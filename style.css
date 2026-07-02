@@ -5503,8 +5503,10 @@
 
 #blai-purifier-popup.blai-app-shell .app-main {
     min-height: 0 !important;
+    overflow: hidden !important;
     display: grid !important;
     grid-template-columns: 184px minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
 }
 
 #blai-purifier-popup.blai-app-shell .rail {
@@ -5521,12 +5523,23 @@
     display: none !important;
     height: 100% !important;
     min-height: 0 !important;
-    overflow: auto !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
     align-content: start !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
 }
 
 #blai-purifier-popup.blai-app-shell .page-panel.active {
     display: grid !important;
+}
+
+#blai-purifier-popup.blai-app-shell .page-panel[data-page="overview"] #blai-tags-container {
+    flex: none !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+    -webkit-overflow-scrolling: auto !important;
+    padding-right: 0 !important;
 }
 
 #blai-purifier-popup.blai-app-shell .content-grid {
