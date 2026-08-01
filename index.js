@@ -8,7 +8,7 @@ import { bindEvents, initRealtimeInterceptor } from './src/events.js';
 import { setupUI, updateToolbarUI, applyCharacterPresetBinding, cleanupInvalidPresetBindings, showToast } from './src/ui.js';
 import { restoreDiffStateFromChatMetadata, injectDiffButtons } from './src/diff.js';
 import { performGlobalCleanse } from './src/core.js';
-import { buildPresetEntry, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetRules, mergeScopeTagsWithBuiltins, normalizeScopeTagBuiltinDismissedList, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList, normalizeXmlTagNameInput } from './src/utils.js';
+import { buildPresetEntry, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetRules, mergeScopeTagsWithBuiltins, normalizeOptionalXmlTagNameInput, normalizeRuleActivationSafety, normalizeScopeTagBuiltinDismissedList, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList } from './src/utils.js';
 import { isBaiBaiToolkitInstalled, isLoreFrameInstalled, isTauriTavernHost, waitForTauriTavernReady } from './src/platform.js';
 import { normalizeZhVariantSettings, restoreZhDictionaryPackageFromCache } from './src/zhConversion.js';
 
@@ -68,7 +68,7 @@ function normalizeAiRewriteSettings(settings) {
     next.maxItemsDefault20Applied = true;
     next.maxContextChars = Number.isFinite(Number(next.maxContextChars)) ? Math.min(Math.max(Math.round(Number(next.maxContextChars)), 1000), 60000) : defaultAiRewriteSettings.maxContextChars;
     next.maxRewriteCharsPerItem = Number.isFinite(Number(next.maxRewriteCharsPerItem)) ? Math.min(Math.max(Math.round(Number(next.maxRewriteCharsPerItem)), 50), 10000) : defaultAiRewriteSettings.maxRewriteCharsPerItem;
-    next.xmlScopeTag = normalizeXmlTagNameInput(next.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
+    next.xmlScopeTag = normalizeOptionalXmlTagNameInput(next.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
     settings.aiRewrite = next;
 }
 
@@ -156,7 +156,12 @@ function ensureSettingsShape() {
 function normalizeRuleShape(rule, index = 0) {
     if (!rule || typeof rule !== 'object') return;
     if (!rule.name) rule.name = `合集 ${index + 1}`;
-    if (rule.enabled === undefined) rule.enabled = true;
+    const normalizedRule = normalizeRuleActivationSafety(rule);
+    if (normalizedRule.activationWarning) rule.activationWarning = normalizedRule.activationWarning;
+    else delete rule.activationWarning;
+    if (normalizedRule.activationWarningEnabled === true) rule.activationWarningEnabled = true;
+    else delete rule.activationWarningEnabled;
+    rule.enabled = normalizedRule.enabled;
 
     if (rule.targets) {
         rule.subRules = [{

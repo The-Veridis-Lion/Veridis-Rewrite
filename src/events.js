@@ -1,6 +1,6 @@
 import { defaultAiRewriteSettings, extensionName, getAppContext, runtimeState, markRulesDataDirty, markPresetsUiDirty, minTrackedDiffMessages, maxTrackedDiffMessages, normalizeDiffTrackedMessageLimit } from './state.js';
 import { logger } from './log.js';
-import { DEFAULT_SCOPE_TAG_GROUP_ID, buildPresetEntry, createScopeTagGroupId, createScopeTagId, deepClone, formatScopeTagInput, getBuiltinScopeTagKeyForStartTag, getCotScopeTagBuiltinKeys, getCurrentChatCompletionPresetName, getCurrentCharacterContext, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetBindingUsage, getPresetRules, isCotScopeTagEntry, mergeScopeTagsWithBuiltins, normalizeImportedRulesPayload, normalizePresetAiRewriteSettings, normalizeScopeTagBuiltinDismissedList, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList, normalizeScopeTagList, normalizeXmlTagNameInput, parseInputToWords, parseScopeTagInput, validateRegexTargetInput } from './utils.js';
+import { DEFAULT_SCOPE_TAG_GROUP_ID, buildPresetEntry, buildRuleActivationConfirmMessage, createScopeTagGroupId, createScopeTagId, deepClone, formatScopeTagInput, getBuiltinScopeTagKeyForStartTag, getCotScopeTagBuiltinKeys, getCurrentChatCompletionPresetName, getCurrentCharacterContext, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetBindingUsage, getPresetRules, getRuleActivationWarning, isCotScopeTagEntry, isRuleActivationWarningEnabled, mergeScopeTagsWithBuiltins, normalizeImportedRulesPayload, normalizeOptionalXmlTagNameInput, normalizePresetAiRewriteSettings, normalizeRuleActivationSafety, normalizeScopeTagBuiltinDismissedList, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList, normalizeScopeTagList, parseInputToWords, parseScopeTagInput, validateRegexTargetInput } from './utils.js';
 import {
     applyPresetByName,
     closeScopeTagsModal,
@@ -12,6 +12,8 @@ import {
     updateLegacyPurifierWarning,
     renderSubrulesToModal,
     showConfirmModal,
+    showRiskConfirmModal,
+    showRiskInfoModal,
     syncRealtimeMaskModeUI,
     refreshCharacterBindingUI,
     applyCharacterPresetBinding,
@@ -51,13 +53,15 @@ import {
     refreshMessageDisplay,
 } from './core.js';
 import { performDeepCleanse } from './cleanse.js';
-import { getMessageDomNode, purifyDOM, purifyStreamingMessageDom, isProtectedNode, isUserMessageDomNode, isRevertedMessageDomNode, isTrackableMessageDomNode, syncPersonaDescriptionProtectionControl } from './dom.js';
-import { clearTrackedDiffEntry, computeMessageSignature, escapeHtml, getDiffComparisonForMessage, getDiffSnippetsForMessage, getDiffStateForMessage, injectDiffButtons, isAssistantMessage, markDiffComparisonPending, refreshDiffCacheIfStale, resetDiffRuntimeState, restoreDiffStateFromChatMetadata, syncTrackedIndicesToLatestAssistantMessages } from './diff.js';
+import { clearStreamingPresentations, getMessageDomNode, purifyDOM, queueStreamingPresentation, replayStreamingPresentation, isProtectedNode, isUserMessageDomNode, isRevertedMessageDomNode, isPurifiableMessageTextNode, isAllowedChatInputElement, syncPersonaDescriptionProtectionControl } from './dom.js';
+import { buildDiffSnippetsFromText, clearTrackedDiffEntry, computeMessageSignature, escapeHtml, getDiffComparisonForMessage, getDiffSnippetsForMessage, getDiffStateForMessage, injectDiffButtons, isAssistantMessage, markDiffComparisonPending, refreshDiffCacheIfStale, resetDiffRuntimeState, restoreDiffStateFromChatMetadata, syncTrackedIndicesToLatestAssistantMessages } from './diff.js';
 import { getCurrentMessageOriginalMes, setCurrentSwipeText } from './messageMeta.js';
 import { findRelatedRulesForDiffChange } from './relatedRules.js';
-import { isBaiBaiToolkitInstalled, isTauriTavernHost } from './platform.js';
-import { getAiRewriteDebugLogText, handleAiRewriteGenerationStarted, markAiRewriteFinalCleanseReady, maybeNotifyAiRewriteReadyFromStreamingText, recordAiRewriteRuntimeDebug, requestManualAiRewriteForMessage, resetAiRewriteRuntimeState } from './aiRewrite.js';
+import { getCurrentChatIdentity, isBaiBaiToolkitInstalled, isTauriTavernHost } from './platform.js';
+import { acknowledgeAiRewriteAllowedTailMutation, acknowledgeAiRewriteContentMutation, getAiRewriteDebugLogText, handleAiRewriteFinalTimerSkipped, handleAiRewriteGenerationStarted, markAiRewriteFinalCleanseReady, maybeNotifyAiRewriteReadyFromStreamingText, recordAiRewriteRuntimeDebug, requestManualAiRewriteForMessage, resetAiRewriteRuntimeState, shouldDeferFinalCleanseForAiRewrite, validateAiRewriteFinalTimer } from './aiRewrite.js';
+import { generationLifecycle } from './generationLifecycle.js';
 import { StreamingSourceCleanser } from './streamingSourceCleanser.js';
+import { classifyHostGenerationStart } from './hostGenerationEvent.js';
 import {
     downloadZhDictionaryPackage,
     getZhDictionaryPackageStats,
@@ -103,22 +107,13 @@ function describeStreamPayload(payload) {
     };
 }
 
-function mergeStreamEventText(previous, incoming) {
+export function classifyStreamSnapshot(previous, incoming) {
     const existing = String(previous || '');
     const next = String(incoming || '');
-    if (!existing) return { text: next, mode: 'first' };
-    if (!next) return { text: existing, mode: 'empty' };
-    if (next === existing) return { text: existing, mode: 'same' };
-    if (next.startsWith(existing)) return { text: next, mode: 'full' };
-    if (existing.endsWith(next)) return { text: existing, mode: 'duplicate-tail' };
-
-    const overlapLimit = Math.min(existing.length, next.length, 512);
-    for (let size = overlapLimit; size > 0; size -= 1) {
-        if (existing.endsWith(next.slice(0, size))) {
-            return { text: `${existing}${next.slice(size)}`, mode: 'overlap' };
-        }
-    }
-    return { text: `${existing}${next}`, mode: 'delta' };
+    if (!existing) return 'first';
+    if (next === existing) return 'same';
+    if (next.startsWith(existing)) return 'append';
+    return 'revision';
 }
 
 function hasXmlLikeClose(text) {
@@ -240,9 +235,21 @@ function hasPresetContentChanges(currentRules, savedPresetEntry, currentAiRewrit
 }
 
 function renderTagsPreserveBatchSelection() {
+    const shell = document.getElementById('blai-purifier-popup');
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && activeElement.closest('#blai-tags-container')) {
+        activeElement.blur();
+    }
+    if (shell) shell.scrollTop = 0;
     renderTags();
     const { extension_settings } = getAppContext();
     applyBatchSelectionStateToDom(extension_settings[extensionName]?.rules || []);
+    if (shell) {
+        shell.scrollTop = 0;
+        window.requestAnimationFrame(() => {
+            if (shell.isConnected) shell.scrollTop = 0;
+        });
+    }
 }
 
 function batchMoveRules(rules, selectedIndexes, direction) {
@@ -297,9 +304,18 @@ export function injectDiffButtonsStreamingSafe(indices = []) {
 
 export function initRealtimeInterceptor() {
     let isPurifying = false;
+    generationLifecycle.configure({
+        getCurrentChatId: getCurrentChatIdentity,
+        getCurrentChat: () => getAppContext().chat,
+        onLog: (stage, details) => recordAiRewriteRuntimeDebug(stage, details),
+    });
     syncPersonaDescriptionProtectionControl();
     const personaProtectionIntervalId = setInterval(syncPersonaDescriptionProtectionControl, 1000);
     window.addEventListener('beforeunload', () => clearInterval(personaProtectionIntervalId), { once: true });
+    window.addEventListener('blai:realtime-beauty-frame', (event) => {
+        if (runtimeState.isStreamingGeneration !== true || getRealtimeMaskMode() !== 'tavern-helper') return;
+        replayStreamingPresentation(event?.detail?.messageIndex);
+    });
     const resolveNodeMessageIndex = (node) => {
         if (!node || node.nodeType !== 1) return -1;
         const attrs = [node.getAttribute('mesid'), node.getAttribute('data-mesid'), node.getAttribute('messageid'), node.getAttribute('data-message-id')];
@@ -318,13 +334,6 @@ export function initRealtimeInterceptor() {
         node.querySelectorAll?.('.mes').forEach((mes) => bucket.push(mes));
     };
 
-    const getClosestTrackableMessageNode = (node) => {
-        if (!node) return null;
-        const element = node.nodeType === 1 ? node : node.parentElement;
-        const mesNode = element?.matches?.('.mes') ? element : element?.closest?.('.mes');
-        return mesNode && isTrackableMessageDomNode(mesNode) ? mesNode : null;
-    };
-
     const primePendingComparisonForNode = (messageNode, options = {}) => {
         const { chat } = getAppContext();
         const index = resolveNodeMessageIndex(messageNode);
@@ -337,9 +346,6 @@ export function initRealtimeInterceptor() {
         const mode = getAppContext().extension_settings?.[extensionName]?.realtimeMaskMode;
         return mode === 'simple-visual' ? 'simple-visual' : 'tavern-helper';
     };
-
-    const isSimpleVisualRealtimeMask = () => getRealtimeMaskMode() === 'simple-visual';
-    const isTavernHelperRealtimeMask = () => getRealtimeMaskMode() === 'tavern-helper';
 
     const streamingProcessorPatchKey = '__blai_streaming_source_cleanser';
 
@@ -362,118 +368,53 @@ export function initRealtimeInterceptor() {
         if (processor[streamingProcessorPatchKey]) return true;
 
         const originalOnProgress = processor.onProgressStreaming;
-        const cleanser = new StreamingSourceCleanser();
-        processor[streamingProcessorPatchKey] = { originalOnProgress, cleanser };
+        const cleansers = new Map();
+        processor[streamingProcessorPatchKey] = { originalOnProgress, cleansers };
         processor.onProgressStreaming = async function(messageId, text, isFinal) {
             const rawText = typeof text === 'string' ? text : String(text ?? '');
             const numericMessageId = Number(messageId);
-            if (Number.isInteger(numericMessageId) && numericMessageId >= 0) {
-                runtimeState.streamingRawMessageCache.set(numericMessageId, rawText);
-                maybeNotifyAiRewriteReadyFromStreamingText(numericMessageId, rawText);
-            }
-            let cleanText = text;
             let changed = false;
 
-            if (isTavernHelperRealtimeMask()) {
+            const result = await originalOnProgress.call(this, messageId, rawText, isFinal);
+            if (Number.isInteger(numericMessageId) && numericMessageId >= 0) {
+                const { chat } = getAppContext();
+                const committedText = Array.isArray(chat) && typeof chat[numericMessageId]?.mes === 'string'
+                    ? chat[numericMessageId].mes
+                    : '';
+                runtimeState.streamingCommittedMessageCache.set(numericMessageId, committedText);
+                let cleanText = committedText;
+                let cleanser = cleansers.get(numericMessageId);
+                if (!cleanser) {
+                    cleanser = new StreamingSourceCleanser();
+                    cleansers.set(numericMessageId, cleanser);
+                }
                 try {
-                    cleanText = cleanser.clean(rawText);
-                    changed = cleanText !== rawText;
+                    cleanText = cleanser.clean(committedText);
+                    changed = cleanText !== committedText;
                 } catch (error) {
                     cleanser.reset();
-                    logger.warn(`[streaming] 预渲染实时净化失败，已跳过本帧: ${error?.message || error}`);
-                    cleanText = text;
+                    logger.warn(`[streaming] 实时显示投影失败，已跳过本帧: ${error?.message || error}`);
+                    cleanText = committedText;
                 }
-            } else {
-                cleanser.reset();
+                queueStreamingPresentation(numericMessageId, committedText, cleanText, getRealtimeMaskMode());
+                if (committedText) {
+                    maybeNotifyAiRewriteReadyFromStreamingText(numericMessageId, committedText, {
+                        source: 'streaming-committed',
+                        hostCommitted: true,
+                    });
+                }
             }
-
-            const result = await originalOnProgress.call(this, messageId, cleanText, isFinal);
             if (changed) markStreamingMessagePending(Number(messageId));
-            if (isFinal === true) cleanser.reset();
+            if (isFinal === true) cleansers.delete(numericMessageId);
             return result;
         };
         return true;
     };
     installStreamingProcessorCleanserFromEvents = installStreamingProcessorCleanser;
 
-    const streamingVisualMessageQueue = new Set();
-    let streamingVisualFlushQueued = false;
-
-    const hasStreamingUnsafeRegexProcessors = () => buildProcessors({ includeAiRewrite: true })
-        .some((proc) => proc.kind === 'regex' && proc.domSafe === false);
-
-    const getLatestStreamingAssistantIndex = () => {
-        const { chat } = getAppContext();
-        if (!Array.isArray(chat)) return -1;
-        for (let i = chat.length - 1; i >= 0; i--) {
-            if (isAssistantMessage(chat[i])) return i;
-        }
-        return -1;
-    };
-
-    const queueStreamingVisualMicrotask = () => {
-        if (streamingVisualFlushQueued) return;
-        streamingVisualFlushQueued = true;
-        if (typeof window.queueMicrotask === 'function') {
-            window.queueMicrotask(flushStreamingVisualQueue);
-            return;
-        }
-        Promise.resolve().then(flushStreamingVisualQueue);
-    };
-
-    const flushStreamingVisualQueue = () => {
-        streamingVisualFlushQueued = false;
-        if (!runtimeState.isStreamingGeneration || !isSimpleVisualRealtimeMask() || streamingVisualMessageQueue.size === 0) {
-            streamingVisualMessageQueue.clear();
-            return;
-        }
-
-        const latestIndex = getLatestStreamingAssistantIndex();
-        const pendingNodes = [...streamingVisualMessageQueue];
-        streamingVisualMessageQueue.clear();
-        if (latestIndex < 0) return;
-
-        const touchedMessageIndices = new Set();
-        const hasUnsafeRegex = hasStreamingUnsafeRegexProcessors();
-        isPurifying = true;
-        try {
-            pendingNodes.forEach((mesNode) => {
-                if (!mesNode?.isConnected || isRevertedMessageDomNode(mesNode)) return;
-
-                const index = resolveNodeMessageIndex(mesNode);
-                if (index !== latestIndex) return;
-
-                let changed = purifyStreamingMessageDom(mesNode);
-                if (hasUnsafeRegex && purifyStreamingMessageDom(mesNode, { unsafeRegexOnly: true })) {
-                    changed = true;
-                }
-                if (!changed) return;
-
-                const touchedIndex = primePendingComparisonForNode(mesNode, { skipPersist: true });
-                if (touchedIndex >= 0) touchedMessageIndices.add(touchedIndex);
-            });
-        } finally {
-            chatObserver.takeRecords();
-            injectDiffButtonsStreamingSafe([...touchedMessageIndices]);
-            isPurifying = false;
-        }
-    };
-
-    const queueStreamingVisualPurify = (messageNodes) => {
-        if (!runtimeState.isStreamingGeneration || !isSimpleVisualRealtimeMask() || !messageNodes || messageNodes.size === 0) return;
-        messageNodes.forEach((mesNode) => {
-            if (mesNode?.isConnected && isTrackableMessageDomNode(mesNode)) {
-                streamingVisualMessageQueue.add(mesNode);
-            }
-        });
-        if (streamingVisualMessageQueue.size === 0) return;
-        queueStreamingVisualMicrotask();
-    };
-
-    const applyMutationTextMask = (textNode, isStreaming) => {
+    const applyMutationTextMask = (textNode) => {
         const original = textNode?.nodeValue || '';
         if (!original) return false;
-        if (isStreaming) return false;
 
         const nextValue = applyScopedReplacements(original, { deterministic: true, domSafeOnly: true });
         if (original === nextValue) return false;
@@ -482,63 +423,41 @@ export function initRealtimeInterceptor() {
     };
 
     const chatObserver = new MutationObserver((mutations) => {
-        if (isPurifying) return;
-        const isStreaming = runtimeState.isStreamingGeneration;
+        if (isPurifying || runtimeState.isStreamingGeneration === true) return;
 
-        const processors = buildProcessors({ includeAiRewrite: isStreaming });
+        const processors = buildProcessors();
         if (processors.length === 0) return;
         
         const touchedMessageIndices = new Set();
-        const streamingMessageNodes = new Set();
         isPurifying = true;
         try {
             for (let mi = 0; mi < mutations.length; mi++) {
                 const m = mutations[mi];
                 for (let ni = 0; ni < m.addedNodes.length; ni++) {
                     const node = m.addedNodes[ni];
-                    if (node.nodeType === 3 || node.nodeType === 8) {
+                    if (node.nodeType === 3) {
+                        if (!isPurifiableMessageTextNode(node)) continue;
                         if (node.parentNode && isProtectedNode(node.parentNode)) continue;
                         if (node.parentNode && isRevertedMessageDomNode(node.parentNode)) continue;
                         if (node.parentNode && getAppContext().extension_settings?.[extensionName]?.skipUserMessages && isUserMessageDomNode(node.parentNode)) continue;
-                        const mesNode = isStreaming ? getClosestTrackableMessageNode(node) : null;
-                        if (mesNode) {
-                            streamingMessageNodes.add(mesNode);
-                            continue;
-                        }
-                        applyMutationTextMask(node, false);
+                        applyMutationTextMask(node);
                     } else if (node.nodeType === 1) {
                         const messageNodes = [];
                         collectMessageNodes(node, messageNodes);
-                        if (isStreaming) {
-                            const closestMesNode = getClosestTrackableMessageNode(node);
-                            if (closestMesNode) streamingMessageNodes.add(closestMesNode);
-                            messageNodes.forEach((mesNode) => streamingMessageNodes.add(mesNode));
-                            if (closestMesNode || messageNodes.length > 0) continue;
-                            if (!node.closest?.('.mes')) purifyDOM(node);
-                        } else {
-                            purifyDOM(node);
-                            messageNodes.forEach((mesNode) => {
-                                const index = primePendingComparisonForNode(mesNode);
-                                if (index >= 0) touchedMessageIndices.add(index);
-                            });
-                        }
+                        purifyDOM(node);
+                        messageNodes.forEach((mesNode) => {
+                            const index = primePendingComparisonForNode(mesNode);
+                            if (index >= 0) touchedMessageIndices.add(index);
+                        });
                     }
                 }
                 if (m.type === 'characterData') {
+                    if (!isPurifiableMessageTextNode(m.target)) continue;
                     if (m.target.parentNode && isProtectedNode(m.target.parentNode)) continue;
                     if (m.target.parentNode && isRevertedMessageDomNode(m.target.parentNode)) continue;
                     if (m.target.parentNode && getAppContext().extension_settings?.[extensionName]?.skipUserMessages && isUserMessageDomNode(m.target.parentNode)) continue;
-                    const mesNode = isStreaming ? getClosestTrackableMessageNode(m.target) : null;
-                    if (mesNode) {
-                        streamingMessageNodes.add(mesNode);
-                        continue;
-                    }
-                    applyMutationTextMask(m.target, false);
+                    applyMutationTextMask(m.target);
                 }
-            }
-
-            if (isStreaming) {
-                queueStreamingVisualPurify(streamingMessageNodes);
             }
         } finally {
             chatObserver.takeRecords();
@@ -568,7 +487,7 @@ export function initRealtimeInterceptor() {
 
     document.addEventListener('input', (e) => {
         const el = e.target;
-        if (!['TEXTAREA', 'INPUT'].includes(el.tagName) || isProtectedNode(el)) return;
+        if (!isAllowedChatInputElement(el) || isProtectedNode(el)) return;
         buildProcessors();
         if (runtimeState.activeProcessors.length === 0) return;
         const originalVal = el.value || '';
@@ -611,10 +530,9 @@ export function bindEvents() {
 
     function normalizeImportedRuleList(rules) {
         return (Array.isArray(rules) ? rules : []).map((rule, idx) => {
-            const next = deepClone(rule || {});
+            const next = normalizeRuleActivationSafety(deepClone(rule || {}), { resetRiskyEnabled: true });
             stripAiConnectionFields(next);
             if (!next.name) next.name = next.targets?.[0] || `未命名合集 ${idx + 1}`;
-            if (next.enabled === undefined) next.enabled = true;
             if (next.targets) {
                 next.subRules = [{
                     targets: next.targets,
@@ -1230,19 +1148,21 @@ export function bindEvents() {
             return { ok: false };
         }
 
-        let isEnabled = true;
-        if (runtimeState.currentEditingIndex !== -1 && rules[runtimeState.currentEditingIndex]) {
-            isEnabled = rules[runtimeState.currentEditingIndex].enabled !== false;
-        }
+        const previousRule = runtimeState.currentEditingIndex !== -1 ? rules[runtimeState.currentEditingIndex] : null;
+        const isEnabled = previousRule?.enabled !== false;
+        const activationWarning = getRuleActivationWarning(previousRule);
+        const activationWarningEnabled = isRuleActivationWarningEnabled(previousRule);
 
         const fallbackName = runtimeState.currentEditingIndex !== -1
             ? (rules[runtimeState.currentEditingIndex]?.name || `合集 ${runtimeState.currentEditingIndex + 1}`)
             : `合集 ${rules.length + 1}`;
-        const newRule = {
+        const newRule = normalizeRuleActivationSafety({
             name: nameVal || fallbackName,
             subRules: validSubrules,
-            enabled: isEnabled
-        };
+            activationWarning,
+            activationWarningEnabled,
+            enabled: activationWarningEnabled ? false : isEnabled,
+        });
 
         if (runtimeState.currentEditingIndex === -1) rules.push(newRule);
         else rules[runtimeState.currentEditingIndex] = newRule;
@@ -1314,7 +1234,7 @@ export function bindEvents() {
             ...defaultAiRewriteSettings,
             ...(settings.aiRewrite && typeof settings.aiRewrite === 'object' ? settings.aiRewrite : {}),
         };
-        settings.aiRewrite.xmlScopeTag = normalizeXmlTagNameInput(settings.aiRewrite.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
+        settings.aiRewrite.xmlScopeTag = normalizeOptionalXmlTagNameInput(settings.aiRewrite.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
         return settings.aiRewrite;
     };
     const isLocalHttpUrl = (value) => {
@@ -1363,6 +1283,10 @@ export function bindEvents() {
             aiApiCheckAbortController.abort();
             aiApiCheckAbortController = null;
         }
+        if (ensureAiRewriteSettings().enabled !== true) {
+            setAiApiCheckState('disabled', '未启用', 'AI 改写未启用，开启后再检测 API。');
+            return;
+        }
         setAiApiCheckState('idle', '未测');
     };
     const extractModelIds = (payload) => {
@@ -1405,6 +1329,14 @@ export function bindEvents() {
     const runAiModelsHealthCheck = async (options = {}) => {
         const { silent = false } = options;
         const aiSettings = ensureAiRewriteSettings();
+        if (aiSettings.enabled !== true) {
+            if (aiApiCheckAbortController) {
+                aiApiCheckAbortController.abort();
+                aiApiCheckAbortController = null;
+            }
+            setAiApiCheckState('disabled', '未启用', 'AI 改写未启用，开启后再检测 API。');
+            return false;
+        }
         const baseUrl = String(aiSettings.baseUrl || '').trim();
         const apiKey = String(aiSettings.apiKey || '');
         const model = String(aiSettings.model || '').trim();
@@ -1481,9 +1413,9 @@ export function bindEvents() {
             if (!$field.is(':focus')) $field.val(value);
         };
         $('#blai-ai-enabled').prop('checked', aiSettings.enabled === true);
-        const xmlScopeTag = normalizeXmlTagNameInput(aiSettings.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
+        const xmlScopeTag = normalizeOptionalXmlTagNameInput(aiSettings.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
         setValueIfNotFocused('#blai-ai-base-url', aiSettings.baseUrl || '');
-        setValueIfNotFocused('#blai-ai-xml-scope', `<${xmlScopeTag}>`);
+        setValueIfNotFocused('#blai-ai-xml-scope', xmlScopeTag ? `<${xmlScopeTag}>` : '');
         setValueIfNotFocused('#blai-ai-api-key', aiSettings.apiKey || '');
         syncAiModelSelect(aiSettings);
         setValueIfNotFocused('#blai-ai-temperature', aiSettings.temperature);
@@ -1496,6 +1428,11 @@ export function bindEvents() {
         setValueIfNotFocused('#blai-ai-prompt-expanded', aiSettings.promptTemplate || defaultAiRewriteSettings.promptTemplate);
         const configured = !!(aiSettings.baseUrl && aiSettings.apiKey && aiSettings.model);
         $('#blai-ai-settings-status').text(aiSettings.enabled === true ? (configured ? '已启用' : '待配置') : '未启用');
+        if (aiSettings.enabled !== true) {
+            setAiApiCheckState('disabled', '未启用', 'AI 改写未启用，开启后再检测 API。');
+        } else if ($('#blai-ai-api-check').attr('data-state') === 'disabled') {
+            setAiApiCheckState('idle', '未测');
+        }
         $('#blai-ai-http-warning').prop('hidden', isLocalHttpUrl(aiSettings.baseUrl));
     };
     const updateAiRewriteSetting = (key, value, options = {}) => {
@@ -1505,7 +1442,7 @@ export function bindEvents() {
         if (options.markRulesDirty !== false) markRulesDataDirty({ rulesUi: false });
         saveSettingsDebounced();
         syncAiRewriteSettingsUI();
-        if (['baseUrl', 'apiKey', 'model'].includes(key)) resetAiApiCheckState();
+        if (['enabled', 'baseUrl', 'apiKey', 'model'].includes(key)) resetAiApiCheckState();
     };
     const enableVerifiedZhCompat = (toastMessage = '简繁兼容已开启') => {
         if (!restoreZhDictionaryPackageFromCache(settings)) return false;
@@ -1601,7 +1538,8 @@ export function bindEvents() {
         }
         settings.realtimeMaskMode = mode;
         saveSettingsDebounced();
-        runtimeState.streamingRawMessageCache.clear();
+        runtimeState.streamingCommittedMessageCache.clear();
+        clearStreamingPresentations();
         syncRealtimeMaskModeUI();
         showToast(mode === 'simple-visual' ? '实时屏蔽：简单视觉屏蔽' : '实时屏蔽：酒馆助手实时渲染');
     });
@@ -1662,7 +1600,11 @@ export function bindEvents() {
 
     $(document).off('change blur', '#blai-ai-xml-scope').on('change blur', '#blai-ai-xml-scope', function() {
         const rawValue = String($(this).val() || '').trim();
-        const parsed = parseScopeTagInput(rawValue || defaultAiRewriteSettings.xmlScopeTag);
+        if (!rawValue) {
+            updateAiRewriteSetting('xmlScopeTag', '');
+            return;
+        }
+        const parsed = parseScopeTagInput(rawValue);
         if (!parsed.ok) {
             showToast(`AI XML 标签无效：${parsed.error?.message || '请填写标签名'}`);
             syncAiRewriteSettingsUI();
@@ -2595,6 +2537,19 @@ export function bindEvents() {
     $(document).off('click', '#blai-diff-modal').on('click', '#blai-diff-modal', function(e) { if (e.target && e.target.id === 'blai-diff-modal') closeDiffModal(); });
     
     $(document).off('click', '#blai-open-new-rule-btn').on('click', '#blai-open-new-rule-btn', () => openEditModal(-1));
+    $(document).off('click keydown', '.blai-rule-risk-indicator').on('click keydown', '.blai-rule-risk-indicator', function(event) {
+        if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const rules = extension_settings[extensionName].rules || [];
+        const index = Number($(this).data('index'));
+        if (!Number.isInteger(index) || index < 0 || index >= rules.length) return;
+        const rule = rules[index];
+        const warning = getRuleActivationWarning(rule);
+        if (!isRuleActivationWarningEnabled(rule) || !warning) return;
+        showRiskInfoModal(warning);
+    });
     $(document).off('click', '.blai-rule-edit').on('click', '.blai-rule-edit', function() { openEditModal($(this).data('index')); });
     $(document).off('click', '.blai-rule-transfer').on('click', '.blai-rule-transfer', function() {
         const index = Number($(this).data('index'));
@@ -2628,14 +2583,24 @@ export function bindEvents() {
         renderTagsPreserveBatchSelection();
     });
 
-    $(document).off('change', '.blai-rule-toggle').on('change', '.blai-rule-toggle', function() {
+    $(document).off('change', '.blai-rule-toggle').on('change', '.blai-rule-toggle', async function() {
         const rules = extension_settings[extensionName].rules || [];
         const index = Number($(this).data('index'));
         if (!Number.isInteger(index) || index < 0 || index >= rules.length) return;
         const targetEnabled = $(this).prop('checked');
         const ctx = getBatchOperationContext(index, rules);
-        if (ctx.shouldBatch) ctx.selectedIndexes.forEach((idx) => { rules[idx].enabled = targetEnabled; });
-        else rules[index].enabled = targetEnabled;
+        const targetIndexes = ctx.shouldBatch ? ctx.selectedIndexes : [index];
+        if (targetEnabled) {
+            const riskyRules = targetIndexes
+                .map((ruleIndex) => rules[ruleIndex])
+                .filter(isRuleActivationWarningEnabled);
+            if (riskyRules.length > 0 && !await showRiskConfirmModal(buildRuleActivationConfirmMessage(riskyRules))) {
+                $(this).prop('checked', false);
+                renderTagsPreserveBatchSelection();
+                return;
+            }
+        }
+        targetIndexes.forEach((ruleIndex) => { rules[ruleIndex].enabled = targetEnabled; });
         markRulesDataDirty();
         saveSettingsDebounced();
         renderTagsPreserveBatchSelection();
@@ -3130,32 +3095,47 @@ export function bindEvents() {
     const markPendingFromPayload = (payload, options = {}) => {
         const { chat } = getAppContext();
         let index = getMessageIndexFromEvent(payload);
-        if (index < 0) index = getLatestMessageIndex();
+        if (index < 0 && options.fallbackLatest === true) index = getLatestMessageIndex();
         if (index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return;
         markDiffComparisonPending(index, computeMessageSignature(chat[index]), options);
         if (options.skipInject !== true) injectDiffButtonsStreamingSafe([index]);
     };
 
-    let delayedCleanseTimer = null;
-    let settleCleanseTimer = null;
-    const resolveStreamingRawSourceForPayload = (payload) => {
-        let index = getMessageIndexFromEvent(payload);
-        if (index < 0) index = getLatestMessageIndex();
-        if (index < 0) return { index: -1, sourceMes: undefined };
-        const sourceMes = runtimeState.streamingRawMessageCache.get(index);
+    const hasCurrentRuleDifference = (sourceMes) => {
+        if (typeof sourceMes !== 'string' || !sourceMes) return false;
+        const diffResult = buildDiffSnippetsFromText(sourceMes);
+        return typeof diffResult.cleanedText === 'string' && diffResult.cleanedText !== sourceMes;
+    };
+
+    const resolveMessageIndexForCleansePayload = (payload) => {
+        return getMessageIndexFromEvent(payload);
+    };
+
+    const resolveFinalCleanseSourceForPayload = (payload) => {
+        const { chat } = getAppContext();
+        const index = resolveMessageIndexForCleansePayload(payload);
+        if (index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return { index: -1, sourceMes: undefined };
+
+        const finalMes = typeof chat[index]?.mes === 'string' ? chat[index].mes : '';
+        if (hasCurrentRuleDifference(finalMes)) return { index, sourceMes: finalMes };
+
+        const streamingCommittedMes = runtimeState.streamingCommittedMessageCache.get(index);
+        if (typeof streamingCommittedMes === 'string' && streamingCommittedMes !== finalMes && hasCurrentRuleDifference(streamingCommittedMes)) {
+            return { index, sourceMes: streamingCommittedMes };
+        }
+
         return {
             index,
-            sourceMes: typeof sourceMes === 'string' ? sourceMes : undefined,
+            sourceMes: undefined,
         };
     };
 
-    const getLatestAssistantMessageIndex = () => {
+    const resolveEditedSourceForPayload = (payload) => {
         const { chat } = getAppContext();
-        if (!Array.isArray(chat)) return -1;
-        for (let index = chat.length - 1; index >= 0; index--) {
-            if (isAssistantMessage(chat[index])) return index;
-        }
-        return -1;
+        const index = resolveMessageIndexForCleansePayload(payload);
+        if (index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return { index: -1, sourceMes: undefined };
+        const sourceMes = typeof chat[index]?.mes === 'string' ? chat[index].mes : undefined;
+        return { index, sourceMes };
     };
 
     const getStreamEventText = (payload, extraArgs = []) => {
@@ -3187,8 +3167,15 @@ export function bindEvents() {
 
     const maybeNotifyAiRewriteReadyFromStreamEvent = (payload, extraArgs = []) => {
         const explicitIndex = getStreamEventIndex(payload, extraArgs);
-        const index = explicitIndex >= 0 ? explicitIndex : getLatestAssistantMessageIndex();
         const rawText = getStreamEventText(payload, extraArgs);
+        const { chat } = getAppContext();
+        const resolution = generationLifecycle.resolveMessage([payload, ...extraArgs], {
+            chatId: getCurrentChatIdentity(),
+            chat,
+            source: 'stream-token',
+            allowBoundMessage: true,
+        });
+        const index = resolution.ok ? resolution.messageIndex : -1;
         if (!rawText) {
             streamEventNoTextProbeCount += 1;
             if (streamEventNoTextProbeCount <= 3 || streamEventNoTextProbeCount % 25 === 0) {
@@ -3201,65 +3188,176 @@ export function bindEvents() {
             }
             return;
         }
-
-        const { chat } = getAppContext();
-        if (index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return;
+        if (!resolution.ok || index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) {
+            recordAiRewriteRuntimeDebug('payload-rejected', {
+                source: 'stream-token',
+                reason: resolution.reason || 'message-unresolved',
+                payload: describeStreamEventArgs(payload, extraArgs),
+            }, 'warn');
+            return;
+        }
 
         const previousText = streamEventTextByMessageId.get(index) || '';
-        const merged = mergeStreamEventText(previousText, rawText);
-        streamEventTextByMessageId.set(index, merged.text);
-        runtimeState.streamingRawMessageCache.set(index, merged.text);
+        const snapshotMode = classifyStreamSnapshot(previousText, rawText);
+        streamEventTextByMessageId.set(index, rawText);
 
-        const probe = getStreamEventProbe(index, merged.text);
+        const probe = getStreamEventProbe(index, rawText);
         if (probe.shouldLog) {
             recordAiRewriteRuntimeDebug('stream-event-token', {
                 index,
                 explicitIndex,
                 count: probe.count,
-                mergeMode: merged.mode,
+                snapshotMode,
                 rawLength: rawText.length,
                 previousLength: previousText.length,
-                combinedLength: merged.text.length,
                 hasXmlLikeClose: probe.hasXmlClose,
                 payload: describeStreamEventArgs(payload, extraArgs),
             });
         }
 
-        maybeNotifyAiRewriteReadyFromStreamingText(index, merged.text);
+        maybeNotifyAiRewriteReadyFromStreamingText(index, rawText, {
+            generationId: resolution.generationId,
+            chatId: resolution.chatId,
+            source: 'streaming',
+        });
     };
 
     const runFinalStreamingCleanse = (payload, options = {}) => {
-        const { index, sourceMes } = resolveStreamingRawSourceForPayload(payload);
-        performIncrementalCleanse(payload, {
+        if (options.acknowledgeGenerationId) {
+            const tailAcknowledgement = acknowledgeAiRewriteAllowedTailMutation(payload);
+            if (!tailAcknowledgement.ok) {
+                recordAiRewriteRuntimeDebug('tail-mutation-rejected', {
+                    generationId: options.acknowledgeGenerationId,
+                    chatId: String(payload?.chatId || ''),
+                    reason: tailAcknowledgement.reason,
+                }, 'warn');
+                return;
+            }
+        }
+        const { index, sourceMes } = resolveFinalCleanseSourceForPayload(payload);
+        const cleanseResult = performIncrementalCleanse(payload, {
             visualOnly: false,
-            fallbackLatest: true,
+            fallbackLatest: false,
             diffSourceMes: sourceMes,
         });
-        if (options.clearRawSource === true && index >= 0) {
-            runtimeState.streamingRawMessageCache.delete(index);
+        if (options.acknowledgeGenerationId
+            && cleanseResult?.dataChanged === true
+            && cleanseResult?.messageTextChanged === true) {
+            const acknowledgement = generationLifecycle.acknowledgeInternalMessageMutation(options.acknowledgeGenerationId, {
+                chatId: String(payload?.chatId || ''),
+                chat: getAppContext().chat,
+                messageId: cleanseResult.index,
+                messageRef: cleanseResult.messageRef,
+                beforeText: cleanseResult.beforeText,
+                afterText: cleanseResult.afterText,
+                source: options.acknowledgementSource || 'final-streaming-cleanse',
+            });
+            if (!acknowledgement.ok) {
+                recordAiRewriteRuntimeDebug('internal-message-mutation-rejected', {
+                    generationId: options.acknowledgeGenerationId,
+                    chatId: String(payload?.chatId || ''),
+                    index: cleanseResult.index,
+                    reason: acknowledgement.reason,
+                }, 'warn');
+            } else {
+                acknowledgeAiRewriteContentMutation({
+                    generationId: options.acknowledgeGenerationId,
+                    chatId: String(payload?.chatId || ''),
+                    messageId: cleanseResult.index,
+                    source: options.acknowledgementSource || 'final-streaming-cleanse',
+                });
+            }
         }
+        if (options.clearRawSource === true && index >= 0) {
+            runtimeState.streamingCommittedMessageCache.delete(index);
+            clearStreamingPresentations(index);
+        }
+        return cleanseResult;
     };
 
-    const delayedIncrementalCleanse = (payload, options = {}) => {
+    const delayedIncrementalCleanse = (source, payload, options = {}) => {
         runtimeState.isStreamingGeneration = false;
-        markPendingFromPayload(payload, { skipPersist: false });
-        if (delayedCleanseTimer) clearTimeout(delayedCleanseTimer);
-        if (settleCleanseTimer) clearTimeout(settleCleanseTimer);
-        delayedCleanseTimer = setTimeout(() => { runFinalStreamingCleanse(payload); }, 150);
-        settleCleanseTimer = setTimeout(() => {
-            runFinalStreamingCleanse(payload, { clearRawSource: true });
-            if (options.scheduleAiRewrite !== false) {
-                markAiRewriteFinalCleanseReady(payload);
+        const { chat } = getAppContext();
+        const resolution = generationLifecycle.resolveMessage(payload, {
+            chatId: getCurrentChatIdentity(),
+            chat,
+            source,
+            allowBoundMessage: options.allowBoundMessage === true,
+        });
+        if (!resolution.ok) {
+            recordAiRewriteRuntimeDebug('payload-rejected', {
+                source,
+                reason: resolution.reason,
+                generationId: generationLifecycle.getActive()?.generationId || '',
+            }, 'warn');
+            return;
+        }
+
+        generationLifecycle.markFinalSource(resolution.generationId, source);
+        const stablePayload = {
+            automatic: true,
+            generationId: resolution.generationId,
+            chatId: resolution.chatId,
+            messageId: resolution.messageIndex,
+            source,
+        };
+        markPendingFromPayload(stablePayload, { skipPersist: false });
+        const timerValidationOptions = {
+            validationOptions: { mode: 'identity' },
+            validate: () => validateAiRewriteFinalTimer(stablePayload),
+            onSkip: (reason) => handleAiRewriteFinalTimerSkipped(stablePayload, reason),
+        };
+        generationLifecycle.scheduleTimer(resolution.generationId, 'cleanse', 150, () => {
+            if (options.scheduleAiRewrite !== false && shouldDeferFinalCleanseForAiRewrite(stablePayload)) {
+                recordAiRewriteRuntimeDebug('final-cleanse-deferred-to-ai', {
+                    generationId: resolution.generationId,
+                    index: resolution.messageIndex,
+                    phase: '150ms',
+                });
+                return;
             }
-        }, 700);
+            runFinalStreamingCleanse(stablePayload, {
+                acknowledgeGenerationId: resolution.generationId,
+                acknowledgementSource: '150ms-cleanse',
+            });
+        }, timerValidationOptions);
+        generationLifecycle.scheduleTimer(resolution.generationId, 'final', 700, () => {
+            const aiOwnsFinalCommit = options.scheduleAiRewrite !== false
+                && markAiRewriteFinalCleanseReady(stablePayload);
+            if (!aiOwnsFinalCommit) {
+                runFinalStreamingCleanse(stablePayload, {
+                    clearRawSource: true,
+                    acknowledgeGenerationId: resolution.generationId,
+                    acknowledgementSource: '700ms-final-cleanse',
+                });
+                return;
+            }
+
+            runtimeState.streamingCommittedMessageCache.delete(resolution.messageIndex);
+            clearStreamingPresentations(resolution.messageIndex);
+            recordAiRewriteRuntimeDebug('final-cleanse-deferred-to-ai', {
+                generationId: resolution.generationId,
+                index: resolution.messageIndex,
+                phase: '700ms',
+            });
+        }, timerValidationOptions);
+    };
+
+    const cancelAutomaticGeneration = (reason) => {
+        generationLifecycle.cancelActive(reason);
+        resetAiRewriteRuntimeState(reason);
     };
 
     let editCleanseTimer = null;
     if (event_types.MESSAGE_EDITED) {
         eventSource.on(event_types.MESSAGE_EDITED, (payload) => {
+            cancelAutomaticGeneration('message-edited');
             markPendingFromPayload(payload);
             if (editCleanseTimer) clearTimeout(editCleanseTimer);
-            editCleanseTimer = setTimeout(() => { performIncrementalCleanse(payload, { visualOnly: false, fallbackLatest: true }); }, 100);
+            editCleanseTimer = setTimeout(() => {
+                const { sourceMes } = resolveEditedSourceForPayload(payload);
+                performIncrementalCleanse(payload, { visualOnly: false, fallbackLatest: false, diffSourceMes: sourceMes });
+            }, 100);
         });
     }
 
@@ -3274,8 +3372,9 @@ export function bindEvents() {
             return false;
         };
         const scheduleRenderedMessageCleanse = (payload, delay = 120) => {
+            if (runtimeState.isStreamingGeneration === true) return;
             const explicitIndex = getMessageIndexFromEvent(payload);
-            const index = explicitIndex >= 0 ? explicitIndex : getLatestMessageIndex();
+            const index = explicitIndex;
             if (index < 0) return;
             if (shouldSkipOwnRenderedEvent(index)) return;
             pendingRenderedCleanseIndices.add(index);
@@ -3285,7 +3384,8 @@ export function bindEvents() {
                 const indices = [...pendingRenderedCleanseIndices];
                 pendingRenderedCleanseIndices.clear();
                 indices.forEach((messageIndex) => {
-                    performIncrementalCleanse(messageIndex, { visualOnly: false, fallbackLatest: true });
+                    const { sourceMes } = resolveFinalCleanseSourceForPayload(messageIndex);
+                    performIncrementalCleanse(messageIndex, { visualOnly: false, fallbackLatest: false, diffSourceMes: sourceMes });
                 });
             }, delay);
         };
@@ -3294,11 +3394,26 @@ export function bindEvents() {
         if (event_types.CHARACTER_MESSAGE_RENDERED) eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, (payload) => scheduleRenderedMessageCleanse(payload, 180));
     }
 
-    if (event_types.GENERATION_STARTED) eventSource.on(event_types.GENERATION_STARTED, () => {
+    if (event_types.GENERATION_STARTED) eventSource.on(event_types.GENERATION_STARTED, (type, options, dryRun) => {
+        const generationStart = classifyHostGenerationStart(type, options, dryRun);
+        if (!generationStart.track) {
+            recordAiRewriteRuntimeDebug('generation-start-ignored', {
+                mode: generationStart.mode,
+                reason: generationStart.reason,
+            });
+            return;
+        }
+        const { chat } = getAppContext();
+        const session = generationLifecycle.startGeneration({
+            chatId: getCurrentChatIdentity(),
+            chat,
+            mode: generationStart.mode,
+        });
+        clearStreamingPresentations();
         runtimeState.isStreamingGeneration = true;
-        runtimeState.streamingRawMessageCache.clear();
+        runtimeState.streamingCommittedMessageCache.clear();
         clearStreamEventBuffers();
-        handleAiRewriteGenerationStarted();
+        handleAiRewriteGenerationStarted(session);
     });
     if (event_types.STREAM_TOKEN_RECEIVED) {
         const onStreamTokenReceived = (payload, ...extraArgs) => {
@@ -3320,10 +3435,15 @@ export function bindEvents() {
         if (typeof eventSource.makeFirst === 'function') eventSource.makeFirst(event_types.STREAM_TOKEN_RECEIVED, onStreamTokenReceived);
         else eventSource.on(event_types.STREAM_TOKEN_RECEIVED, onStreamTokenReceived);
     }
-    if (event_types.GENERATION_ENDED) eventSource.on(event_types.GENERATION_ENDED, (payload) => delayedIncrementalCleanse(payload));
-    if (event_types.GENERATION_STOPPED) eventSource.on(event_types.GENERATION_STOPPED, (payload) => delayedIncrementalCleanse(payload));
-    if (event_types.MESSAGE_RECEIVED) eventSource.on(event_types.MESSAGE_RECEIVED, (payload) => delayedIncrementalCleanse(payload));
-    if (event_types.MESSAGE_SWIPED) eventSource.on(event_types.MESSAGE_SWIPED, (payload) => delayedIncrementalCleanse(payload, { scheduleAiRewrite: false }));
+    if (event_types.GENERATION_ENDED) eventSource.on(event_types.GENERATION_ENDED, (payload) => delayedIncrementalCleanse('generation-ended', payload, { allowBoundMessage: true }));
+    if (event_types.GENERATION_STOPPED) eventSource.on(event_types.GENERATION_STOPPED, (payload) => delayedIncrementalCleanse('generation-stopped', payload, { allowBoundMessage: true }));
+    if (event_types.MESSAGE_RECEIVED) eventSource.on(event_types.MESSAGE_RECEIVED, (payload) => delayedIncrementalCleanse('message-received', payload));
+    if (event_types.MESSAGE_SWIPED) eventSource.on(event_types.MESSAGE_SWIPED, (payload) => {
+        cancelAutomaticGeneration('message-swiped');
+        const index = getMessageIndexFromEvent(payload);
+        if (index < 0) return;
+        runFinalStreamingCleanse(index, { clearRawSource: true });
+    });
     if (event_types.PRESET_CHANGED) {
         eventSource.on(event_types.PRESET_CHANGED, (payload) => {
             if (payload && payload.apiId && payload.apiId !== 'openai') return;
@@ -3332,9 +3452,11 @@ export function bindEvents() {
     }
     if (event_types.CHAT_CHANGED) {
         eventSource.on(event_types.CHAT_CHANGED, () => {
+            generationLifecycle.cancelActive('chat-changed');
             resetAiRewriteRuntimeState('chat-changed');
             resetDiffRuntimeState();
-            runtimeState.streamingRawMessageCache.clear();
+            runtimeState.streamingCommittedMessageCache.clear();
+            clearStreamingPresentations();
             clearStreamEventBuffers();
             runtimeState.currentDiffIndex = undefined;
             $('#blai-diff-modal').hide();
@@ -3343,6 +3465,11 @@ export function bindEvents() {
             setTimeout(() => { injectDiffButtons(); performGlobalCleanse({ deferLargeChat: true }); }, 120);
         });
     }
+
+    window.addEventListener('beforeunload', () => {
+        generationLifecycle.cancelActive('page-unload');
+        resetAiRewriteRuntimeState('page-unload');
+    }, { once: true });
 
     setInterval(() => applyCharacterPresetBinding(false, { skipCleanse: true }), 1200);
 }

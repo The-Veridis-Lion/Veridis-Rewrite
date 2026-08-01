@@ -1646,7 +1646,6 @@
 .blai-checkbox-label input:checked + .blai-custom-checkbox::after, .blai-batch-checkbox-label input:checked + .blai-custom-checkbox.blai-square-2px::after {
     content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: white; font-size: 10px; display: flex; align-items: center; justify-content: center;
 }
-
 /* 卡片内容排版 */
 .blai-group-title { font-size: 15px !important; font-weight: 600; color: var(--blai-text-main); display: flex; align-items: center; word-break: break-all; }
 .blai-card-body { display: flex; flex-direction: column; gap: 4px; }
@@ -2984,8 +2983,41 @@
 .blai-diff-full-modified ins[data-blai-diff-source="program"] { color: #0ca678 !important; background: rgba(12, 166, 120, 0.08) !important; }
 .blai-diff-full-modified ins[data-blai-diff-source="ai"] { color: #5b46d9 !important; background: rgba(91, 70, 217, 0.13) !important; }
 
-.blai-ai-toast-actions { display: flex !important; justify-content: flex-end !important; margin-top: 10px !important; }
-.blai-ai-toast-stop { min-height: 26px !important; padding: 4px 10px !important; border: 1px solid rgba(255, 255, 255, 0.42) !important; border-radius: 4px !important; background: rgba(0, 0, 0, 0.16) !important; color: #ffffff !important; font: inherit !important; font-size: 12px !important; line-height: 1 !important; cursor: pointer !important; }
+#toast-container > .toast.blai-ai-rewrite-toast {
+    box-sizing: border-box !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-areas: "title action" "message action" !important;
+    column-gap: 12px !important;
+    row-gap: 4px !important;
+    width: min(360px, calc(100vw - 24px)) !important;
+    min-height: 0 !important;
+    padding: 12px 14px 12px 40px !important;
+    background-position: 13px center !important;
+    background-size: 16px !important;
+}
+#toast-container > .toast.blai-ai-rewrite-toast .toast-title {
+    grid-area: title !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    font-size: 15px !important;
+    line-height: 1.3 !important;
+}
+#toast-container > .toast.blai-ai-rewrite-toast .toast-message {
+    grid-area: message !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+}
+.blai-ai-toast-actions {
+    grid-area: action !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    margin: 0 !important;
+}
+.blai-ai-toast-stop { min-height: 40px !important; padding: 7px 12px !important; border: 1px solid rgba(255, 255, 255, 0.42) !important; border-radius: 5px !important; background: rgba(0, 0, 0, 0.16) !important; color: #ffffff !important; font: inherit !important; font-size: 13px !important; line-height: 1 !important; cursor: pointer !important; }
 .blai-ai-toast-stop:hover { background: rgba(0, 0, 0, 0.28) !important; border-color: rgba(255, 255, 255, 0.72) !important; }
 
 /* 尾部溯源按钮 */
@@ -4977,6 +5009,28 @@
     color: var(--blai-chip-text) !important;
 }
 
+#blai-tags-container .blai-rule-risk-indicator {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 24px !important;
+    width: 24px !important;
+    height: 32px !important;
+    cursor: pointer !important;
+    color: var(--blai-btn-danger) !important;
+    font-size: 18px !important;
+    line-height: 1 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+#blai-tags-container .blai-rule-risk-indicator:focus-visible {
+    outline: 2px solid var(--blai-btn-danger) !important;
+    outline-offset: 2px !important;
+    border-radius: 50% !important;
+}
+
 #blai-purifier-popup.blai-is-batch-mode #blai-tags-container .blai-rule-edit span {
     display: none !important;
 }
@@ -5020,6 +5074,29 @@
     max-height: min(760px, calc(100dvh - 28px)) !important;
     border-radius: 20px !important;
     padding: 16px !important;
+}
+
+#blai-risk-confirm-modal .blai-risk-confirm-card,
+#blai-risk-info-modal .blai-risk-info-card {
+    width: min(440px, calc(100vw - 28px)) !important;
+    max-height: calc(100dvh - 28px) !important;
+    padding: 18px !important;
+}
+
+#blai-risk-confirm-text,
+#blai-risk-info-text {
+    max-height: min(55dvh, 420px) !important;
+    margin: 0 !important;
+    overflow-y: auto !important;
+    color: var(--blai-text-primary) !important;
+    font-size: 14px !important;
+    line-height: 1.7 !important;
+    white-space: pre-wrap !important;
+}
+
+#blai-risk-confirm-modal .blai-modal-actions,
+#blai-risk-info-modal .blai-modal-actions {
+    margin-top: 16px !important;
 }
 
 #blai-rule-edit-modal .blai-edit-modal-title,
@@ -5627,6 +5704,10 @@
 }
 
 #blai-purifier-popup.blai-app-shell .api-metric[data-state="missing"] b {
+    color: var(--subtle) !important;
+}
+
+#blai-purifier-popup.blai-app-shell .api-metric[data-state="disabled"] b {
     color: var(--subtle) !important;
 }
 

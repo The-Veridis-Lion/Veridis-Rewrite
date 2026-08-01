@@ -4,31 +4,57 @@ import {
     applyScopedReplacements,
     buildSimpleTargetPattern,
     buildTargetLiteralPattern,
+    pickReplacement,
     queueIncrementalChatSave,
     preserveMvuStatusPlaceholder,
     refreshMessageDisplay,
-    resolveLatestTrackableMessageIndex,
+    resolveRegexProcessorReplacement,
     resolveMessageDiffSource,
     syncMessageDiffMetadata,
 } from './core.js';
-import { compileRegexTarget, mergeScopeTagsWithBuiltins, normalizeXmlTagNameInput } from './utils.js';
+import { compileRegexTarget, mergeScopeTagsWithBuiltins, normalizeOptionalXmlTagNameInput } from './utils.js';
 import { getZhVariantCompatOptions, isZhDictionaryReady } from './zhConversion.js';
-import { buildDiffResultFromChain, ensureMessageDiffButton, isAssistantMessage, writeReadyDiffCache } from './diff.js';
-import { getMessageDomNode, purifyDOM } from './dom.js';
+import { buildDiffResultFromChain, isAssistantMessage, writeReadyDiffCache } from './diff.js';
+import { beginAtomicMessageDisplaySwap } from './dom.js';
 import { getMessageDiffBranchKey, setCurrentSwipeText, writeMessageDiffAiTrace } from './messageMeta.js';
-import { markHostChatDirtyFromIndex } from './platform.js';
+import { getCurrentChatIdentity, markHostChatDirtyFromIndex } from './platform.js';
+import { generationLifecycle, hashLifecycleText, parseStableMessagePayload } from './generationLifecycle.js';
 import { showToast } from './ui.js';
 
-const responseGuard = `必须只返回一个 JSON 对象，格式为 {"rewrites":[{"id":"hit-1","rewritten":"..."}]}。
-不要返回 markdown、解释、多个 JSON 对象、整条消息改写或未列出的片段。
-每个 rewritten 只能替换对应 id 的局部片段，不能包含代码块围栏或 JSON 包装。
-输出 rewrites[].id 必须来自 rewriteGroups[].items[].id。
-每个 rewriteGroups[].instructions 只能作用于同组 items。`;
+const responseGuard = `这是原位片段替换任务：每个 rewritten 都会直接替换对应 item.text，而不是替换整句或整段。
+beforeContext 和 afterContext 只用于判断衔接，严禁复制、复述或改写到 rewritten 中。
+rewritten 可以是空字符串，表示删除 item.text；无法安全改写时原样返回 item.text。
+必须为本次输入的每个 id 恰好返回一项，不得遗漏、重复或返回未知 id。
+必须只返回一个 JSON 对象，格式为 {"rewrites":[{"id":"hit-1","rewritten":"..."}]}。
+不要返回 markdown、解释、多个 JSON 对象、整条消息改写、代码块围栏或 JSON 包装。
+每个 rewriteGroups[].instructions 和 localFallbackCandidates 只能作用于同组 items；候选仅供参考，不要求强行使用。`;
 
 let readyNoticeTimer = null;
 const debugLogStorageKey = `${extensionName}_ai_rewrite_debug_events`;
+const criticalDebugLogStorageKey = `${extensionName}_ai_rewrite_critical_debug_events`;
 const debugLogDomAttribute = 'data-veridis-ai-rewrite-debug-events';
 const debugLogLimit = 60;
+const criticalDebugLogLimit = 160;
+const criticalDebugStages = new Set([
+    'streaming-xml-end-detected',
+    'content-snapshot-frozen',
+    'task-built',
+    'popup-preparing',
+    'request-claimed',
+    'pre-run-validation',
+    'run-start',
+    'fetch-start',
+    'fetch-response',
+    'apply-deferred',
+    'response-deferred',
+    'final-cleanse-ready',
+    'apply-start',
+    'apply-success',
+    'atomic-commit',
+    'apply-skip',
+    'task-cancelled',
+    'popup-cleared',
+]);
 const streamingXmlTailLookbackChars = 64;
 const streamingXmlScanByMessageId = new Map();
 
@@ -81,12 +107,40 @@ function readStoredDebugEvents() {
     }
 }
 
+function readStoredCriticalDebugEvents() {
+    try {
+        const raw = localStorage.getItem(criticalDebugLogStorageKey);
+        const parsed = JSON.parse(raw || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
 function writeStoredDebugEvents(events) {
     try {
         localStorage.setItem(debugLogStorageKey, JSON.stringify(events.slice(-debugLogLimit)));
     } catch {
         // Ignore storage failures; console/runtime logs still work.
     }
+}
+
+function writeStoredCriticalDebugEvents(events) {
+    try {
+        localStorage.setItem(criticalDebugLogStorageKey, JSON.stringify(events.slice(-criticalDebugLogLimit)));
+    } catch {
+        // Ignore storage failures; runtime logs still work.
+    }
+}
+
+function mergeDebugEvents(...groups) {
+    const seen = new Set();
+    return groups.flat().filter((event) => {
+        const key = `${event?.time}|${event?.stage}|${JSON.stringify(event?.details || {})}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    }).sort((a, b) => String(a?.time || '').localeCompare(String(b?.time || '')));
 }
 
 function recordAiRewriteDebug(stage, details = {}, level = 'info') {
@@ -101,13 +155,27 @@ function recordAiRewriteDebug(stage, details = {}, level = 'info') {
         : [];
     stateEvents.push(event);
     runtimeState.aiRewrite.debugEvents = stateEvents.slice(-debugLogLimit);
+    if (criticalDebugStages.has(event.stage)) {
+        const criticalEvents = Array.isArray(runtimeState.aiRewrite.criticalDebugEvents)
+            ? runtimeState.aiRewrite.criticalDebugEvents
+            : [];
+        criticalEvents.push(event);
+        runtimeState.aiRewrite.criticalDebugEvents = criticalEvents.slice(-criticalDebugLogLimit);
+        const storedCritical = readStoredCriticalDebugEvents();
+        storedCritical.push(event);
+        writeStoredCriticalDebugEvents(storedCritical);
+    }
+    const exposedEvents = mergeDebugEvents(
+        runtimeState.aiRewrite.criticalDebugEvents || [],
+        runtimeState.aiRewrite.debugEvents || [],
+    );
     try {
-        globalThis.__veridisAiRewriteLog = runtimeState.aiRewrite.debugEvents;
+        globalThis.__veridisAiRewriteLog = exposedEvents;
     } catch {
         // Ignore global exposure failures.
     }
     try {
-        document?.documentElement?.setAttribute?.(debugLogDomAttribute, JSON.stringify(runtimeState.aiRewrite.debugEvents));
+        document?.documentElement?.setAttribute?.(debugLogDomAttribute, JSON.stringify(exposedEvents));
     } catch {
         // Ignore DOM exposure failures; storage/console logs still work.
     }
@@ -133,23 +201,34 @@ export function recordAiRewriteRuntimeDebug(stage, details = {}, level = 'info')
 }
 
 export function getAiRewriteDebugLogText() {
-    const combined = [...readStoredDebugEvents(), ...(runtimeState.aiRewrite.debugEvents || [])];
+    const combined = mergeDebugEvents(
+        readStoredCriticalDebugEvents(),
+        runtimeState.aiRewrite.criticalDebugEvents || [],
+        readStoredDebugEvents(),
+        runtimeState.aiRewrite.debugEvents || [],
+    );
     const seen = new Set();
     const deduped = combined.filter((event) => {
         const key = `${event.time}|${event.stage}|${JSON.stringify(event.details || {})}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
-    }).slice(-debugLogLimit);
-    runtimeState.aiRewrite.debugEvents = deduped;
-    writeStoredDebugEvents(deduped);
+    }).slice(-(criticalDebugLogLimit + debugLogLimit));
+    runtimeState.aiRewrite.debugEvents = deduped.slice(-debugLogLimit);
+    runtimeState.aiRewrite.criticalDebugEvents = deduped
+        .filter(event => criticalDebugStages.has(event.stage))
+        .slice(-criticalDebugLogLimit);
+    writeStoredDebugEvents(runtimeState.aiRewrite.debugEvents);
+    writeStoredCriticalDebugEvents(runtimeState.aiRewrite.criticalDebugEvents);
     return JSON.stringify(deduped, null, 2);
 }
 
 export function clearAiRewriteDebugLog() {
     runtimeState.aiRewrite.debugEvents = [];
+    runtimeState.aiRewrite.criticalDebugEvents = [];
     try {
         localStorage.removeItem(debugLogStorageKey);
+        localStorage.removeItem(criticalDebugLogStorageKey);
     } catch {
         // Ignore storage failures.
     }
@@ -201,8 +280,10 @@ function removeToastElement(toastElement) {
     }
 }
 
-function clearAiRewriteStatusToast(extraToastElement = null) {
+function clearAiRewriteStatusToast(extraToastElement = null, reason = '') {
     const rewriteState = runtimeState.aiRewrite;
+    const clearedTaskKey = String(rewriteState?.statusTaskKey || '');
+    const hadStatus = Boolean(rewriteState?.statusToast || clearedTaskKey);
     const toastApi = getToastApi();
     const toastElement = getToastElement(rewriteState?.statusToast);
     if (rewriteState?.statusToast && toastApi && typeof toastApi.clear === 'function') {
@@ -224,6 +305,12 @@ function clearAiRewriteStatusToast(extraToastElement = null) {
     if (rewriteState) {
         rewriteState.statusToast = null;
         rewriteState.statusTaskKey = '';
+    }
+    if (hadStatus && reason) {
+        recordAiRewriteDebug('popup-cleared', {
+            task: clearedTaskKey ? hashString(clearedTaskKey) : '',
+            reason: String(reason),
+        });
     }
 }
 
@@ -278,7 +365,7 @@ function notifyAiRewriteStatus(type, title, message, options = {}) {
     const safeMessage = String(message || '');
     const toastApi = getToastApi();
     if (toastApi && typeof toastApi[method] === 'function') {
-        if (options.replaceCurrent !== false) clearAiRewriteStatusToast();
+        if (options.replaceCurrent !== false) clearAiRewriteStatusToast(null, `status-${method}`);
         const sticky = options.sticky === true;
         const toast = toastApi[method](safeMessage, safeTitle, {
             timeOut: sticky ? 0 : (options.timeOut ?? 5000),
@@ -288,6 +375,7 @@ function notifyAiRewriteStatus(type, title, message, options = {}) {
             preventDuplicates: false,
             escapeHtml: true,
         });
+        if (sticky) getToastElement(toast)?.classList?.add('blai-ai-rewrite-toast');
         runtimeState.aiRewrite.statusToast = sticky ? toast : null;
         runtimeState.aiRewrite.statusTaskKey = sticky ? String(options.taskKey || '') : '';
         if (sticky && options.cancellable === true) {
@@ -300,11 +388,12 @@ function notifyAiRewriteStatus(type, title, message, options = {}) {
 }
 
 function getAiXmlScopeTag(aiSettings) {
-    const tagName = normalizeXmlTagNameInput(aiSettings?.xmlScopeTag, 'content');
+    const tagName = normalizeOptionalXmlTagNameInput(aiSettings?.xmlScopeTag, 'content');
     return {
+        wholeMessage: tagName === '',
         tagName,
-        startTag: `<${tagName}>`,
-        endTag: `</${tagName}>`,
+        startTag: tagName ? `<${tagName}>` : '',
+        endTag: tagName ? `</${tagName}>` : '',
     };
 }
 
@@ -314,7 +403,16 @@ function escapeRegExp(value = '') {
 
 function collectAiXmlScopeSegments(text, aiSettings) {
     const source = String(text || '');
-    const { tagName } = getAiXmlScopeTag(aiSettings);
+    const { wholeMessage, tagName } = getAiXmlScopeTag(aiSettings);
+    if (wholeMessage) {
+        return source.length > 0 ? [{
+            index: 0,
+            start: 0,
+            end: source.length,
+            outerStart: 0,
+            outerEnd: source.length,
+        }] : [];
+    }
     const escapedTagName = escapeRegExp(tagName);
     const startRegex = new RegExp(`<\\s*${escapedTagName}(?:\\s+[^<>]*)?\\s*>`, 'giu');
     const endRegex = new RegExp(`<\\s*/\\s*${escapedTagName}\\s*>`, 'giu');
@@ -348,9 +446,9 @@ function getAiXmlScopedRequestText(text, aiSettings) {
     const source = String(text || '');
     const segments = collectAiXmlScopeSegments(source, aiSettings);
     if (segments.length === 0) return source;
-
-    const cutoff = segments.reduce((maxEnd, segment) => Math.max(maxEnd, Number(segment.outerEnd) || segment.end), 0);
-    return cutoff > 0 ? source.slice(0, cutoff) : source;
+    return segments
+        .map((segment) => source.slice(segment.outerStart, segment.outerEnd))
+        .join('\n');
 }
 
 function buildAiRewriteVersionToken(settings) {
@@ -381,7 +479,7 @@ function buildAiRewriteVersionToken(settings) {
             maxContextChars: aiSettings.maxContextChars,
             maxRewriteCharsPerItem: aiSettings.maxRewriteCharsPerItem,
             streamingRoughPreview: aiSettings.streamingRoughPreview !== false,
-            xmlScopeTag: normalizeXmlTagNameInput(aiSettings.xmlScopeTag, 'content'),
+            xmlScopeTag: normalizeOptionalXmlTagNameInput(aiSettings.xmlScopeTag, 'content'),
             promptTemplate: aiSettings.promptTemplate || '',
         },
         activePreset: settings.activePreset || '',
@@ -600,6 +698,8 @@ function collectAiMatches(text, settings, aiSettings) {
                     matches.push({
                         ...matcher,
                         matchedText,
+                        captures: match.slice(1),
+                        groups: match.groups && typeof match.groups === 'object' ? { ...match.groups } : null,
                         start,
                         end,
                     });
@@ -615,16 +715,235 @@ function countMatchedAiRules(matches = []) {
     return new Set(matches.map(match => `${match.ruleIndex}:${match.subRuleIndex}`)).size;
 }
 
-function formatAiRewriteProgress(task, suffix) {
-    return `AI规则命中 ${task.ruleHitCount} 条，待改写 ${task.items.length} 段，${suffix}`;
+function isLatestTrackableMessageIndex(index) {
+    const { chat } = getAppContext();
+    if (!Array.isArray(chat) || !Number.isInteger(index) || index < 0) return false;
+    for (let i = chat.length - 1; i >= 0; i--) {
+        if (!isAssistantMessage(chat[i])) continue;
+        return i === index;
+    }
+    return false;
+}
+
+function getAiConfigIssue(aiSettings) {
+    if (aiSettings?.enabled !== true) {
+        return {
+            code: 'disabled',
+            reason: 'AI改写未启用',
+            warning: '',
+        };
+    }
+
+    const missingConfig = [];
+    if (!String(aiSettings.baseUrl || '').trim()) missingConfig.push('Base URL');
+    if (!String(aiSettings.apiKey || '')) missingConfig.push('API Key');
+    if (!String(aiSettings.model || '').trim()) missingConfig.push('模型');
+    if (missingConfig.length > 0) {
+        return {
+            code: 'incomplete-config',
+            reason: `AI API配置不完整：缺少 ${missingConfig.join('、')}`,
+            warning: '已命中 AI 改写规则，但 AI API 配置不完整，本次仅执行程序改写。',
+        };
+    }
+
+    return null;
+}
+
+function getAiProgramFallbackReplacement(match, sourceText = '') {
+    const replacements = Array.isArray(match?.replacements) ? match.replacements : [];
+    if (replacements.length === 0) return '';
+
+    const key = `${match.ruleIndex}:${match.subRuleIndex}:${match.mode}:${match.target}:${match.matchedText}`;
+    if (match.mode === 'regex') {
+        const args = [
+            ...(Array.isArray(match.captures) ? match.captures : []),
+            Number(match.start) || 0,
+            String(sourceText || ''),
+        ];
+        if (match.groups && typeof match.groups === 'object') args.push(match.groups);
+        return resolveRegexProcessorReplacement({ replacements }, key, String(match.matchedText || ''), args, true);
+    }
+
+    return String(pickReplacement(replacements, key) ?? '');
+}
+
+function applyAiProgramFallbackMatches(text, matches = []) {
+    const source = String(text || '');
+    if (!source || !Array.isArray(matches) || matches.length === 0) return source;
+
+    const sorted = [...matches]
+        .filter((match) => Number.isFinite(Number(match?.start)) && Number.isFinite(Number(match?.end)) && Number(match.end) > Number(match.start))
+        .sort((a, b) => Number(b.start) - Number(a.start) || Number(b.end) - Number(a.end));
+    const appliedRanges = [];
+    let output = source;
+
+    for (const match of sorted) {
+        const start = Math.max(0, Math.min(output.length, Number(match.start)));
+        const end = Math.max(start, Math.min(output.length, Number(match.end)));
+        if (appliedRanges.some((range) => start < range.end && range.start < end)) continue;
+        if (output.slice(start, end) !== String(match.matchedText || '')) continue;
+
+        const replacement = getAiProgramFallbackReplacement(match, source);
+        output = output.slice(0, start) + replacement + output.slice(end);
+        appliedRanges.push({ start, end });
+    }
+
+    return output;
+}
+
+function formatAiRewriteProgress(task, current, total) {
+    const hitCount = Math.max(0, Array.isArray(task?.items) ? task.items.length : 0);
+    const safeTotal = Math.max(1, Number(total) || 1);
+    const safeCurrent = Math.min(safeTotal, Math.max(1, Number(current) || 1));
+    return `命中 ${hitCount} 处 · 正在处理 ${safeCurrent}/${safeTotal}…`;
+}
+
+function notifyAiRewriteProgress(task, current, total) {
+    notifyAiRewriteStatus('info', 'AI 改写中', formatAiRewriteProgress(task, current, total), {
+        sticky: true,
+        cancellable: true,
+        taskKey: task.dedupeKey,
+    });
 }
 
 function getAiRewriteMessageKey(index, branchKey = 'main') {
     return `${Number(index)}:${String(branchKey || 'main')}`;
 }
 
+function getAiRewriteMessageIndexKey(index) {
+    return String(Number(index));
+}
+
 function getTaskMessageKey(task) {
     return getAiRewriteMessageKey(task.index, task.branchKey);
+}
+
+function getContentIdentityMap() {
+    const rewriteState = runtimeState.aiRewrite;
+    if (!(rewriteState.contentIdentityByGenerationId instanceof Map)) {
+        rewriteState.contentIdentityByGenerationId = new Map();
+    }
+    return rewriteState.contentIdentityByGenerationId;
+}
+
+function getContentIdentity(generationId) {
+    return getContentIdentityMap().get(String(generationId || '')) || null;
+}
+
+function extractCurrentAiRewriteScope(text, aiSettings) {
+    const source = String(text || '');
+    const segments = collectAiXmlScopeSegments(source, aiSettings);
+    if (segments.length === 0) {
+        return { ok: false, text: '', hash: '', tailLength: source.length, reason: 'content-scope-missing' };
+    }
+    const scopedText = getAiXmlScopedRequestText(source, aiSettings);
+    return {
+        ok: true,
+        text: scopedText,
+        hash: hashString(scopedText),
+        tailLength: Math.max(0, source.length - scopedText.length),
+        reason: '',
+    };
+}
+
+function freezeAiRewriteContentIdentity(payload, snapshotText, aiSettings) {
+    const generationId = String(payload?.generationId || '');
+    if (!generationId) return null;
+    const existing = getContentIdentity(generationId);
+    if (existing) return existing;
+
+    const { chat } = getAppContext();
+    const parsed = parseStableMessagePayload(payload);
+    if (!parsed.ok || !Array.isArray(chat)) return null;
+    const messageRef = chat[parsed.messageIndex];
+    if (!isAssistantMessage(messageRef)) return null;
+
+    const scoped = extractCurrentAiRewriteScope(snapshotText, aiSettings);
+    if (!scoped.ok) return null;
+    const identity = {
+        generationId,
+        chatId: String(payload?.chatId || ''),
+        messageId: parsed.messageIndex,
+        messageRef,
+        branchKey: getMessageDiffBranchKey(messageRef),
+        xmlTag: getAiXmlScopeTag(aiSettings).tagName,
+        requestSnapshotText: scoped.text,
+        requestSnapshotHash: scoped.hash,
+        expectedScopeText: scoped.text,
+        expectedScopeHash: scoped.hash,
+        taskKey: '',
+    };
+    getContentIdentityMap().set(generationId, identity);
+    recordAiRewriteDebug('content-snapshot-frozen', {
+        generationId,
+        chatId: identity.chatId,
+        messageId: identity.messageId,
+        contentSnapshotHash: identity.requestSnapshotHash,
+        scopedLength: identity.requestSnapshotText.length,
+        xmlTag: identity.xmlTag,
+    });
+    return identity;
+}
+
+function validateAutomaticAiRewriteContent(taskLike, options = {}) {
+    const generationId = String(taskLike?.generationId || '');
+    const { chat } = getAppContext();
+    const lifecycleValidation = generationLifecycle.validate(generationId, {
+        chatId: getCurrentChatIdentity(),
+        chat,
+        mode: 'identity',
+    });
+    if (!lifecycleValidation.ok) return lifecycleValidation;
+
+    const identity = getContentIdentity(generationId);
+    if (!identity) return { ok: false, reason: 'content-identity-missing' };
+    if (lifecycleValidation.session.messageId !== identity.messageId
+        || lifecycleValidation.session.messageRef !== identity.messageRef) {
+        return { ok: false, reason: 'generation-message-mismatch' };
+    }
+    if (taskLike?.index !== undefined && Number(taskLike.index) !== identity.messageId) {
+        return { ok: false, reason: 'generation-message-mismatch' };
+    }
+    if (String(taskLike?.chatId || identity.chatId) !== identity.chatId) {
+        return { ok: false, reason: 'chat-changed' };
+    }
+    if (getMessageDiffBranchKey(identity.messageRef) !== identity.branchKey) {
+        return { ok: false, reason: 'branch-changed' };
+    }
+    if (taskLike?.contentSnapshotHash
+        && String(taskLike.contentSnapshotHash) !== identity.requestSnapshotHash) {
+        return { ok: false, reason: 'content-snapshot-changed' };
+    }
+
+    const aiSettings = taskLike?.aiSettings || getAiSettings();
+    const currentScope = extractCurrentAiRewriteScope(identity.messageRef?.mes || '', aiSettings);
+    if (!currentScope.ok) return currentScope;
+    const matchesExpectedScope = currentScope.hash === identity.expectedScopeHash
+        && currentScope.text === identity.expectedScopeText;
+    recordAiRewriteDebug('pre-run-validation', {
+        generationId,
+        chatId: identity.chatId,
+        messageId: identity.messageId,
+        requestState: lifecycleValidation.session.requestState,
+        validationMode: 'content-scope',
+        validationReason: matchesExpectedScope ? '' : 'content-scope-changed',
+        contentSnapshotHash: identity.requestSnapshotHash,
+        currentContentHash: currentScope.hash,
+        fullMessageHash: hashLifecycleText(identity.messageRef?.mes || ''),
+        tailLength: currentScope.tailLength,
+        source: String(options.source || taskLike?.scheduleSource || ''),
+    }, matchesExpectedScope ? 'info' : 'warn');
+    if (!matchesExpectedScope) return { ok: false, reason: 'content-scope-changed' };
+    return { ok: true, reason: '', session: lifecycleValidation.session, message: identity.messageRef, identity, currentScope };
+}
+
+function markStreamingAiRewriteStarted(task) {
+    if (task?.waitForFinalCleanse !== true) return;
+    runtimeState.aiRewrite.streamingStartedMessageIndices.add(getAiRewriteMessageIndexKey(task.index));
+}
+
+function hasStreamingAiRewriteStartedForMessage(index) {
+    return runtimeState.aiRewrite.streamingStartedMessageIndices.has(getAiRewriteMessageIndexKey(index));
 }
 
 function getRunningTaskMetaMap() {
@@ -689,60 +1008,16 @@ function findContainingSegment(match, segments) {
     return segments.find((segment) => match.start >= segment.start && match.end <= segment.end) || { start: 0, end: 0 };
 }
 
-function expandToParagraph(text, start, end, segment) {
-    let paraStart = start;
-    while (paraStart > segment.start) {
-        const previous = text.slice(Math.max(segment.start, paraStart - 2), paraStart);
-        if (/\n\s*\n$/.test(previous)) break;
-        paraStart -= 1;
-    }
-
-    let paraEnd = end;
-    while (paraEnd < segment.end) {
-        const next = text.slice(paraEnd, Math.min(segment.end, paraEnd + 2));
-        if (/^\n\s*\n/.test(next)) break;
-        paraEnd += 1;
-    }
-
-    return { start: paraStart, end: paraEnd };
-}
-
-function expandToSentence(text, start, end, paragraph) {
-    const boundaryRegex = /[。！？!?;；]/g;
-    let sentenceStart = paragraph.start;
-    let match;
-    const before = text.slice(paragraph.start, start);
-    while ((match = boundaryRegex.exec(before)) !== null) {
-        sentenceStart = paragraph.start + match.index + match[0].length;
-    }
-    while (sentenceStart < start && /[\s"'“”‘’)\]）】》>]/.test(text[sentenceStart] || '')) sentenceStart += 1;
-
-    let sentenceEnd = paragraph.end;
-    const after = text.slice(end, paragraph.end);
-    const nextBoundary = after.search(/[。！？!?;；]/);
-    if (nextBoundary >= 0) {
-        sentenceEnd = end + nextBoundary + 1;
-        while (sentenceEnd < paragraph.end && /["'“”‘’)\]）】》>]/.test(text[sentenceEnd] || '')) sentenceEnd += 1;
-    }
-
-    const candidate = { start: sentenceStart, end: sentenceEnd };
-    const tooShort = candidate.end - candidate.start < Math.max(12, end - start + 4);
-    return tooShort ? paragraph : candidate;
-}
-
 function buildRewriteItems(text, matches, aiSettings) {
     if (matches.length === 0) return [];
     const segments = collectAiXmlScopeSegments(text, aiSettings);
     const codeRanges = collectCodeRanges(text);
-    const maxItems = normalizeLimit(aiSettings.maxItemsPerRequest, 8, 1, 32);
     const fragments = [];
 
     matches.forEach((match) => {
         const segment = findContainingSegment(match, segments);
         if (!segment || segment.end <= segment.start) return;
-        const paragraph = expandToParagraph(text, match.start, match.end, segment);
-        const sentence = expandToSentence(text, match.start, match.end, paragraph);
-        const range = rangeOverlapsAny(sentence.start, sentence.end, codeRanges) ? paragraph : sentence;
+        const range = { start: match.start, end: match.end };
         if (rangeOverlapsAny(range.start, range.end, codeRanges)) return;
         fragments.push({
             ...range,
@@ -765,9 +1040,18 @@ function buildRewriteItems(text, matches, aiSettings) {
         merged.push({ ...fragment });
     });
 
-    return merged.slice(0, maxItems).map((fragment, index) => {
+    return merged.map((fragment, index) => {
         const localFallbackCandidates = [...new Set(fragment.matches.flatMap((match) => match.replacements || []).filter((value) => value !== undefined).map(String))];
         const matchedTerms = [...new Set(fragment.matches.map((match) => match.matchedText).filter(Boolean))];
+        const fragmentText = text.slice(fragment.start, fragment.end);
+        const programFallbackText = applyAiProgramFallbackMatches(
+            fragmentText,
+            fragment.matches.map((match) => ({
+                ...match,
+                start: match.start - fragment.start,
+                end: match.end - fragment.start,
+            }))
+        );
         return {
             id: `hit-${index + 1}`,
             segmentIndex: fragment.segmentIndex,
@@ -775,7 +1059,8 @@ function buildRewriteItems(text, matches, aiSettings) {
             end: fragment.end,
             relativeStart: fragment.start - fragment.segmentStart,
             relativeEnd: fragment.end - fragment.segmentStart,
-            text: text.slice(fragment.start, fragment.end),
+            text: fragmentText,
+            programFallbackText,
             beforeAnchor: text.slice(Math.max(fragment.segmentStart, fragment.start - 24), fragment.start),
             afterAnchor: text.slice(fragment.end, Math.min(fragment.segmentEnd, fragment.end + 24)),
             matchedTerms,
@@ -846,6 +1131,8 @@ function buildPublicRewriteGroups(items) {
             id: item.id,
             text: item.text,
             matchedTerms: item.matchedTerms,
+            beforeContext: item.beforeAnchor,
+            afterContext: item.afterAnchor,
         });
     });
 
@@ -853,11 +1140,16 @@ function buildPublicRewriteGroups(items) {
 }
 
 function groupRewriteItemsByPrompt(items, aiSettings) {
-    return [{
-        key: 'all-items',
-        promptTemplate: getGlobalPromptTemplate(aiSettings),
-        items,
-    }];
+    const batchSize = normalizeLimit(aiSettings.maxItemsPerRequest, defaultAiRewriteSettings.maxItemsPerRequest, 1, 32);
+    const groups = [];
+    for (let start = 0; start < items.length; start += batchSize) {
+        groups.push({
+            key: `batch-${Math.floor(start / batchSize) + 1}`,
+            promptTemplate: getGlobalPromptTemplate(aiSettings),
+            items: items.slice(start, start + batchSize),
+        });
+    }
+    return groups;
 }
 
 function renderPrompt(originalText, items, settings, aiSettings, promptTemplate = getGlobalPromptTemplate(aiSettings)) {
@@ -867,10 +1159,11 @@ function renderPrompt(originalText, items, settings, aiSettings, promptTemplate 
     const template = String(promptTemplate || '')
         .replaceAll('{{originalMessage}}', clippedContext)
         .replaceAll('{{rewriteItemsJson}}', rewriteItemsJson);
-    const rendered = template.includes(clippedContext) || template.includes(rewriteItemsJson)
-        ? template
-        : `${template}\n\n整条回复：\n${clippedContext}\n\n需要改写的分组与片段：\n${rewriteItemsJson}`;
-    return `${rendered}\n\n${responseGuard}`;
+    let rendered = template;
+    if (!rendered.includes(clippedContext)) rendered += `\n\n整条回复：\n${clippedContext}`;
+    if (!rendered.includes(rewriteItemsJson)) rendered += `\n\n需要改写的分组与片段：\n${rewriteItemsJson}`;
+    const expectedIds = items.map((item) => item.id);
+    return `${rendered}\n\n${responseGuard}\n本次必须返回 ${expectedIds.length} 项，id 依次为：${expectedIds.join('、')}。`;
 }
 
 function buildChatCompletionsEndpoint(baseUrl) {
@@ -885,13 +1178,58 @@ function stripSingleJsonFence(value) {
     return fenceMatch ? fenceMatch[1].trim() : trimmed;
 }
 
+const cotThinkingBlockRegex = /<\s*think(?:ing)?\b[^>]*>[\s\S]*?<\s*\/\s*think(?:ing)?\s*>/giu;
+const cotThinkingOpenTailRegex = /<\s*think(?:ing)?\b[^>]*>[\s\S]*$/iu;
+const cotThinkingTagRegex = /<\s*\/?\s*think(?:ing)?\b[^>]*>/giu;
+const cotThinkingMarkerRegex = /<\s*\/?\s*think(?:ing)?\b/i;
+
+function stripCotThinkingContent(value) {
+    return String(value || '')
+        .replace(cotThinkingBlockRegex, '')
+        .replace(cotThinkingOpenTailRegex, '')
+        .replace(cotThinkingTagRegex, '');
+}
+
+function hasCotThinkingMarker(value) {
+    return cotThinkingMarkerRegex.test(String(value || ''));
+}
+
+function getBoundaryProbe(value = '', edge = 'end') {
+    const compact = String(value || '').replace(/\s+/g, ' ').trim();
+    if (compact.length < 6) return '';
+    return edge === 'start' ? compact.slice(0, 12) : compact.slice(-12);
+}
+
+function getItemRewriteLengthLimit(item, absoluteLimit) {
+    const sourceLength = String(item?.text || '').length;
+    const fallbackLength = normalizeStringList(item?.localFallbackCandidates)
+        .reduce((max, value) => Math.max(max, value.length), 0);
+    const localLimit = Math.max(sourceLength + 8, Math.ceil(sourceLength * 3), fallbackLength);
+    return Math.min(absoluteLimit, localLimit);
+}
+
+function countSentenceBoundaries(value = '') {
+    return (String(value || '').match(/[。！？!?\r\n]/gu) || []).length;
+}
+
+function getRewrittenBoundaryIssue(rewritten, item) {
+    if (!rewritten) return '';
+    const beforeProbe = getBoundaryProbe(item?.beforeAnchor, 'end');
+    if (beforeProbe && rewritten.includes(beforeProbe)) return 'copied-before-context';
+    const afterProbe = getBoundaryProbe(item?.afterAnchor, 'start');
+    if (afterProbe && rewritten.includes(afterProbe)) return 'copied-after-context';
+    return '';
+}
+
 function parseAiResponse(rawText, itemById, aiSettings) {
-    const candidate = stripSingleJsonFence(rawText);
+    const sanitizedRawText = stripCotThinkingContent(rawText);
+    const candidate = stripSingleJsonFence(sanitizedRawText);
     if (!/^\{[\s\S]*\}$/.test(candidate)) {
         recordAiRewriteDebug('parse-failed', {
             reason: 'not-json-object',
             rawLength: String(rawText || '').length,
-            preview: String(rawText || '').slice(0, 300),
+            sanitizedLength: sanitizedRawText.length,
+            preview: String(sanitizedRawText || rawText || '').slice(0, 300),
         }, 'warn');
         throw new Error('API 返回不是单个 JSON 对象');
     }
@@ -915,24 +1253,48 @@ function parseAiResponse(rawText, itemById, aiSettings) {
         throw new Error('API 返回缺少 rewrites 数组');
     }
 
+    if (parsed.rewrites.length !== itemById.size) {
+        recordAiRewriteDebug('parse-failed', {
+            reason: 'rewrite-count-mismatch',
+            expectedCount: itemById.size,
+            returnedCount: parsed.rewrites.length,
+        }, 'warn');
+        throw new Error(`API 返回改写数量不一致：需要 ${itemById.size} 项，实际 ${parsed.rewrites.length} 项`);
+    }
+
     const maxChars = normalizeLimit(aiSettings.maxRewriteCharsPerItem, 2000, 50, 10000);
     const accepted = new Map();
-    let rejectedCount = 0;
-    parsed.rewrites.forEach((entry) => {
+    for (const entry of parsed.rewrites) {
         const id = String(entry?.id || '');
-        const rewritten = typeof entry?.rewritten === 'string' ? entry.rewritten : '';
-        if (!itemById.has(id)) { rejectedCount++; return; }
-        if (!rewritten.trim()) { rejectedCount++; return; }
-        if (rewritten.length > maxChars) { rejectedCount++; return; }
-        if (/```/.test(rewritten)) { rejectedCount++; return; }
-        if (/^\s*[\[{][\s\S]*[\]}]\s*$/.test(rewritten)) { rejectedCount++; return; }
+        if (!itemById.has(id)) throw new Error(`API 返回未知改写 id：${id || '(空)'}`);
+        if (accepted.has(id)) throw new Error(`API 返回重复改写 id：${id}`);
+        if (typeof entry?.rewritten !== 'string') throw new Error(`API 返回 ${id} 的 rewritten 不是字符串`);
+
+        const item = itemById.get(id);
+        const rawRewritten = entry.rewritten;
+        const rewritten = stripCotThinkingContent(rawRewritten).trim();
+        if (hasCotThinkingMarker(rewritten)) throw new Error(`API 返回 ${id} 包含思考标签`);
+        const itemLimit = getItemRewriteLengthLimit(item, maxChars);
+        if (rewritten.length > itemLimit) {
+            throw new Error(`API 返回 ${id} 超出局部改写长度：上限 ${itemLimit} 字，实际 ${rewritten.length} 字`);
+        }
+        if (countSentenceBoundaries(rewritten) > countSentenceBoundaries(item?.text)) {
+            throw new Error(`API 返回 ${id} 引入了 item.text 之外的句子边界`);
+        }
+        if (/```/.test(rewritten)) throw new Error(`API 返回 ${id} 包含代码块围栏`);
+        if (/^\s*[\[{][\s\S]*[\]}]\s*$/.test(rewritten)) throw new Error(`API 返回 ${id} 包含 JSON 包装`);
+        const boundaryIssue = getRewrittenBoundaryIssue(rewritten, item);
+        if (boundaryIssue) throw new Error(`API 返回 ${id} 越过局部边界：${boundaryIssue}`);
         accepted.set(id, rewritten);
-    });
+    }
+
+    const missingIds = [...itemById.keys()].filter((id) => !accepted.has(id));
+    if (missingIds.length > 0) throw new Error(`API 返回缺少改写 id：${missingIds.join('、')}`);
     recordAiRewriteDebug('parse-result', {
         returnedCount: parsed.rewrites.length,
         acceptedCount: accepted.size,
-        rejectedCount,
-    }, accepted.size > 0 ? 'info' : 'warn');
+        rejectedCount: 0,
+    });
     return accepted;
 }
 
@@ -941,6 +1303,13 @@ function getTaskFreshnessIssue(task) {
     const { chat } = getAppContext();
     const settings = getSettings();
     const msg = Array.isArray(chat) ? chat[task.index] : null;
+    if (task.automatic === true) {
+        const validation = validateAutomaticAiRewriteContent(task, { source: 'task-freshness' });
+        if (!validation.ok) return `generation-${validation.reason}`;
+        if (validation.session.messageId !== task.index) return 'generation-message-changed';
+    } else if (task.messageTextHashAtBuild && hashLifecycleText(msg?.mes || '') !== task.messageTextHashAtBuild) {
+        return 'message-text-changed';
+    }
     if (msg !== task.messageRef) return 'message-ref-changed';
     if (!isAssistantMessage(msg)) return 'not-assistant-message';
     if (msg?.__blai_is_reverted) return 'message-reverted';
@@ -956,6 +1325,9 @@ function isTaskStillFresh(task) {
 
 function getItemSearchNeedles(item) {
     const values = [String(item?.text || '')];
+    if (item?.programFallbackText && item.programFallbackText !== item.text) {
+        values.push(String(item.programFallbackText));
+    }
     try {
         const programText = applyScopedReplacements(String(item?.text || ''), { deterministic: true });
         if (programText && programText !== item.text) values.push(programText);
@@ -1024,7 +1396,162 @@ function locateRewriteItem(currentText, item, task) {
     return null;
 }
 
+function buildFinalAiRewriteText(text, msg, sources = []) {
+    const cleansedText = applyScopedReplacements(String(text || ''), { deterministic: true });
+    return preserveMvuStatusPlaceholder(cleansedText, msg, sources);
+}
+
+function commitAiRewriteText(taskLike, prepared) {
+    const { chat } = getAppContext();
+    const index = Number(taskLike?.index);
+    const msg = Array.isArray(chat) ? chat[index] : null;
+    if (!msg || msg !== taskLike?.messageRef || typeof msg.mes !== 'string') {
+        return { committed: false, reason: 'message-ref-changed' };
+    }
+
+    const currentText = String(prepared.currentText || '');
+    const finalText = String(prepared.finalText || '');
+    if (msg.mes !== currentText) return { committed: false, reason: 'message-text-changed' };
+    if (finalText === currentText) return { committed: false, reason: 'no-text-change' };
+
+    const sourceText = String(prepared.sourceText || currentText);
+    const programText = String(prepared.programText || finalText);
+    const branchKey = String(taskLike.branchKey || getMessageDiffBranchKey(msg));
+    const atomicSwap = beginAtomicMessageDisplaySwap(index);
+    try {
+        msg.mes = finalText;
+        setCurrentSwipeText(msg, finalText);
+        const { signature } = syncMessageDiffMetadata(msg, sourceText, finalText);
+        writeMessageDiffAiTrace(msg, branchKey, programText, finalText);
+        const diffResult = buildDiffResultFromChain(sourceText, programText, finalText);
+        writeReadyDiffCache(index, signature, {
+            snippets: Array.from(new Set(diffResult.snippets || [])),
+            fullDiff: diffResult.fullDiff || '',
+            signature,
+        }, {
+            preserveExistingRealDiff: true,
+            persist: true,
+        });
+
+        markHostChatDirtyFromIndex(index);
+        refreshMessageDisplay(index, { atomic: true, atomicSwap, emitRenderedEvent: 'auto' });
+        queueIncrementalChatSave();
+        recordAiRewriteDebug('atomic-commit', {
+            task: taskLike.dedupeKey ? hashString(taskLike.dedupeKey) : '',
+            index,
+            beforeLength: currentText.length,
+            afterLength: finalText.length,
+        });
+        return { committed: true, reason: '', signature };
+    } catch (error) {
+        atomicSwap?.release();
+        throw error;
+    }
+}
+
+function applyAiProgramFallback(taskLike, options = {}) {
+    const { chat } = getAppContext();
+    const index = Number(taskLike?.index);
+    if (!Array.isArray(chat) || !Number.isInteger(index) || index < 0 || index >= chat.length) {
+        return { applied: false, reason: 'invalid-index' };
+    }
+    if (!isLatestTrackableMessageIndex(index)) {
+        recordAiRewriteDebug('fallback-skip', {
+            reason: 'not-latest-trackable-message',
+            index,
+        }, 'warn');
+        return { applied: false, reason: 'not-latest-trackable-message' };
+    }
+
+    const msg = chat[index];
+    if (!isAssistantMessage(msg)) return { applied: false, reason: 'not-assistant-message' };
+    if (msg?.__blai_is_reverted) return { applied: false, reason: 'message-reverted' };
+    if (taskLike?.messageRef && msg !== taskLike.messageRef) return { applied: false, reason: 'message-ref-changed' };
+    if (taskLike?.automatic === true) {
+        const validation = validateAutomaticAiRewriteContent(taskLike, { source: 'program-fallback' });
+        if (!validation.ok || validation.session.messageId !== index) {
+            return { applied: false, reason: validation.reason || 'generation-message-mismatch' };
+        }
+    }
+    if (taskLike?.messageTextHashAtBuild
+        && taskLike.automatic !== true
+        && hashLifecycleText(msg.mes || '') !== taskLike.messageTextHashAtBuild) {
+        return { applied: false, reason: 'message-text-changed' };
+    }
+
+    const settings = taskLike.settings || getSettings();
+    const aiSettings = taskLike.aiSettings || getAiSettings();
+    const currentText = typeof msg.mes === 'string' ? msg.mes : '';
+    if (!currentText) return { applied: false, reason: 'message-empty' };
+
+    const currentMatches = collectAiMatches(currentText, settings, aiSettings);
+    if (currentMatches.length === 0) {
+        recordAiRewriteDebug('fallback-skip', {
+            reason: 'no-current-ai-match',
+            index,
+            trigger: options.reason || '',
+        }, 'warn');
+        return { applied: false, reason: 'no-current-ai-match' };
+    }
+
+    const fallbackText = applyAiProgramFallbackMatches(currentText, currentMatches);
+    const nextText = buildFinalAiRewriteText(fallbackText, msg, [currentText, fallbackText, taskLike.snapshotText]);
+    if (nextText === currentText) {
+        recordAiRewriteDebug('fallback-skip', {
+            reason: 'no-text-change',
+            index,
+            matchCount: currentMatches.length,
+            trigger: options.reason || '',
+        }, 'warn');
+        return { applied: false, reason: 'no-text-change' };
+    }
+
+    const branchKey = getMessageDiffBranchKey(msg);
+    const currentSourceText = resolveMessageDiffSource(msg);
+    const nextSourceText = preserveMvuStatusPlaceholder(currentSourceText || currentText, msg, [
+        currentText,
+        nextText,
+        taskLike.snapshotText,
+    ]);
+    const commitResult = commitAiRewriteText({ ...taskLike, branchKey, messageRef: msg }, {
+        currentText,
+        sourceText: nextSourceText,
+        programText: nextText,
+        finalText: nextText,
+    });
+    if (!commitResult.committed) return { applied: false, reason: commitResult.reason };
+
+    recordAiRewriteDebug('fallback-applied', {
+        index,
+        branchKey,
+        trigger: options.reason || '',
+        matchCount: currentMatches.length,
+        ruleHitCount: countMatchedAiRules(currentMatches),
+        beforeLength: currentText.length,
+        afterLength: nextText.length,
+    }, 'warn');
+
+    if (options.notify !== false && options.message) {
+        notifyAiRewriteStatus('warning', 'AI 改写已改用程序改写', options.message, { timeOut: 8000, extendedTimeOut: 16000 });
+    }
+
+    return {
+        applied: true,
+        reason: '',
+        matchCount: currentMatches.length,
+        ruleHitCount: countMatchedAiRules(currentMatches),
+    };
+}
+
 function applyAcceptedRewrites(task, accepted) {
+    recordAiRewriteDebug('apply-start', {
+        task: hashString(task.dedupeKey),
+        generationId: task.generationId || '',
+        chatId: task.chatId || '',
+        messageId: task.index,
+        contentSnapshotHash: task.contentSnapshotHash || '',
+        acceptedCount: accepted.size,
+    });
     if (accepted.size === 0) {
         recordAiRewriteDebug('apply-skip', { reason: 'accepted-empty', task: hashString(task.dedupeKey) }, 'warn');
         return { appliedCount: 0, skippedCount: 0, reason: 'accepted-empty' };
@@ -1043,8 +1570,8 @@ function applyAcceptedRewrites(task, accepted) {
     const replacements = [];
     const skippedIds = [];
     for (const item of task.items || []) {
+        if (!accepted.has(item.id)) continue;
         const rewritten = accepted.get(item.id);
-        if (!rewritten) continue;
         const location = locateRewriteItem(currentText, item, task);
         if (!location) {
             skippedIds.push(item.id);
@@ -1076,36 +1603,24 @@ function applyAcceptedRewrites(task, accepted) {
         return { appliedCount: 0, skippedCount: skippedIds.length, reason: 'item-locate-failed' };
     }
 
-    nextText = applyScopedReplacements(nextText, { deterministic: true });
-    nextText = preserveMvuStatusPlaceholder(nextText, msg, [currentText, currentSourceText, task.snapshotText]);
+    const programText = buildFinalAiRewriteText(currentText, msg, [currentText, currentSourceText, task.snapshotText]);
+    nextText = buildFinalAiRewriteText(nextText, msg, [currentText, currentSourceText, task.snapshotText]);
     if (nextText === currentText) {
         recordAiRewriteDebug('apply-skip', { reason: 'no-text-change', task: hashString(task.dedupeKey) }, 'warn');
         return { appliedCount: 0, skippedCount: skippedIds.length, reason: 'no-text-change' };
     }
 
-    msg.mes = nextText;
-    setCurrentSwipeText(msg, nextText);
     const nextSourceText = preserveMvuStatusPlaceholder(currentSourceText, msg, [currentText, nextText, task.snapshotText]);
-    const { signature } = syncMessageDiffMetadata(msg, nextSourceText, nextText);
-    writeMessageDiffAiTrace(msg, task.branchKey, currentText, nextText);
-    const diffResult = buildDiffResultFromChain(nextSourceText, currentText, nextText);
-    writeReadyDiffCache(task.index, signature, {
-        snippets: diffResult.snippets,
-        fullDiff: diffResult.fullDiff,
-        signature,
-    }, {
-        preserveExistingRealDiff: true,
-        persist: true,
+    const commitResult = commitAiRewriteText(task, {
+        currentText,
+        sourceText: nextSourceText,
+        programText,
+        finalText: nextText,
     });
-
-    markHostChatDirtyFromIndex(task.index);
-    const messageNode = getMessageDomNode(task.index);
-    if (messageNode) {
-        purifyDOM(messageNode);
-        ensureMessageDiffButton(task.index, messageNode);
+    if (!commitResult.committed) {
+        recordAiRewriteDebug('apply-skip', { reason: commitResult.reason, task: hashString(task.dedupeKey) }, 'warn');
+        return { appliedCount: 0, skippedCount: skippedIds.length, reason: commitResult.reason };
     }
-    refreshMessageDisplay(task.index, { emitRenderedEvent: 'auto' });
-    queueIncrementalChatSave();
     recordAiRewriteDebug('apply-success', {
         task: hashString(task.dedupeKey),
         index: task.index,
@@ -1148,6 +1663,11 @@ function finishAiRewriteApply(task, accepted) {
     if (accepted.size === 0) {
         logger.warn('AI 改写响应没有可应用条目');
         recordAiRewriteDebug('run-no-accepted', { task: hashString(task.dedupeKey) }, 'warn');
+        const fallbackResult = applyAiProgramFallback(task, {
+            reason: 'accepted-empty',
+            message: 'AI 改写未返回可应用内容，本次已改用程序改写。',
+        });
+        if (fallbackResult.applied) return { status: 'fallback-applied', applyResult, fallbackResult };
         notifyAiRewriteStatus('success', 'AI 改写成功', 'AI返回 0 段可应用改写', { timeOut: 5000 });
         return { status: 'empty', applyResult };
     }
@@ -1157,7 +1677,12 @@ function finishAiRewriteApply(task, accepted) {
             reason: applyResult.reason,
             skippedCount: applyResult.skippedCount || 0,
         }, 'warn');
-        notifyAiRewriteStatus('error', 'AI 改写失败', '未能在当前 XML 内容中定位命中片段，未写回', { timeOut: 8000, extendedTimeOut: 16000 });
+        const fallbackResult = applyAiProgramFallback(task, {
+            reason: 'item-locate-failed',
+            message: 'AI 改写返回后未能定位片段，本次已改用程序改写。',
+        });
+        if (fallbackResult.applied) return { status: 'fallback-applied', applyResult, fallbackResult };
+        notifyAiRewriteStatus('error', 'AI 改写失败', '未能在当前消息范围内定位命中片段，未写回', { timeOut: 8000, extendedTimeOut: 16000 });
         return { status: 'apply-failed', applyResult };
     }
 
@@ -1166,6 +1691,11 @@ function finishAiRewriteApply(task, accepted) {
         acceptedCount: accepted.size,
         reason: applyResult.reason || '',
     }, 'warn');
+    const fallbackResult = applyAiProgramFallback(task, {
+        reason: applyResult.reason || 'no-change',
+        message: 'AI 改写未返回可应用内容，本次已改用程序改写。',
+    });
+    if (fallbackResult.applied) return { status: 'fallback-applied', applyResult, fallbackResult };
     notifyAiRewriteStatus('success', 'AI 改写成功', '没有新的文本变更需要写入', { timeOut: 5000 });
     return { status: 'no-change', applyResult };
 }
@@ -1173,6 +1703,7 @@ function finishAiRewriteApply(task, accepted) {
 function deferAiRewriteApplyUntilFinalCleanse(task, accepted) {
     const rewriteState = runtimeState.aiRewrite;
     rewriteState.pendingApplyByKey.set(task.dedupeKey, {
+        mode: 'accepted',
         task,
         accepted: new Map(accepted),
     });
@@ -1182,12 +1713,30 @@ function deferAiRewriteApplyUntilFinalCleanse(task, accepted) {
         finalCleanseSequence: task.finalCleanseSequence,
         pendingApplyCount: rewriteState.pendingApplyByKey.size,
     });
-    notifyAiRewriteStatus('info', 'AI 改写中', formatAiRewriteProgress(task, 'AI已返回，等待最终净化后写回...'), {
-        sticky: true,
-        cancellable: true,
-        taskKey: task.dedupeKey,
+    recordAiRewriteDebug('response-deferred', {
+        task: hashString(task.dedupeKey),
+        generationId: task.generationId || '',
+        chatId: task.chatId || '',
+        messageId: task.index,
+        contentSnapshotHash: task.contentSnapshotHash || '',
+        finalCleanseSequence: task.finalCleanseSequence,
     });
     return { status: 'deferred' };
+}
+
+function deferAiRewriteFallbackUntilFinalCleanse(task, options = {}) {
+    runtimeState.aiRewrite.pendingApplyByKey.set(task.dedupeKey, {
+        mode: 'fallback',
+        task,
+        fallbackOptions: { ...options },
+    });
+    recordAiRewriteDebug('apply-deferred', {
+        task: hashString(task.dedupeKey),
+        index: task.index,
+        finalCleanseSequence: task.finalCleanseSequence,
+        mode: 'fallback',
+    });
+    return { status: 'deferred-fallback' };
 }
 
 function finishOrDeferAiRewriteApply(task, accepted) {
@@ -1206,10 +1755,18 @@ function getPendingApplyCountForMessageKey(messageKey) {
     return count;
 }
 
+function hasRunningAiRewriteForMessage(index) {
+    for (const meta of getRunningTaskMetaMap().values()) {
+        if (Number(meta?.index) === Number(index)) return true;
+    }
+    return false;
+}
+
 function flushPendingAiRewriteApplyForMessageKey(messageKey) {
     const rewriteState = runtimeState.aiRewrite;
     const entries = [...rewriteState.pendingApplyByKey.entries()]
         .filter(([, entry]) => getTaskMessageKey(entry.task) === messageKey);
+    let handledCount = 0;
     entries.forEach(([dedupeKey, entry]) => {
         rewriteState.pendingApplyByKey.delete(dedupeKey);
         if (rewriteState.cancelledKeys.has(dedupeKey)) return;
@@ -1218,15 +1775,34 @@ function flushPendingAiRewriteApplyForMessageKey(messageKey) {
             index: entry.task.index,
             finalCleanseSequence: rewriteState.finalCleanseSequence,
         });
-        finishAiRewriteApply(entry.task, entry.accepted);
+        const result = entry.mode === 'fallback'
+            ? applyAiProgramFallback(entry.task, entry.fallbackOptions)
+            : finishAiRewriteApply(entry.task, entry.accepted);
+        if (entry.mode === 'fallback' ? result?.applied === true : ['applied', 'fallback-applied'].includes(result?.status)) {
+            handledCount += 1;
+        }
     });
-    return entries.length;
+    return handledCount;
 }
 
 export function markAiRewriteFinalCleanseReady(payload, options = {}) {
     const { chat } = getAppContext();
-    const index = resolveLatestTrackableMessageIndex(payload);
-    if (!Array.isArray(chat) || index < 0 || !isAssistantMessage(chat[index])) return;
+    const parsed = parseStableMessagePayload(payload);
+    if (!parsed.ok) {
+        recordAiRewriteDebug('payload-rejected', { source: 'final', reason: parsed.reason }, 'warn');
+        return false;
+    }
+    const index = parsed.messageIndex;
+    if (!Array.isArray(chat) || index < 0 || !isAssistantMessage(chat[index])) return false;
+    const validation = validateAiRewriteFinalTimer(payload);
+    if (!validation.ok || validation.session.messageId !== index) {
+        recordAiRewriteDebug('run-skip', {
+            generationId: String(payload?.generationId || ''),
+            index,
+            reason: validation.reason || 'generation-message-mismatch',
+        }, 'warn');
+        return false;
+    }
 
     const msg = chat[index];
     const branchKey = getMessageDiffBranchKey(msg);
@@ -1241,26 +1817,63 @@ export function markAiRewriteFinalCleanseReady(payload, options = {}) {
         sequence: rewriteState.finalCleanseSequence,
         pendingApplyCount: getPendingApplyCountForMessageKey(messageKey),
         scheduleRequest: options.scheduleRequest !== false,
+        generationId: validation.session.generationId,
+        chatId: validation.session.chatId,
     });
     const flushedCount = flushPendingAiRewriteApplyForMessageKey(messageKey);
-    if (options.scheduleRequest !== false && flushedCount === 0) {
-        const readyTask = buildReadyAiRewriteTask(payload);
-        const runningTask = findRunningAiRewriteForReadyTask(readyTask);
-        if (runningTask) {
-            recordAiRewriteDebug('final-cleanse-skip-request', {
-                index,
-                branchKey,
-                reason: 'same-streaming-task-running',
-                runningTask: hashString(runningTask.dedupeKey),
-                runningSource: runningTask.meta?.source || '',
-            });
-            return;
-        }
-        scheduleAiRewriteForMessage(payload, { delayMs: 0 });
+    if (flushedCount > 0) return true;
+    if (options.scheduleRequest === false) return false;
+
+    if (hasStreamingAiRewriteStartedForMessage(index) && hasRunningAiRewriteForMessage(index)) {
+        recordAiRewriteDebug('final-cleanse-skip-request', {
+            index,
+            branchKey,
+            reason: 'streaming-task-already-running',
+        });
+        return true;
     }
+
+    const taskCheck = buildAiRewriteTaskCheck(payload, { automatic: true });
+    if (taskCheck.fallbackTask) {
+        const fallbackResult = applyAiProgramFallback(taskCheck.fallbackTask, {
+            reason: taskCheck.fallbackCode || 'not-sent',
+            message: taskCheck.fallbackWarning || '已命中 AI 改写规则，但 AI 不可用，本次仅执行程序改写。',
+            notify: taskCheck.fallbackCode !== 'disabled',
+        });
+        return fallbackResult.applied === true;
+    }
+    const readyTask = taskCheck.task;
+    if (!readyTask) {
+        recordAiRewriteDebug('final-cleanse-no-ai-task', {
+            index,
+            branchKey,
+            reason: taskCheck.reason || 'not-ready',
+        });
+        return false;
+    }
+    const runningTask = findRunningAiRewriteForReadyTask(readyTask);
+    if (runningTask) {
+        recordAiRewriteDebug('final-cleanse-skip-request', {
+            index,
+            branchKey,
+            reason: 'same-streaming-task-running',
+            runningTask: hashString(runningTask.dedupeKey),
+            runningSource: runningTask.meta?.source || '',
+        });
+        return true;
+    }
+    return scheduleAiRewriteForMessage(payload, { delayMs: 0 });
 }
 
-async function requestAiRewrite(prompt, aiSettings, signal) {
+export function shouldDeferFinalCleanseForAiRewrite(payload) {
+    const candidate = buildAiRewriteCandidate(payload, {
+        automatic: true,
+        freezeIdentity: false,
+    });
+    return Boolean(candidate.task);
+}
+
+async function requestAiRewrite(prompt, aiSettings, signal, task = null) {
     const endpoint = buildChatCompletionsEndpoint(aiSettings.baseUrl);
     const startedAt = Date.now();
     recordAiRewriteDebug('fetch-start', {
@@ -1268,6 +1881,11 @@ async function requestAiRewrite(prompt, aiSettings, signal) {
         model: aiSettings.model,
         promptLength: String(prompt || '').length,
         timeoutMs: aiSettings.timeoutMs,
+        generationId: task?.generationId || '',
+        chatId: task?.chatId || '',
+        index: Number.isInteger(task?.index) ? task.index : null,
+        source: task?.scheduleSource || '',
+        textHash: task?.messageTextHashAtBuild || '',
     });
     const response = await fetch(endpoint, {
         method: 'POST',
@@ -1291,6 +1909,9 @@ async function requestAiRewrite(prompt, aiSettings, signal) {
         elapsedMs: Date.now() - startedAt,
         responseLength: responseText.length,
         responsePreview: response.ok ? '' : responseText.slice(0, 300),
+        generationId: task?.generationId || '',
+        chatId: task?.chatId || '',
+        index: Number.isInteger(task?.index) ? task.index : null,
     }, response.ok ? 'info' : 'warn');
     if (!response.ok) throw new Error(`API 返回 HTTP ${response.status}`);
     let payload;
@@ -1328,17 +1949,135 @@ export function cancelAiRewriteTask(reason = 'cancelled') {
     }
 }
 
-export function handleAiRewriteGenerationStarted() {
+function finishAutomaticTaskBeforeRun(payload, reason, state = 'stale') {
+    const generationId = String(payload?.generationId || '');
+    const identity = getContentIdentity(generationId);
+    const taskKey = String(identity?.taskKey || '');
+    if (taskKey) {
+        runtimeState.aiRewrite.cancelledKeys.add(taskKey);
+        runtimeState.aiRewrite.pendingKeys.delete(taskKey);
+        runtimeState.aiRewrite.pendingApplyByKey.delete(taskKey);
+        getRunningTaskMetaMap().delete(taskKey);
+    }
+    if (runtimeState.aiRewrite.activeTaskKey === taskKey) cancelAiRewriteTask(reason);
+    generationLifecycle.markRequestTerminated(generationId, state, reason);
+    getContentIdentityMap().delete(generationId);
+    if (!taskKey || runtimeState.aiRewrite.statusTaskKey === taskKey) {
+        clearAiRewriteStatusToast(null, reason);
+    }
+    recordAiRewriteDebug('task-cancelled', {
+        task: taskKey ? hashString(taskKey) : '',
+        generationId,
+        chatId: String(payload?.chatId || identity?.chatId || ''),
+        messageId: Number.isInteger(identity?.messageId) ? identity.messageId : null,
+        requestState: generationLifecycle.getSession(generationId)?.requestState || state,
+        reason: String(reason || state),
+        source: String(payload?.source || ''),
+    }, 'warn');
+}
+
+export function acknowledgeAiRewriteContentMutation(payload) {
+    const generationId = String(payload?.generationId || '');
+    const identity = getContentIdentity(generationId);
+    if (!identity) return { ok: true, changed: false, reason: '' };
+    const currentScope = extractCurrentAiRewriteScope(identity.messageRef?.mes || '', getAiSettings());
+    if (!currentScope.ok) return currentScope;
+    const changed = currentScope.hash !== identity.expectedScopeHash
+        || currentScope.text !== identity.expectedScopeText;
+    identity.expectedScopeText = currentScope.text;
+    identity.expectedScopeHash = currentScope.hash;
+    recordAiRewriteDebug('content-mutation-acknowledged', {
+        generationId,
+        chatId: identity.chatId,
+        messageId: identity.messageId,
+        currentContentHash: currentScope.hash,
+        tailLength: currentScope.tailLength,
+        changed,
+        source: String(payload?.source || 'internal-cleanse'),
+    });
+    return { ok: true, changed, reason: '', currentScope };
+}
+
+export function validateAiRewriteFinalTimer(payload) {
+    const generationId = String(payload?.generationId || '');
+    if (!getContentIdentity(generationId)) {
+        return generationLifecycle.validate(generationId, {
+            chatId: getCurrentChatIdentity(),
+            chat: getAppContext().chat,
+        });
+    }
+    return validateAutomaticAiRewriteContent({
+        generationId,
+        chatId: String(payload?.chatId || ''),
+        index: Number(payload?.messageId),
+        scheduleSource: String(payload?.source || 'final-timer'),
+    }, { source: 'final-timer' });
+}
+
+export function acknowledgeAiRewriteAllowedTailMutation(payload) {
+    const generationId = String(payload?.generationId || '');
+    const identity = getContentIdentity(generationId);
+    if (!identity) return { ok: true, changed: false, reason: '' };
+    const validation = validateAutomaticAiRewriteContent({
+        generationId,
+        chatId: String(payload?.chatId || ''),
+        index: Number(payload?.messageId),
+        scheduleSource: String(payload?.source || 'final-cleanse'),
+    }, { source: 'tail-acknowledgement' });
+    if (!validation.ok) return validation;
+
+    const previousTextHash = validation.session.messageTextHash;
+    const resolution = generationLifecycle.resolveMessage(payload, {
+        generationId,
+        chatId: identity.chatId,
+        chat: getAppContext().chat,
+        source: 'scoped-tail-accepted',
+    });
+    if (!resolution.ok) return resolution;
+    recordAiRewriteDebug('tail-mutation-acknowledged', {
+        generationId,
+        chatId: identity.chatId,
+        messageId: identity.messageId,
+        contentSnapshotHash: identity.requestSnapshotHash,
+        previousFullMessageHash: previousTextHash,
+        fullMessageHash: resolution.message ? hashLifecycleText(resolution.message.mes || '') : '',
+        tailLength: validation.currentScope.tailLength,
+    });
+    return {
+        ok: true,
+        changed: previousTextHash !== generationLifecycle.getSession(generationId)?.messageTextHash,
+        reason: '',
+    };
+}
+
+export function handleAiRewriteFinalTimerSkipped(payload, reason) {
+    if (!getContentIdentity(payload?.generationId)) return;
+    finishAutomaticTaskBeforeRun(payload, reason || 'final-timer-skipped', 'stale');
+}
+
+export function handleAiRewriteGenerationStarted(session = null) {
     streamingXmlScanByMessageId.clear();
     const state = runtimeState.aiRewrite;
+    const cancelledTaskKey = String(state?.activeTaskKey || '');
     if (state?.activeController) {
-        recordAiRewriteDebug('generation-started-ignored', {
+        recordAiRewriteDebug('generation-started-cancelled-active', {
             task: hashString(state.activeTaskKey),
-            reason: 'active-ai-request',
+            reason: 'superseded-by-new-generation',
+            generationId: session?.generationId || '',
         });
-        return;
     }
+    state.streamingStartedMessageIndices.clear();
+    clearAiRewriteStatusToast(null, 'superseded-by-new-generation');
     cancelAiRewriteTask('generation-started');
+    state.pendingKeys.clear();
+    state.startedKeys.clear();
+    state.appliedKeys.clear();
+    state.cancelledKeys.clear();
+    if (cancelledTaskKey) state.cancelledKeys.add(cancelledTaskKey);
+    state.readyNoticeKeys.clear();
+    state.pendingApplyByKey.clear();
+    getContentIdentityMap().clear();
+    getRunningTaskMetaMap().clear();
 }
 
 export function resetAiRewriteRuntimeState(reason = 'reset') {
@@ -1355,26 +2094,21 @@ export function resetAiRewriteRuntimeState(reason = 'reset') {
     state.appliedKeys.clear();
     state.cancelledKeys.clear();
     state.readyNoticeKeys.clear();
+    state.streamingStartedMessageIndices.clear();
     getRunningTaskMetaMap().clear();
     state.finalCleanseSequence = 0;
     state.finalCleanseByMessageKey.clear();
     state.pendingApplyByKey.clear();
+    getContentIdentityMap().clear();
 }
 
-function buildAiRewriteTaskCheck(payload, options = {}) {
+function buildAiRewriteCandidate(payload, options = {}) {
     const settings = getSettings();
     const aiSettings = getAiSettings();
-    if (aiSettings.enabled !== true) return { task: null, reason: 'AI改写未启用' };
-    const missingConfig = [];
-    if (!String(aiSettings.baseUrl || '').trim()) missingConfig.push('Base URL');
-    if (!String(aiSettings.apiKey || '')) missingConfig.push('API Key');
-    if (!String(aiSettings.model || '').trim()) missingConfig.push('模型');
-    if (missingConfig.length > 0) {
-        return { task: null, reason: `AI API配置不完整：缺少 ${missingConfig.join('、')}` };
-    }
-
     const { chat } = getAppContext();
-    const index = resolveLatestTrackableMessageIndex(payload);
+    const parsed = parseStableMessagePayload(payload);
+    if (!parsed.ok) return { task: null, reason: `消息参数无效：${parsed.reason}` };
+    const index = parsed.messageIndex;
     if (!Array.isArray(chat) || index < 0 || index >= chat.length) {
         return { task: null, reason: '未找到可改写的助手消息' };
     }
@@ -1382,14 +2116,32 @@ function buildAiRewriteTaskCheck(payload, options = {}) {
     const msg = chat[index];
     if (!isAssistantMessage(msg)) return { task: null, reason: '目标消息不是助手消息' };
     if (msg?.__blai_is_reverted) return { task: null, reason: '目标消息已撤回净化' };
+    const isAutomatic = payload?.automatic === true;
+    if (isAutomatic) {
+        const validation = generationLifecycle.validate(payload.generationId, {
+            chatId: getCurrentChatIdentity(),
+            chat,
+            mode: 'identity',
+        });
+        if (!validation.ok) return { task: null, reason: `生成事务已失效：${validation.reason}` };
+        if (validation.session.messageId !== index || validation.session.messageRef !== msg) {
+            return { task: null, reason: '生成事务目标消息不一致' };
+        }
+        if (String(payload.chatId || '') !== validation.session.chatId) {
+            return { task: null, reason: '生成事务聊天身份不一致' };
+        }
+    } else if (options.manual !== true) {
+        return { task: null, reason: '自动 AI 改写缺少生成事务身份' };
+    }
     const rawSnapshotText = payload && typeof payload === 'object' && typeof payload.snapshotText === 'string'
         ? payload.snapshotText
         : '';
-    const rawSourceText = rawSnapshotText || (typeof msg.mes === 'string' ? msg.mes : '');
+    const diffSourceText = options.preferDiffSource === true ? resolveMessageDiffSource(msg) : '';
+    const rawSourceText = rawSnapshotText || diffSourceText || (typeof msg.mes === 'string' ? msg.mes : '');
     const sourceText = getAiXmlScopedRequestText(rawSourceText, aiSettings);
     if (typeof sourceText !== 'string' || !sourceText.trim()) return { task: null, reason: '目标消息为空' };
 
-    const { tagName } = getAiXmlScopeTag(aiSettings);
+    const { wholeMessage, tagName } = getAiXmlScopeTag(aiSettings);
     const segments = collectAiXmlScopeSegments(sourceText, aiSettings);
     if (segments.length === 0) {
         return { task: null, reason: `未找到完整 <${tagName}>...</${tagName}>` };
@@ -1397,7 +2149,7 @@ function buildAiRewriteTaskCheck(payload, options = {}) {
 
     const matches = collectAiMatches(sourceText, settings, aiSettings);
     if (matches.length === 0) {
-        return { task: null, reason: `<${tagName}> 内未命中 AI 改写规则` };
+        return { task: null, reason: wholeMessage ? '整条消息内未命中 AI 改写规则' : `<${tagName}> 内未命中 AI 改写规则` };
     }
 
     const items = buildRewriteItems(sourceText, matches, aiSettings);
@@ -1407,11 +2159,20 @@ function buildAiRewriteTaskCheck(payload, options = {}) {
 
     const versionToken = buildAiRewriteVersionToken(settings);
     const dedupeKey = buildDedupeKey(index, msg, settings, versionToken, aiSettings, sourceText);
+    const shouldFreezeIdentity = isAutomatic && options.freezeIdentity !== false;
+    const contentIdentity = shouldFreezeIdentity
+        ? freezeAiRewriteContentIdentity(payload, sourceText, aiSettings)
+        : null;
+    if (shouldFreezeIdentity && !contentIdentity) {
+        return { task: null, reason: '无法冻结自动 AI 改写 content identity' };
+    }
+    if (contentIdentity) contentIdentity.taskKey = dedupeKey;
     if (options.logTask === true) {
         recordAiRewriteDebug('task-ready', {
             task: hashString(dedupeKey),
             index,
             branchKey: getMessageDiffBranchKey(msg),
+            scopeMode: wholeMessage ? 'whole-message' : 'xml',
             xmlTag: tagName,
             segmentCount: segments.length,
             matchCount: matches.length,
@@ -1422,20 +2183,71 @@ function buildAiRewriteTaskCheck(payload, options = {}) {
             source: rawSnapshotText ? 'streaming-snapshot' : 'message',
             rawSourceLength: rawSourceText.length,
             sourceLength: sourceText.length,
+            generationId: isAutomatic ? String(payload.generationId || '') : '',
+            chatId: isAutomatic ? String(payload.chatId || '') : '',
+            contentSnapshotHash: contentIdentity?.requestSnapshotHash || hashString(sourceText),
         });
     }
     return {
-        task: { settings, aiSettings, index, msg, snapshotText: sourceText, items, ruleHitCount: countMatchedAiRules(matches), versionToken, dedupeKey },
+        task: {
+            settings,
+            aiSettings,
+            index,
+            msg,
+            messageRef: msg,
+            branchKey: getMessageDiffBranchKey(msg),
+            snapshotText: sourceText,
+            items,
+            ruleHitCount: countMatchedAiRules(matches),
+            versionToken,
+            dedupeKey,
+            automatic: isAutomatic,
+            generationId: isAutomatic ? String(payload.generationId || '') : '',
+            chatId: isAutomatic ? String(payload.chatId || '') : '',
+            scheduleSource: isAutomatic ? String(payload.source || '') : 'manual',
+            messageTextHashAtBuild: hashLifecycleText(msg.mes || ''),
+            contentSnapshotHash: contentIdentity?.requestSnapshotHash || hashString(sourceText),
+        },
         reason: '',
     };
 }
 
-function buildReadyAiRewriteTask(payload) {
-    return buildAiRewriteTaskCheck(payload).task;
+function buildAiRewriteTaskCheck(payload, options = {}) {
+    const candidate = buildAiRewriteCandidate(payload, options);
+    if (!candidate.task) return candidate;
+
+    const configIssue = getAiConfigIssue(candidate.task.aiSettings);
+    if (configIssue) {
+        return {
+            task: null,
+            reason: configIssue.reason,
+            fallbackTask: candidate.task,
+            fallbackCode: configIssue.code,
+            fallbackWarning: configIssue.warning,
+        };
+    }
+
+    return candidate;
 }
 
-function notifyAiRewriteNotSent(reason) {
-    const message = String(reason || '未满足发送条件');
+function buildReadyAiRewriteTask(payload) {
+    return buildAiRewriteTaskCheck(payload, { automatic: true }).task;
+}
+
+function notifyAiRewriteNotSent(taskCheckOrReason, options = {}) {
+    const taskCheck = taskCheckOrReason && typeof taskCheckOrReason === 'object'
+        ? taskCheckOrReason
+        : null;
+    if (taskCheck?.fallbackTask && options.allowFallback !== false) {
+        const fallbackResult = applyAiProgramFallback(taskCheck.fallbackTask, {
+            reason: taskCheck.fallbackCode || 'not-sent',
+            message: taskCheck.fallbackWarning || '已命中 AI 改写规则，但 AI 不可用，本次仅执行程序改写。',
+            notify: taskCheck.fallbackCode !== 'disabled',
+        });
+        if (fallbackResult.applied) return;
+    }
+
+    const message = String(taskCheck?.reason || taskCheckOrReason || '未满足发送条件');
     recordAiRewriteDebug('not-sent', { reason: message }, runtimeState.aiRewrite.statusToast ? 'warn' : 'info');
     if (!runtimeState.aiRewrite.statusToast) {
         logger.info(`AI 改写未发送：${message}`);
@@ -1458,6 +2270,14 @@ function notifyAiRewriteReadyForMessage(payload) {
         || rewriteState.readyNoticeKeys.has(task.dedupeKey)) return;
 
     rewriteState.readyNoticeKeys.add(task.dedupeKey);
+    recordAiRewriteDebug('task-built', {
+        task: hashString(task.dedupeKey),
+        generationId: task.generationId,
+        chatId: task.chatId,
+        messageId: task.index,
+        contentSnapshotHash: task.contentSnapshotHash,
+        source: task.scheduleSource,
+    });
     recordAiRewriteDebug('xml-ready-request', {
         task: hashString(task.dedupeKey),
         index: task.index,
@@ -1465,7 +2285,13 @@ function notifyAiRewriteReadyForMessage(payload) {
         itemCount: task.items.length,
         itemLengths: task.items.map(item => item.text.length),
     });
-    notifyAiRewriteStatus('info', 'AI 改写中', formatAiRewriteProgress(task, '正在请求AI，返回后等待最终净化写回...'), { sticky: true, cancellable: true, taskKey: task.dedupeKey });
+    recordAiRewriteDebug('popup-preparing', {
+        task: hashString(task.dedupeKey),
+        generationId: task.generationId,
+        messageId: task.index,
+    });
+    const groupCount = Math.max(1, groupRewriteItemsByPrompt(task.items, task.aiSettings).length);
+    notifyAiRewriteProgress(task, 1, groupCount);
     scheduleAiRewriteForMessage(payload, { delayMs: 0 });
 }
 
@@ -1478,17 +2304,39 @@ export function scheduleAiRewriteReadyNotice(payload, options = {}) {
     }, delay);
 }
 
-export function maybeNotifyAiRewriteReadyFromStreamingText(messageId, text) {
+export function maybeNotifyAiRewriteReadyFromStreamingText(messageId, text, lifecycle = {}) {
     const index = Number(messageId);
     if (!Number.isInteger(index) || index < 0) return;
     const sourceText = typeof text === 'string' ? text : String(text ?? '');
     if (!sourceText) return;
 
+    const { chat } = getAppContext();
+    const resolution = generationLifecycle.resolveMessage(index, {
+        generationId: lifecycle.generationId,
+        chatId: lifecycle.chatId || getCurrentChatIdentity(),
+        chat,
+        source: lifecycle.source || 'streaming',
+        allowBoundMessage: false,
+    });
+    if (!resolution.ok) {
+        recordAiRewriteDebug('payload-rejected', {
+            source: 'streaming',
+            index,
+            reason: resolution.reason,
+        }, 'warn');
+        return;
+    }
+
     const aiSettings = getAiSettings();
     if (aiSettings.enabled !== true) return;
-    const { tagName } = getAiXmlScopeTag(aiSettings);
+    const { wholeMessage, tagName } = getAiXmlScopeTag(aiSettings);
+    if (wholeMessage) return;
     const scanKey = `${index}:${tagName}`;
-    const scanState = streamingXmlScanByMessageId.get(scanKey) || { checkedLength: 0, closedSeen: false };
+    const scanState = streamingXmlScanByMessageId.get(scanKey) || {
+        checkedLength: 0,
+        closeObserved: false,
+        closedSeen: false,
+    };
     if (scanState.closedSeen === true) return;
 
     const previousLength = Number(scanState.checkedLength) || 0;
@@ -1498,7 +2346,21 @@ export function maybeNotifyAiRewriteReadyFromStreamingText(messageId, text) {
     scanState.checkedLength = sourceText.length;
 
     const endTagRegex = new RegExp(`<\\s*/\\s*${escapeRegExp(tagName)}\\s*>`, 'iu');
-    if (!endTagRegex.test(scanText)) {
+    if (endTagRegex.test(scanText)) scanState.closeObserved = true;
+    if (scanState.closeObserved !== true) {
+        streamingXmlScanByMessageId.set(scanKey, scanState);
+        return;
+    }
+    if (lifecycle.hostCommitted !== true) {
+        streamingXmlScanByMessageId.set(scanKey, scanState);
+        return;
+    }
+
+    const committedText = typeof resolution.message?.mes === 'string'
+        ? resolution.message.mes
+        : '';
+    const committedScope = extractCurrentAiRewriteScope(committedText, aiSettings);
+    if (!committedScope.ok) {
         streamingXmlScanByMessageId.set(scanKey, scanState);
         return;
     }
@@ -1509,22 +2371,31 @@ export function maybeNotifyAiRewriteReadyFromStreamingText(messageId, text) {
         index,
         xmlTag: tagName,
         sourceLength: sourceText.length,
+        committedSourceLength: committedText.length,
         scanStart,
     });
-    notifyAiRewriteReadyForMessage({
+    const frozenSnapshot = committedScope.text;
+    freezeAiRewriteContentIdentity({
+        automatic: true,
+        generationId: resolution.generationId,
+        chatId: resolution.chatId,
         messageId: index,
-        snapshotText: getAiXmlScopedRequestText(sourceText, aiSettings),
+    }, frozenSnapshot, aiSettings);
+    notifyAiRewriteReadyForMessage({
+        automatic: true,
+        generationId: resolution.generationId,
+        chatId: resolution.chatId,
+        messageId: index,
+        snapshotText: frozenSnapshot,
         streamingSnapshot: true,
+        source: 'streaming',
     });
 }
 
 async function requestAcceptedRewritesOnce(task, rewriteState, attempt, maxAttempts, accepted, completedGroupKeys) {
-    if (attempt === 1 && !rewriteState.readyNoticeKeys.has(task.dedupeKey)) {
-        notifyAiRewriteStatus('info', 'AI 改写中', formatAiRewriteProgress(task, '正在改写...'), { sticky: true, cancellable: true, taskKey: task.dedupeKey });
-    }
-
     const timeoutMs = normalizeLimit(task.aiSettings.timeoutMs, defaultAiRewriteSettings.timeoutMs, 1000, 120000);
-    for (const group of groupRewriteItemsByPrompt(task.items, task.aiSettings)) {
+    const groups = groupRewriteItemsByPrompt(task.items, task.aiSettings);
+    for (const [groupOffset, group] of groups.entries()) {
         if (completedGroupKeys.has(group.key)) {
             recordAiRewriteDebug('request-group-skip', {
                 task: hashString(task.dedupeKey),
@@ -1537,6 +2408,15 @@ async function requestAcceptedRewritesOnce(task, rewriteState, attempt, maxAttem
         if (rewriteState.cancelledKeys.has(task.dedupeKey)) {
             recordAiRewriteDebug('request-cancelled-before-fetch', { task: hashString(task.dedupeKey), attempt }, 'warn');
             return { cancelled: true, accepted };
+        }
+        const freshnessIssueBeforeFetch = getTaskFreshnessIssue(task);
+        if (freshnessIssueBeforeFetch) {
+            recordAiRewriteDebug('request-stale-before-fetch', {
+                task: hashString(task.dedupeKey),
+                generationId: task.generationId || '',
+                reason: freshnessIssueBeforeFetch,
+            }, 'warn');
+            return { stale: true, accepted };
         }
 
         const controller = new AbortController();
@@ -1563,7 +2443,8 @@ async function requestAcceptedRewritesOnce(task, rewriteState, attempt, maxAttem
                 groupItemIds: group.items.map(item => item.id),
                 timeoutMs,
             });
-            const rawResponse = await requestAiRewrite(prompt, task.aiSettings, controller.signal);
+            notifyAiRewriteProgress(task, groupOffset + 1, groups.length);
+            const rawResponse = await requestAiRewrite(prompt, task.aiSettings, controller.signal, task);
             const freshnessIssue = getTaskFreshnessIssue(task);
             if (freshnessIssue) {
                 recordAiRewriteDebug('request-stale-after-fetch', { task: hashString(task.dedupeKey), reason: freshnessIssue }, 'warn');
@@ -1612,14 +2493,19 @@ async function requestAcceptedRewritesOnce(task, rewriteState, attempt, maxAttem
 async function runAiRewriteForMessage(payload, options = {}) {
     const waitForFinalCleanse = typeof options.waitForFinalCleanse === 'boolean'
         ? options.waitForFinalCleanse
-        : runtimeState.isStreamingGeneration === true;
+        : runtimeState.isStreamingGeneration === true || payload?.streamingSnapshot === true;
     if (waitForFinalCleanse === true) {
         logger.info('AI 改写在 XML 闭合后提前请求，返回后等待最终净化再写回');
     }
-    const taskCheck = buildAiRewriteTaskCheck(payload, { logTask: true });
+    const taskCheck = buildAiRewriteTaskCheck(payload, {
+        logTask: true,
+        preferDiffSource: options.preferDiffSource === true,
+        manual: options.manual === true,
+    });
     const readyTask = taskCheck.task;
     if (!readyTask) {
-        notifyAiRewriteNotSent(taskCheck.reason);
+        if (payload?.automatic === true) generationLifecycle.markRequestFailed(payload.generationId, taskCheck.reason || 'task-not-ready');
+        notifyAiRewriteNotSent(taskCheck);
         return;
     }
     const { settings, aiSettings, index, msg, items, versionToken, dedupeKey } = readyTask;
@@ -1649,6 +2535,16 @@ async function runAiRewriteForMessage(payload, options = {}) {
             runningTask: hashString(runningSameTask.dedupeKey),
             runningSource: runningSameTask.meta?.source || '',
         });
+        return;
+    }
+
+    if (readyTask.automatic === true && !generationLifecycle.markRequestRunning(readyTask.generationId)) {
+        recordAiRewriteDebug('run-skip', {
+            generationId: readyTask.generationId,
+            index: readyTask.index,
+            reason: 'generation-request-not-scheduled',
+        }, 'warn');
+        finishAutomaticTaskBeforeRun(payload, 'generation-request-not-scheduled', 'failed');
         return;
     }
 
@@ -1682,7 +2578,14 @@ async function runAiRewriteForMessage(payload, options = {}) {
         ruleHitCount: readyTask.ruleHitCount,
         waitForFinalCleanse,
         finalCleanseSequence: Number(rewriteState.finalCleanseSequence) || 0,
+        automatic: readyTask.automatic === true,
+        generationId: readyTask.generationId || '',
+        chatId: readyTask.chatId || '',
+        scheduleSource: readyTask.scheduleSource || '',
+        messageTextHashAtBuild: readyTask.messageTextHashAtBuild || '',
+        contentSnapshotHash: readyTask.contentSnapshotHash || hashString(readyTask.snapshotText || ''),
     };
+    markStreamingAiRewriteStarted(task);
     getRunningTaskMetaMap().set(dedupeKey, {
         index: task.index,
         branchKey: task.branchKey,
@@ -1700,6 +2603,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
             try {
                 const result = await requestAcceptedRewritesOnce(task, rewriteState, attempt, maxAttempts, accepted, completedGroupKeys);
                 if (result?.cancelled) {
+                    if (task.automatic === true) generationLifecycle.markRequestFailed(task.generationId, 'request-cancelled');
                     if (!rewriteState.cancelledKeys.has(dedupeKey)) {
                         recordAiRewriteDebug('run-cancelled', { task: hashString(dedupeKey), reason: 'request-cancelled' }, 'warn');
                         notifyAiRewriteStatus('error', 'AI 改写失败', '请求已取消，未写回', { timeOut: 8000, extendedTimeOut: 16000 });
@@ -1707,6 +2611,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
                     return;
                 }
                 if (result?.stale) {
+                    if (task.automatic === true) generationLifecycle.markRequestFailed(task.generationId, getTaskFreshnessIssue(task) || 'stale');
                     recordAiRewriteDebug('run-stale', { task: hashString(dedupeKey), reason: getTaskFreshnessIssue(task) || 'stale' }, 'warn');
                     notifyAiRewriteStatus('error', 'AI 改写失败', '消息已变化，未写回', { timeOut: 8000, extendedTimeOut: 16000 });
                     return;
@@ -1721,15 +2626,28 @@ async function runAiRewriteForMessage(payload, options = {}) {
                     maxAttempts,
                     reason: err?.message || '请求未完成',
                 }, 'warn');
-                notifyAiRewriteStatus('warning', 'AI 改写失败', `自动重试 ${attempt + 1}/${maxAttempts}：${err?.message || '请求未完成'}`, { sticky: true, cancellable: true, taskKey: dedupeKey });
             }
         }
 
         if (rewriteState.cancelledKeys.has(dedupeKey)) return;
+        if (task.automatic === true) generationLifecycle.markRequestSucceeded(task.generationId);
         finishOrDeferAiRewriteApply(task, accepted);
     } catch (err) {
+        if (task.automatic === true) generationLifecycle.markRequestFailed(task.generationId, err?.message || 'request-failed');
         logger.warn('AI 改写失败', err);
         recordAiRewriteDebug('run-error', { task: hashString(dedupeKey), reason: err?.message || '请求未完成' }, 'warn');
+        if (!rewriteState.cancelledKeys.has(dedupeKey) && isTaskStillFresh(task)) {
+            const fallbackOptions = {
+                reason: 'retry-exhausted',
+                message: 'AI 改写多次失败，本次已改用程序改写。',
+            };
+            if (!hasFinalCleanseAfterTaskStart(task)) {
+                deferAiRewriteFallbackUntilFinalCleanse(task, fallbackOptions);
+                return;
+            }
+            const fallbackResult = applyAiProgramFallback(task, fallbackOptions);
+            if (fallbackResult.applied) return;
+        }
         notifyAiRewriteStatus('error', 'AI 改写失败', err?.message || '请求未完成', { timeOut: 8000, extendedTimeOut: 16000 });
     } finally {
         rewriteState.pendingKeys.delete(dedupeKey);
@@ -1744,28 +2662,76 @@ async function runAiRewriteForMessage(payload, options = {}) {
 
 export function scheduleAiRewriteForMessage(payload, options = {}) {
     const delay = normalizeLimit(options.delayMs, 0, 0, 10000);
+    if (payload?.automatic === true) {
+        const claim = generationLifecycle.claimRequest(payload.generationId, payload.source || (payload.streamingSnapshot ? 'streaming' : 'final'));
+        if (!claim.ok) {
+            recordAiRewriteDebug('task-deduped', {
+                generationId: String(payload.generationId || ''),
+                chatId: String(payload.chatId || ''),
+                index: parseStableMessagePayload(payload).messageIndex,
+                source: String(payload.source || ''),
+                reason: claim.reason,
+            });
+            if (!String(claim.reason || '').startsWith('request-')) {
+                finishAutomaticTaskBeforeRun(payload, `request-claim-${claim.reason}`, 'failed');
+            }
+            return false;
+        }
+        const identity = getContentIdentity(payload.generationId);
+        recordAiRewriteDebug('request-claimed', {
+            task: identity?.taskKey ? hashString(identity.taskKey) : '',
+            generationId: String(payload.generationId || ''),
+            chatId: String(payload.chatId || ''),
+            messageId: parseStableMessagePayload(payload).messageIndex,
+            requestState: claim.session.requestState,
+            contentSnapshotHash: identity?.requestSnapshotHash || '',
+            source: String(payload.source || ''),
+        });
+    }
     setTimeout(() => {
+        if (payload?.automatic === true) {
+            const validation = validateAutomaticAiRewriteContent({
+                generationId: String(payload.generationId || ''),
+                chatId: String(payload.chatId || ''),
+                index: parseStableMessagePayload(payload).messageIndex,
+                scheduleSource: String(payload.source || ''),
+            }, { source: 'schedule-callback' });
+            if (!validation.ok) {
+                recordAiRewriteDebug('run-skip', {
+                    generationId: String(payload.generationId || ''),
+                    reason: validation.reason,
+                }, 'warn');
+                finishAutomaticTaskBeforeRun(payload, validation.reason, 'stale');
+                return;
+            }
+        }
         runAiRewriteForMessage(payload, options);
     }, delay);
+    return true;
 }
 
 export function requestManualAiRewriteForMessage(payload) {
-    const taskCheck = buildAiRewriteTaskCheck(payload, { logTask: true });
+    const taskCheck = buildAiRewriteTaskCheck(payload, { logTask: true, preferDiffSource: true, manual: true });
     const task = taskCheck.task;
     if (!task) {
+        recordAiRewriteDebug('not-sent', { reason: taskCheck.reason || '未满足发送条件', manual: true }, 'warn');
         notifyAiRewriteStatus('error', 'AI 改写未发送', taskCheck.reason || '未满足发送条件', { timeOut: 8000, extendedTimeOut: 16000 });
         return false;
     }
 
     const rewriteState = runtimeState.aiRewrite;
     if (rewriteState.pendingKeys.has(task.dedupeKey)) {
-        notifyAiRewriteStatus('info', 'AI 改写中', '当前消息已有 AI 改写任务在进行中', { sticky: true, cancellable: true, taskKey: task.dedupeKey });
+        if (!rewriteState.statusToast) {
+            notifyAiRewriteProgress(task, 1, Math.max(1, groupRewriteItemsByPrompt(task.items, task.aiSettings).length));
+        }
         return false;
     }
 
     const runningTask = findRunningAiRewriteForReadyTask(task);
     if (runningTask) {
-        notifyAiRewriteStatus('info', 'AI 改写中', '当前消息已有 AI 改写任务在进行中', { sticky: true, cancellable: true, taskKey: runningTask.dedupeKey });
+        if (!rewriteState.statusToast) {
+            notifyAiRewriteProgress(task, 1, Math.max(1, groupRewriteItemsByPrompt(task.items, task.aiSettings).length));
+        }
         return false;
     }
 
@@ -1780,6 +2746,6 @@ export function requestManualAiRewriteForMessage(payload) {
         itemCount: task.items.length,
         ruleHitCount: task.ruleHitCount,
     });
-    runAiRewriteForMessage(payload, { waitForFinalCleanse: false });
+    runAiRewriteForMessage(payload, { waitForFinalCleanse: false, preferDiffSource: true, manual: true });
     return true;
 }

@@ -1,11 +1,40 @@
 import { extensionName, getAppContext, runtimeState } from './state.js';
-import { applyScopedReplacements, applyVisualMask, buildProcessors, resolveRegexProcessorReplacement } from './core.js';
+import { applyScopedReplacements, buildProcessors } from './core.js';
 import { isCotScopeSkippingEnabled } from './utils.js';
 import { loreFrameDomSelector } from './platform.js';
 
-const streamingTailMaxChars = 1600;
-const streamingTailContextChars = 180;
-const streamingTailSegmentCount = 2;
+const messageBodySelector = '.mes .mes_text';
+const excludedMessageContentSelector = [
+    'script',
+    'style',
+    'code',
+    'pre',
+    'textarea',
+    'input',
+    'select',
+    'option',
+    'button',
+    '[role="button"]',
+    '[role="menu"]',
+    '[role="menuitem"]',
+    '[role="dialog"]',
+    '[aria-controls]',
+    '[contenteditable]:not([contenteditable="false"])',
+    '.mes_reasoning',
+    '.mes_reasoning_details',
+    '.mes_buttons',
+    '.mes_controls',
+    '.swipe_left',
+    '.swipe_right',
+    '.swipeRightBlock',
+    '.blai-diff-btn',
+    '.TH-collapse-code-block-button',
+    '[class*="blai-diff"]',
+].join(', ');
+
+const streamingPresentationByMessageId = new Map();
+const pendingStreamingPresentationIds = new Set();
+let streamingPresentationFrameId = 0;
 
 const knownPluginContainerSelector = [
     '#tavern_helper',
@@ -156,190 +185,47 @@ export function isRevertedMessageDomNode(node) {
 function shouldSkipTextNode(node) {
     const parent = node?.parentNode;
     if (!parent) return true;
+    if (node.nodeType !== Node.TEXT_NODE) return true;
+    if (!isPurifiableMessageTextNode(node)) return true;
     if (isProtectedNode(parent) || isRevertedMessageDomNode(parent)) return true;
     if (document.activeElement && (document.activeElement === parent || parent.contains(document.activeElement))) return true;
     if (getAppContext().extension_settings?.[extensionName]?.skipUserMessages && isUserMessageDomNode(parent)) return true;
     return false;
 }
 
-function collectPurifiableTextNodes(rootNode) {
-    const nodes = [];
-    if (!rootNode) return nodes;
-    const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, null, false);
-    let node;
-    while (node = walker.nextNode()) {
-        if (!node.nodeValue || shouldSkipTextNode(node)) continue;
-        nodes.push(node);
-    }
-    return nodes;
+function isMessageOnAllowedSurface(messageNode) {
+    if (!messageNode || !messageNode.closest) return false;
+    if (messageNode.closest('#chat')) return true;
+    const root = messageNode.getRootNode?.();
+    const host = root?.host;
+    return Boolean(host?.matches?.('#t-output-content .t-shadow-host')
+        || host?.closest?.('#t-output-content .t-shadow-host'));
 }
 
-function projectTextAcrossNodes(textNodes, nextText) {
-    let offset = 0;
-    for (let i = 0; i < textNodes.length; i++) {
-        const node = textNodes[i];
-        const originalLength = String(node.nodeValue || '').length;
-        const remainingLength = Math.max(0, nextText.length - offset);
-        const takeLength = i === textNodes.length - 1
-            ? remainingLength
-            : Math.min(originalLength, remainingLength);
-        const projected = takeLength > 0 ? nextText.slice(offset, offset + takeLength) : '';
-        if (node.nodeValue !== projected) node.nodeValue = projected;
-        offset += takeLength;
-    }
-}
-
-function getLineBreakSignature(text = '') {
-    return String(text).match(/\r\n|\r|\n/g)?.join('|') || '';
-}
-
-function getStreamingTailStart(text = '') {
-    const value = String(text || '');
-    if (value.length <= streamingTailMaxChars) return 0;
-
-    const searchStart = Math.max(0, value.length - streamingTailMaxChars - streamingTailContextChars);
-    const searchText = value.slice(searchStart);
-    const segmentStarts = [searchStart];
-    const lineBreakRegex = /\r\n|\r|\n/g;
-    let match;
-
-    while ((match = lineBreakRegex.exec(searchText)) !== null) {
-        segmentStarts.push(searchStart + match.index + match[0].length);
-    }
-
-    if (segmentStarts.length > streamingTailSegmentCount) {
-        const start = segmentStarts[segmentStarts.length - streamingTailSegmentCount];
-        return Math.max(0, start - streamingTailContextChars);
-    }
-
-    return Math.max(0, value.length - streamingTailMaxChars - streamingTailContextChars);
-}
-
-function selectStreamingTailTextNodes(textNodes) {
-    if (!Array.isArray(textNodes) || textNodes.length <= 1) return textNodes || [];
-
-    const selected = [];
-    let totalLength = 0;
-    let segmentBreaks = 0;
-    const targetLength = streamingTailMaxChars + streamingTailContextChars;
-
-    for (let i = textNodes.length - 1; i >= 0; i--) {
-        const node = textNodes[i];
-        const value = String(node?.nodeValue || '');
-        selected.unshift(node);
-        totalLength += value.length;
-        segmentBreaks += (value.match(/\r\n|\r|\n/g) || []).length;
-
-        if (totalLength >= targetLength && segmentBreaks >= streamingTailSegmentCount - 1) break;
-        if (totalLength >= targetLength + streamingTailMaxChars) break;
-    }
-
-    return selected;
-}
-
-export function applyStreamingVisualMask(originalText, options = {}) {
-    if (typeof originalText !== 'string' || !originalText) return originalText;
-
-    const tailStart = getStreamingTailStart(originalText);
-    if (tailStart <= 0) return applyVisualMask(originalText, options);
-
-    const prefix = originalText.slice(0, tailStart);
-    const tail = originalText.slice(tailStart);
-    const nextTail = applyVisualMask(tail, options);
-    return prefix + nextTail;
-}
-
-function getReplaceCallbackMatchOffset(args) {
-    const hasNamedGroups = typeof args[args.length - 1] === 'object' && args[args.length - 1] !== null;
-    return Number(args[hasNamedGroups ? args.length - 3 : args.length - 2]);
-}
-
-function buildTextNodeRanges(textNodes) {
-    const ranges = [];
-    let offset = 0;
-    textNodes.forEach((node, index) => {
-        const value = String(node.nodeValue || '');
-        ranges.push({
-            node,
-            index,
-            start: offset,
-            end: offset + value.length,
-        });
-        offset += value.length;
-    });
-    return ranges;
-}
-
-function findRangeForPosition(ranges, position) {
-    return ranges.find((range) => position >= range.start && position < range.end) || null;
-}
-
-function applyUnsafeRegexEdit(edit, ranges) {
-    const startRange = ranges[edit.startRangeIndex];
-    const endRange = ranges[edit.endRangeIndex];
-    if (!startRange || !endRange) return false;
-
-    const startNode = startRange.node;
-    const endNode = endRange.node;
-    const startValue = String(startNode.nodeValue || '');
-    const endValue = String(endNode.nodeValue || '');
-    const localStart = edit.start - startRange.start;
-    const localEnd = edit.end - endRange.start;
-
-    if (startRange.index === endRange.index) {
-        startNode.nodeValue = startValue.slice(0, localStart) + edit.replacement + startValue.slice(localEnd);
-        return true;
-    }
-
-    startNode.nodeValue = startValue.slice(0, localStart) + edit.replacement;
-    for (let i = startRange.index + 1; i < endRange.index; i++) {
-        ranges[i].node.nodeValue = '';
-    }
-    endNode.nodeValue = endValue.slice(localEnd);
+export function isPurifiableMessageTextNode(node) {
+    if (!node || node.nodeType !== Node.TEXT_NODE) return false;
+    const parent = node.parentElement || node.parentNode;
+    if (!parent?.closest) return false;
+    const messageBody = parent.closest(messageBodySelector);
+    if (!messageBody) return false;
+    const messageNode = messageBody.closest('.mes');
+    if (!isMessageOnAllowedSurface(messageNode)) return false;
+    if (parent.closest(excludedMessageContentSelector)) return false;
     return true;
 }
 
-function applyUnsafeRegexWithinTextNodes(textNodes, processors = runtimeState.activeProcessors) {
-    let changed = false;
+export function isAllowedChatInputElement(element) {
+    if (!element?.matches) return false;
+    if (element.matches('#send_textarea')) return true;
+    return Boolean(element.matches('.mes textarea.edit_textarea, .mes textarea[data-message-edit], .mes [contenteditable="true"][data-message-edit]'));
+}
 
-    processors.forEach((proc, procIndex) => {
-        if (proc.kind !== 'regex' || proc.domSafe !== false) return;
-
-        const ranges = buildTextNodeRanges(textNodes);
-        const originalText = ranges.map((range) => range.node.nodeValue || '').join('');
-        if (!originalText.trim()) return;
-
-        const edits = [];
-        proc.regex.lastIndex = 0;
-        originalText.replace(proc.regex, (match, ...args) => {
-            const start = getReplaceCallbackMatchOffset(args);
-            const end = start + String(match).length;
-            if (!Number.isInteger(start) || end <= start) return match;
-
-            const replacement = resolveRegexProcessorReplacement(proc, procIndex, match, args, true);
-            if (/[\r\n]/.test(String(match)) || /[\r\n]/.test(String(replacement))) return match;
-
-            const startRange = findRangeForPosition(ranges, start);
-            const endRange = findRangeForPosition(ranges, end - 1);
-            if (!startRange || !endRange) return match;
-
-            edits.push({
-                start,
-                end,
-                replacement,
-                startRangeIndex: startRange.index,
-                endRangeIndex: endRange.index,
-            });
-            return match;
-        });
-
-        edits.sort((a, b) => b.start - a.start);
-        edits.forEach((edit) => {
-            if (applyUnsafeRegexEdit(edit, ranges)) changed = true;
-        });
-    });
-
-    return changed;
+function collectMessageBodyRoots(rootNode) {
+    const roots = [];
+    if (!rootNode) return roots;
+    if (rootNode.nodeType === Node.ELEMENT_NODE && rootNode.matches?.(messageBodySelector)) roots.push(rootNode);
+    rootNode.querySelectorAll?.(messageBodySelector).forEach((node) => roots.push(node));
+    return [...new Set(roots)].filter((body) => isMessageOnAllowedSurface(body.closest?.('.mes')));
 }
 
 /**
@@ -348,58 +234,136 @@ function applyUnsafeRegexWithinTextNodes(textNodes, processors = runtimeState.ac
  * @returns {void}
  */
 export function purifyDOM(rootNode) {
-    if (!rootNode) return;
+    if (!rootNode || runtimeState.isStreamingGeneration === true) return;
     if (rootNode.nodeType === 1 && isRevertedMessageDomNode(rootNode)) return;
-    const processors = buildProcessors({ includeAiRewrite: runtimeState.isStreamingGeneration === true });
+    const processors = buildProcessors();
     if (processors.length === 0) return;
 
-    const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_COMMENT, null, false);
+    const messageBodies = collectMessageBodyRoots(rootNode);
+    for (const messageBody of messageBodies) {
+        const walker = document.createTreeWalker(messageBody, NodeFilter.SHOW_TEXT, null, false);
+        let node;
+        while (node = walker.nextNode()) {
+            if (shouldSkipTextNode(node)) continue;
 
-let node;
-    while (node = walker.nextNode()) {
-        if (shouldSkipTextNode(node)) continue;
+            const original = node.nodeValue || '';
+            if (original.trim() === '') continue;
 
-        const original = node.nodeValue || '';
-        if (original.trim() === '') continue;
-
-        const nextValue = runtimeState.isStreamingGeneration
-            ? applyStreamingVisualMask(original, { domSafeOnly: true })
-            : applyScopedReplacements(original, { deterministic: true, domSafeOnly: true });
-        if (original !== nextValue) node.nodeValue = nextValue;
+            const nextValue = applyScopedReplacements(original, { deterministic: true, domSafeOnly: true });
+            if (original !== nextValue) node.nodeValue = nextValue;
+        }
     }
 }
 
+function findTavernHelperStreamingSurface(messageNode) {
+    const local = messageNode?.querySelectorAll?.('.TH-streaming');
+    if (local?.length) return local[local.length - 1];
+    const global = document.querySelectorAll?.('#chat .TH-streaming');
+    return global?.length ? global[global.length - 1] : null;
+}
+
+function shouldSkipStreamingPresentationTextNode(node, surface) {
+    const parent = node?.parentElement || node?.parentNode;
+    if (!parent || node.nodeType !== Node.TEXT_NODE) return true;
+    if (!surface?.contains?.(parent)) return true;
+    if (parent.closest?.(excludedMessageContentSelector)) return true;
+    if (isProtectedNode(parent) || isRevertedMessageDomNode(parent)) return true;
+    if (document.activeElement && (document.activeElement === parent || parent.contains?.(document.activeElement))) return true;
+    if (getAppContext().extension_settings?.[extensionName]?.skipUserMessages && isUserMessageDomNode(parent)) return true;
+    return false;
+}
+
 /**
- * 流式输出时按尾部窗口做简单视觉净化。
- * 该模式只改 DOM 显示，不写入 chat 数据；生成结束后仍由数据净化流程落盘。
- * @param {Element} messageNode 消息 DOM 节点。
- * @param {{domSafeOnly?: boolean, unsafeRegexOnly?: boolean}} [options={}] 净化选项。
- * @returns {boolean} 是否发生视觉替换。
+ * 在宿主或酒馆助手已经渲染完成的显示面上只替换普通文本节点。
+ * 不重建 innerHTML，从而保留代码块折叠、iframe 和其他扩展绑定的 DOM 与事件。
+ * @param {Element} surface 当前帧的显示面。
+ * @returns {boolean} 是否修改了至少一个文本节点。
  */
-export function purifyStreamingMessageDom(messageNode, options = {}) {
-    if (!messageNode || messageNode.nodeType !== 1 || runtimeState.isStreamingGeneration !== true) return false;
-    if (isRevertedMessageDomNode(messageNode)) return false;
+function applyStreamingVisualMask(surface) {
+    if (!surface) return false;
+    const walker = document.createTreeWalker(surface, NodeFilter.SHOW_TEXT, null, false);
+    const textNodes = [];
+    let node;
+    while (node = walker.nextNode()) textNodes.push(node);
 
-    const processors = buildProcessors({ includeAiRewrite: true });
-    if (processors.length === 0) return false;
+    let changed = false;
+    for (const textNode of textNodes) {
+        if (shouldSkipStreamingPresentationTextNode(textNode, surface)) continue;
+        const original = textNode.nodeValue || '';
+        if (!original.trim()) continue;
+        const nextValue = applyScopedReplacements(original, { deterministic: true, includeAiRewrite: true, domSafeOnly: true });
+        if (nextValue === original) continue;
+        textNode.nodeValue = nextValue;
+        changed = true;
+    }
+    return changed;
+}
 
-    const rootNode = messageNode.querySelector?.('.mes_text') || messageNode;
-    const textNodes = collectPurifiableTextNodes(rootNode);
-    const unsafeRegexOnly = options.unsafeRegexOnly === true;
-    if (textNodes.length === 0) return false;
-    const scanTextNodes = selectStreamingTailTextNodes(textNodes);
+function renderStreamingPresentationNow(messageId) {
+    const presentation = streamingPresentationByMessageId.get(messageId);
+    if (!presentation || runtimeState.isStreamingGeneration !== true) return false;
 
-    const originalText = scanTextNodes.map((node) => node.nodeValue || '').join('');
-    if (!originalText.trim()) return false;
+    const messageNode = getMessageDomNode(messageId);
+    if (!messageNode || isRevertedMessageDomNode(messageNode)) return false;
+    const surface = presentation.mode === 'tavern-helper'
+        ? findTavernHelperStreamingSurface(messageNode)
+        : messageNode.querySelector?.('.mes_text');
+    return applyStreamingVisualMask(surface);
+}
 
-    if (unsafeRegexOnly) return applyUnsafeRegexWithinTextNodes(scanTextNodes, processors);
+function flushStreamingPresentationQueue() {
+    streamingPresentationFrameId = 0;
+    const messageIds = [...pendingStreamingPresentationIds];
+    pendingStreamingPresentationIds.clear();
+    messageIds.forEach((messageId) => renderStreamingPresentationNow(messageId));
+}
 
-    const nextText = applyStreamingVisualMask(originalText, { domSafeOnly: options.domSafeOnly !== false });
-    if (originalText === nextText) return false;
-    if (getLineBreakSignature(originalText) !== getLineBreakSignature(nextText)) return false;
+/**
+ * 将净化后的累计快照排队投影到宿主已渲染的显示面，不重建 DOM，也不修改 chat 数据。
+ * @param {number} messageId 消息索引。
+ * @param {string} rawText 宿主原始累计快照。
+ * @param {string} cleanText 净化后的累计快照。
+ * @param {'simple-visual'|'tavern-helper'} mode 显示面模式。
+ */
+export function queueStreamingPresentation(messageId, rawText, cleanText, mode) {
+    const index = Number(messageId);
+    if (!Number.isInteger(index) || index < 0 || runtimeState.isStreamingGeneration !== true) return;
+    if (String(rawText || '') === String(cleanText || '')) {
+        if (streamingPresentationByMessageId.has(index)) clearStreamingPresentations(index);
+        return;
+    }
+    streamingPresentationByMessageId.set(index, {
+        mode: mode === 'simple-visual' ? 'simple-visual' : 'tavern-helper',
+    });
+    pendingStreamingPresentationIds.add(index);
+    if (streamingPresentationFrameId) return;
+    const schedule = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+        ? window.requestAnimationFrame.bind(window)
+        : (callback) => setTimeout(callback, 0);
+    streamingPresentationFrameId = schedule(flushStreamingPresentationQueue);
+}
 
-    projectTextAcrossNodes(scanTextNodes, nextText);
-    return true;
+export function replayStreamingPresentation(messageId) {
+    const index = Number(messageId);
+    if (!streamingPresentationByMessageId.has(index)) return;
+    pendingStreamingPresentationIds.add(index);
+    if (streamingPresentationFrameId) return;
+    const schedule = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+        ? window.requestAnimationFrame.bind(window)
+        : (callback) => setTimeout(callback, 0);
+    streamingPresentationFrameId = schedule(flushStreamingPresentationQueue);
+}
+
+export function clearStreamingPresentations(messageId) {
+    const index = Number(messageId);
+    const clearAll = !Number.isInteger(index) || index < 0;
+    if (clearAll) {
+        streamingPresentationByMessageId.clear();
+        pendingStreamingPresentationIds.clear();
+    } else {
+        streamingPresentationByMessageId.delete(index);
+        pendingStreamingPresentationIds.delete(index);
+    }
 }
 
 /**
@@ -419,6 +383,67 @@ export function getMessageDomNode(index) {
     const byOrder = allMes[index];
     if (byOrder && resolveMessageIndexFromDomNode(byOrder) === index) return byOrder;
     return null;
+}
+
+function removeSnapshotIdentifiers(root) {
+    if (!root?.removeAttribute) return;
+    root.removeAttribute('id');
+    root.querySelectorAll?.('[id]').forEach((node) => node.removeAttribute('id'));
+    ['mesid', 'data-mesid', 'messageid', 'data-message-id'].forEach((name) => root.removeAttribute(name));
+}
+
+/**
+ * 在宿主渲染最终消息期间保留一份不可交互的旧消息视觉快照。
+ * 真实消息节点保持布局但不可见，宿主和其他插件可在其上完成全部渲染；release 后才显示最终节点。
+ * @param {number} index 消息索引。
+ * @returns {{release: () => void}|null} 原子交换控制器。
+ */
+export function beginAtomicMessageDisplaySwap(index) {
+    if (typeof document === 'undefined' || !document.body) return null;
+    const messageNode = getMessageDomNode(index);
+    if (!messageNode?.cloneNode || !messageNode.getBoundingClientRect) return null;
+
+    const rect = messageNode.getBoundingClientRect();
+    const snapshot = messageNode.cloneNode(true);
+    removeSnapshotIdentifiers(snapshot);
+    snapshot.setAttribute('data-blai-atomic-message-snapshot', 'true');
+    snapshot.setAttribute('aria-hidden', 'true');
+    if ('inert' in snapshot) snapshot.inert = true;
+
+    const computed = typeof globalThis.getComputedStyle === 'function'
+        ? globalThis.getComputedStyle(messageNode)
+        : null;
+    Object.assign(snapshot.style, {
+        position: 'fixed',
+        top: `${rect.top}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        minHeight: `${rect.height}px`,
+        boxSizing: 'border-box',
+        margin: '0',
+        pointerEvents: 'none',
+        visibility: 'visible',
+        zIndex: computed?.zIndex && computed.zIndex !== 'auto' ? computed.zIndex : '1',
+    });
+
+    const previousVisibility = messageNode.style.visibility;
+    const previousMinHeight = messageNode.style.minHeight;
+    messageNode.style.visibility = 'hidden';
+    messageNode.style.minHeight = `${rect.height}px`;
+    document.body.appendChild(snapshot);
+
+    let released = false;
+    return {
+        release() {
+            if (released) return;
+            released = true;
+            snapshot.remove?.();
+            if (messageNode.isConnected !== false) {
+                messageNode.style.visibility = previousVisibility;
+                messageNode.style.minHeight = previousMinHeight;
+            }
+        },
+    };
 }
 
 export function isUserMessageDomNode(node) {

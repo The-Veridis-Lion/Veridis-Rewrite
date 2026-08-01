@@ -2,9 +2,8 @@ import { extensionName, getAppContext, runtimeState } from './state.js';
 import { logger } from './log.js';
 import { buildSimpleWildcardPattern, compileRegexTarget, mergeScopeTagsWithBuiltins } from './utils.js';
 import { buildChineseVariantPattern, getChineseTextVariantLengths, getZhVariantCompatOptions, isZhDictionaryReady } from './zhConversion.js';
-import { deepCleanObjectSync } from './cleanse.js';
 import { buildDiffSnippetsFromText, computeMessageSignature, ensureMessageDiffButton, getLatestTrackableDiffIndices, hasRealDiffCache, injectDiffButtons, isAssistantMessage, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, writeReadyDiffCache, clearTrackedDiffEntry } from './diff.js';
-import { getMessageDomNode, purifyDOM } from './dom.js';
+import { beginAtomicMessageDisplaySwap, getMessageDomNode, purifyDOM } from './dom.js';
 import { clearMessageDiffMeta, getMessageDiffBranchKey, getMessageDiffMeta, isMessageFinalizedForCurrentBranch, setCurrentSwipeText, writeMessageDiffMeta } from './messageMeta.js';
 import { getMaxHostChatSaveDefers, getRecommendedChatSaveDelay, getSillyTavernContextSnapshot, isBaiBaiToolkitInstalled, isLoreFrameInstalled, isTauriTavernHost, markHostChatDirtyFromIndex, runPreferredSaveChat, shouldDelayChatSaveForHost } from './platform.js';
 
@@ -631,25 +630,29 @@ function scheduleRenderedEvent(index, message, context) {
     const appContext = getAppContext();
     const eventSource = context.eventSource || appContext.eventSource;
     const eventTypes = context.eventTypes || context.event_types || appContext.event_types;
-    if (!eventSource || typeof eventSource.emit !== 'function' || !eventTypes) return;
+    if (!eventSource || typeof eventSource.emit !== 'function' || !eventTypes) return Promise.resolve();
 
     const eventType = message?.is_user === true
         ? eventTypes.USER_MESSAGE_RENDERED
         : eventTypes.CHARACTER_MESSAGE_RENDERED;
-    if (!eventType) return;
+    if (!eventType) return Promise.resolve();
 
-    const emitEvent = () => {
-        Promise.resolve(eventSource.emit(eventType, index))
-            .catch((e) => logger.warn(`补发消息渲染事件失败 index=${index}`, e));
-    };
+    return new Promise((resolve) => {
+        const emitEvent = () => {
+            Promise.resolve()
+                .then(() => eventSource.emit(eventType, index))
+                .catch((e) => logger.warn(`补发消息渲染事件失败 index=${index}`, e))
+                .finally(resolve);
+        };
 
-    if (typeof globalThis.requestAnimationFrame === 'function') {
-        globalThis.requestAnimationFrame(emitEvent);
-    } else if (typeof globalThis.setTimeout === 'function') {
-        globalThis.setTimeout(emitEvent, 0);
-    } else {
-        emitEvent();
-    }
+        if (typeof globalThis.requestAnimationFrame === 'function') {
+            globalThis.requestAnimationFrame(emitEvent);
+        } else if (typeof globalThis.setTimeout === 'function') {
+            globalThis.setTimeout(emitEvent, 0);
+        } else {
+            emitEvent();
+        }
+    });
 }
 
 function suppressOwnRenderedEventCleanse(index) {
@@ -668,20 +671,38 @@ function scheduleMessageUpdatedEvent(index, context) {
     const eventSource = context.eventSource || appContext.eventSource;
     const eventTypes = context.eventTypes || context.event_types || appContext.event_types;
     const eventType = eventTypes?.MESSAGE_UPDATED;
-    if (!eventSource || typeof eventSource.emit !== 'function' || !eventType) return;
+    if (!eventSource || typeof eventSource.emit !== 'function' || !eventType) return Promise.resolve();
 
-    const emitEvent = () => {
-        Promise.resolve(eventSource.emit(eventType, index))
-            .catch((e) => logger.warn(`补发消息更新事件失败 index=${index}`, e));
-    };
+    return new Promise((resolve) => {
+        const emitEvent = () => {
+            Promise.resolve()
+                .then(() => eventSource.emit(eventType, index))
+                .catch((e) => logger.warn(`补发消息更新事件失败 index=${index}`, e))
+                .finally(resolve);
+        };
 
-    if (typeof globalThis.requestAnimationFrame === 'function') {
-        globalThis.requestAnimationFrame(emitEvent);
-    } else if (typeof globalThis.setTimeout === 'function') {
-        globalThis.setTimeout(emitEvent, 0);
-    } else {
-        emitEvent();
-    }
+        if (typeof globalThis.requestAnimationFrame === 'function') {
+            globalThis.requestAnimationFrame(emitEvent);
+        } else if (typeof globalThis.setTimeout === 'function') {
+            globalThis.setTimeout(emitEvent, 0);
+        } else {
+            emitEvent();
+        }
+    });
+}
+
+function releaseAtomicMessageDisplayAfterRender(index, atomicSwap, pendingEvents = []) {
+    if (!atomicSwap) return;
+    Promise.allSettled(pendingEvents).then(() => {
+        const release = () => {
+            const messageNode = getMessageDomNode(index);
+            if (messageNode) ensureMessageDiffButton(index, messageNode);
+            atomicSwap.release();
+        };
+        if (typeof globalThis.requestAnimationFrame === 'function') globalThis.requestAnimationFrame(release);
+        else if (typeof globalThis.setTimeout === 'function') globalThis.setTimeout(release, 0);
+        else release();
+    });
 }
 
 function schedulePostRefreshDomSettle(index) {
@@ -711,7 +732,7 @@ function schedulePostRefreshDomSettle(index) {
 /**
  * 使用 SillyTavern 宿主渲染器刷新消息块，避免直接写 raw text 破坏排版。
  * @param {number} index 消息索引。
- * @param {{delay?: number, allowReloadFallback?: boolean, emitRenderedEvent?: boolean|'auto'}} [options={}] 刷新选项。
+ * @param {{delay?: number, allowReloadFallback?: boolean, emitRenderedEvent?: boolean|'auto', atomic?: boolean, atomicSwap?: {release: () => void}|null}} [options={}] 刷新选项。
  * @returns {boolean} 已触发刷新则返回 true。
  */
 export function refreshMessageDisplay(index, options = {}) {
@@ -732,22 +753,26 @@ export function refreshMessageDisplay(index, options = {}) {
 
     const hostUpdateMessageBlock = stContext.updateMessageBlock || appContext.updateMessageBlock;
     if (typeof hostUpdateMessageBlock === 'function') {
+        const atomicSwap = options.atomicSwap || (options.atomic === true ? beginAtomicMessageDisplaySwap(index) : null);
         try {
             hostUpdateMessageBlock(index, message);
             const shouldEmitRenderedEvent = options.emitRenderedEvent === true
                 || (options.emitRenderedEvent === 'auto' && looksLikeTemplateRenderedContent(index, message));
             const needsHostSettle = isTauriTavernHost() || isBaiBaiToolkitInstalled();
             const shouldNotifyHostPlugins = needsHostSettle || isLoreFrameInstalled();
+            const pendingEvents = [];
             if (shouldNotifyHostPlugins) suppressOwnRenderedEventCleanse(index);
-            if (shouldEmitRenderedEvent || needsHostSettle) scheduleRenderedEvent(index, message, stContext);
+            if (shouldEmitRenderedEvent || needsHostSettle) pendingEvents.push(scheduleRenderedEvent(index, message, stContext));
             if (shouldNotifyHostPlugins) {
-                scheduleMessageUpdatedEvent(index, stContext);
+                pendingEvents.push(scheduleMessageUpdatedEvent(index, stContext));
             }
-            if (needsHostSettle) {
+            if (needsHostSettle && options.atomic !== true) {
                 schedulePostRefreshDomSettle(index);
             }
+            releaseAtomicMessageDisplayAfterRender(index, atomicSwap, pendingEvents);
             return true;
         } catch (e) {
+            atomicSwap?.release();
             logger.warn(`updateMessageBlock 调用失败 index=${index}`, e);
             if (options.allowReloadFallback === true) {
                 return reloadChatAsDisplayFallback(stContext, index);
@@ -756,6 +781,7 @@ export function refreshMessageDisplay(index, options = {}) {
         }
     }
 
+    options.atomicSwap?.release?.();
     warnMissingMessageRefresh(index);
     if (options.allowReloadFallback === true) {
         return reloadChatAsDisplayFallback(stContext, index);
@@ -861,6 +887,14 @@ function hasMvuUpdatePayload(text) {
     return String(text || '').includes('<UpdateVariable>');
 }
 
+function stripMvuStatusPlaceholders(text) {
+    return String(text ?? '')
+        .split(mvuStatusPlaceholder)
+        .join('')
+        .replace(/\n{3,}/g, '\n\n')
+        .trimEnd();
+}
+
 function getCurrentSwipeVariables(msg) {
     const swipeId = Number.isInteger(Number(msg?.swipe_id)) ? Number(msg.swipe_id) : 0;
     return msg?.variables?.[swipeId];
@@ -873,7 +907,7 @@ function hasCurrentSwipeMvuState(msg) {
 
 export function preserveMvuStatusPlaceholder(text, msg, sources = []) {
     const nextText = typeof text === 'string' ? text : String(text ?? '');
-    if (!nextText || hasMvuStatusPlaceholder(nextText)) return nextText;
+    if (!nextText) return nextText;
     if (!isAssistantMessage(msg)) return nextText;
 
     const sourceTexts = [nextText, msg?.mes, ...sources].map(value => String(value || ''));
@@ -881,7 +915,8 @@ export function preserveMvuStatusPlaceholder(text, msg, sources = []) {
     const hasMvuPayload = sourceTexts.some(hasMvuUpdatePayload);
     if (!hadPlaceholder && !(hasMvuPayload && hasCurrentSwipeMvuState(msg))) return nextText;
 
-    return `${nextText.trimEnd()}\n\n${mvuStatusPlaceholder}`;
+    const normalizedText = stripMvuStatusPlaceholders(nextText);
+    return normalizedText ? `${normalizedText}\n\n${mvuStatusPlaceholder}` : mvuStatusPlaceholder;
 }
 
 function getPostSourceAddition(sourceMes, cleanedSourceMes, currentMes, hasExplicitSource) {
@@ -1033,7 +1068,7 @@ export function performNonStreamingFinalCleanse(payload) {
  * 执行增量净化：处理单条消息并刷新对应 DOM。
  * @param {number|object} payload 事件载荷或消息索引。
  * @param {{visualOnly?: boolean, fallbackLatest?: boolean, skipPurifyDom?: boolean, diffSourceMes?: string}} [options={}] 控制选项。
- * @returns {void}
+ * @returns {{index:number, messageRef:object, beforeText:string, afterText:string, dataChanged:boolean, messageTextChanged:boolean}|undefined}
  */
 export function performIncrementalCleanse(payload, options = {}) {
     logger.debug(`[performIncrementalCleanse] payload=${JSON.stringify(payload)}, options=${JSON.stringify(options)}`);
@@ -1061,6 +1096,7 @@ export function performIncrementalCleanse(payload, options = {}) {
         injectDiffButtons([index]);
         return;
     }
+    const beforeText = typeof msg.mes === 'string' ? msg.mes : '';
     if (assistant) {
         const signature = computeMessageSignature(msg);
         if (options.visualOnly) markDiffComparisonPending(index, signature);
@@ -1073,7 +1109,14 @@ export function performIncrementalCleanse(payload, options = {}) {
             if (alreadyFinalizedSameSource && hasRealDiffCache(index)) {
                 const messageNode = getMessageDomNode(index);
                 if (messageNode) ensureMessageDiffButton(index, messageNode);
-                return;
+                return {
+                    index,
+                    messageRef: msg,
+                    beforeText,
+                    afterText: beforeText,
+                    dataChanged: false,
+                    messageTextChanged: false,
+                };
             }
 
             if (!previousState || previousState.signature !== signature) {
@@ -1085,6 +1128,7 @@ export function performIncrementalCleanse(payload, options = {}) {
     const dataChanged = options.visualOnly ? false : cleanseMessageDataAtIndex(index, {
         diffSourceMes: options.diffSourceMes,
     });
+    const afterCleanseText = typeof msg.mes === 'string' ? msg.mes : '';
     const messageNode = getMessageDomNode(index);
     if (messageNode) {
         if (!options.skipPurifyDom) purifyDOM(messageNode);
@@ -1095,6 +1139,14 @@ export function performIncrementalCleanse(payload, options = {}) {
         refreshMessageDisplay(index, { emitRenderedEvent: 'auto' });
         queueIncrementalChatSave();
     }
+    return {
+        index,
+        messageRef: msg,
+        beforeText,
+        afterText: afterCleanseText,
+        dataChanged,
+        messageTextChanged: beforeText !== afterCleanseText,
+    };
 }
 
 function cancelGlobalCleanseJob() {
@@ -1266,24 +1318,6 @@ export function performGlobalCleanse(options = {}) {
             if (!msg || typeof msg !== 'object') return;
             if (processGlobalCleanseMessageSafely(msg, index, latestDiffIndices, skipUser, { refreshDom: true })) chatChanged = true;
         });
-
-        const latestMsg = chat.length > 0 ? chat[chat.length - 1] : null;
-        if (latestMsg && typeof latestMsg === 'object') {
-            ['TavernDB_ACU_Data', 'TavernDB_ACU_SummaryData'].forEach((dbKey) => {
-                const dbVal = latestMsg[dbKey];
-                if (dbVal && typeof dbVal === 'object') {
-                    try {
-                        const dbChanges = deepCleanObjectSync(dbVal);
-                        if (dbChanges > 0) {
-                            chatChanged = true;
-                            markHostChatDirtyFromIndex(chat.length - 1);
-                        }
-                    } catch (error) {
-                        logger.warn(`[performGlobalCleanse] 跳过异常附加数据 ${dbKey}: ${error?.message || error}`);
-                    }
-                }
-            });
-        }
 
         if (useDeferredLongChat) {
             scheduleGlobalCleanseRemainder(chat, new Set(syncIndices), latestDiffIndices, skipUser);

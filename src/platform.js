@@ -98,6 +98,41 @@ export function isBaiBaiToolkitInstalled() {
     );
 }
 
+const fallbackChatIdentityByReference = new WeakMap();
+let fallbackChatIdentitySequence = 0;
+
+export function getCurrentChatIdentity() {
+    const appContext = getAppContext();
+    const hostContext = getSillyTavernContextSnapshot();
+    let currentChatId;
+    try {
+        currentChatId = typeof hostContext?.getCurrentChatId === 'function'
+            ? hostContext.getCurrentChatId()
+            : undefined;
+    } catch (error) {
+        logger.warn('读取 SillyTavern 当前聊天 ID 失败，改用稳定对象身份。', error);
+    }
+    const hostCandidates = [
+        currentChatId,
+        hostContext?.chatId,
+        hostContext?.chat_id,
+        appContext?.chat_metadata?.chatId,
+        appContext?.chat_metadata?.chat_id,
+    ];
+    for (const candidate of hostCandidates) {
+        if (candidate !== null && candidate !== undefined && String(candidate).trim()) {
+            return `host:${String(candidate).trim()}`;
+        }
+    }
+
+    const chat = appContext?.chat;
+    if (!chat || typeof chat !== 'object') return '';
+    if (!fallbackChatIdentityByReference.has(chat)) {
+        fallbackChatIdentityByReference.set(chat, `chat-ref:${++fallbackChatIdentitySequence}`);
+    }
+    return fallbackChatIdentityByReference.get(chat);
+}
+
 export function isLoreFrameInstalled() {
     const root = getGlobalObject();
     if (loreFrameDetected) return true;

@@ -6,11 +6,12 @@ export const defaultTrackedDiffMessages = 3;
 export const maxTrackedDiffMessages = 20;
 export const defaultDeepCleanTimeoutSec = 120;
 
-export const defaultAiRewritePrompt = `你是文本局部改写助手。你会收到一整条 AI 回复作为文风参考，以及若干需要改写的分组。
+export const defaultAiRewritePrompt = `你是文本原位改写助手。你会收到一整条 AI 回复作为只读文风参考，以及若干需要替换的局部片段。
 每个 rewriteGroups 条目中的 instructions 和 localFallbackCandidates 只适用于同组 items。
-只改写 rewriteGroups[].items 里列出的片段，不要扩写、总结、解释或改变剧情事实。
-目标是去除命中的八股句式、夸张副词或不自然表达，同时尽量保持原文文风、语气、人物口吻和原意。
-必须只返回 JSON，不要返回 markdown。
+对每个 item，只返回能够直接替换 item.text 的文本；beforeContext 和 afterContext 是只读边界，禁止复制进 rewritten。
+不要改写 item 外的句子，不要扩写、总结、解释或改变剧情事实。删除命中片段是最佳结果时，rewritten 必须返回空字符串。
+目标是去除命中的八股句式、夸张副词或不自然表达，同时保持原文文风、语气、人物口吻和原意；无法安全改写时原样返回 item.text。
+必须为每个输入 id 恰好返回一项，只返回 JSON，不要返回 markdown。
 
 整条回复：
 {{originalMessage}}
@@ -110,7 +111,7 @@ export const runtimeState = {
     diffSnippetsCache: new Map(),
     diffRawSourceCache: new Map(),
     nonStreamingRawMessageCache: new Map(),
-    streamingRawMessageCache: new Map(),
+    streamingCommittedMessageCache: new Map(),
     diffMessageStates: new Map(),
     trackedDiffMessageOrder: [],
     hostRenderedEventSuppressUntil: new Map(),
@@ -131,12 +132,15 @@ export const runtimeState = {
         statusToast: null,
         statusTaskKey: "",
         debugEvents: [],
+        criticalDebugEvents: [],
         pendingKeys: new Set(),
         startedKeys: new Set(),
         appliedKeys: new Set(),
         cancelledKeys: new Set(),
         readyNoticeKeys: new Set(),
+        streamingStartedMessageIndices: new Set(),
         runningTaskMetaByKey: new Map(),
+        contentIdentityByGenerationId: new Map(),
         finalCleanseSequence: 0,
         finalCleanseByMessageKey: new Map(),
         pendingApplyByKey: new Map(),

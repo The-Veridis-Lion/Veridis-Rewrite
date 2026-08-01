@@ -4,28 +4,6 @@ import { applyScopedReplacements, buildProcessors } from './core.js';
 import { showDeepCleanOverlay, updateDeepCleanOverlay } from './ui.js';
 import { markHostChatDirtyFromIndex, runPreferredSaveChat } from './platform.js';
 
-/**
- * 判断是否应跳过数据库扩展字段。
- * @param {string[]} [pathKeys=[]] 当前字段路径键列表。
- * @param {boolean} [isGlobalSettings=false] 是否处于全局设置扫描。
- * @returns {boolean} true 表示跳过该字段。
- */
-export function shouldSkipDbExtensionField(pathKeys = [], isGlobalSettings = false) {
-    if (!isGlobalSettings || pathKeys.length < 2) return false;
-    const rootNamespace = String(pathKeys[0] || '');
-    if (!rootNamespace.includes('shujuku_v120')) return false;
-    const currentKey = String(pathKeys[pathKeys.length - 1] || '');
-    return currentKey.includes('Prompt') || currentKey.includes('Settings') || currentKey.includes('Template');
-}
-
-function shouldSkipDbExtensionFieldByMeta(depth, rootNamespace, currentKey, isGlobalSettings = false) {
-    if (!isGlobalSettings || depth < 2) return false;
-    const rootNs = String(rootNamespace || '');
-    if (!rootNs.includes('shujuku_v120')) return false;
-    const key = String(currentKey || '');
-    return key.includes('Prompt') || key.includes('Settings') || key.includes('Template');
-}
-
 function isRevertedMessageObject(value) {
     return !!(value && typeof value === 'object' && value.__blai_is_reverted === true);
 }
@@ -38,35 +16,78 @@ function createDeepCleanCancelledError(totalChanges = 0, partialChanges = 0) {
 }
 
 /**
- * 同步深度清理对象中的所有字符串字段。
+ * 按数据类型 allowlist 同步清理明确的用户内容字段。
  * @param {object} rootObj 待清理对象。
+ * @param {{scope?: 'chat'|'characters'|'world-info'|'personas', transform?: Function}} [options={}] 数据范围与替换函数。
  * @returns {number} 命中并替换的字段数量。
  */
-export function deepCleanObjectSync(rootObj) {
-    if (!rootObj || typeof rootObj !== 'object') return 0;
-    let changes = 0;
-    const stack = [rootObj];
-    const seen = new Set();
+function collectDeepCleanSlots(rootObj, scope = 'chat') {
+    const slots = [];
+    const addSlot = (owner, key, path) => {
+        if (owner && typeof owner[key] === 'string') slots.push({ owner, key, path });
+    };
 
-    while (stack.length > 0) {
-        const current = stack.pop();
-        if (!current || seen.has(current)) continue;
-        seen.add(current);
-        if (isRevertedMessageObject(current)) continue;
+    if (scope === 'chat') {
+        const messages = Array.isArray(rootObj) ? rootObj : [rootObj];
+        messages.forEach((message, messageIndex) => {
+            if (!message || typeof message !== 'object' || isRevertedMessageObject(message)) return;
+            addSlot(message, 'mes', `[${messageIndex}].mes`);
+            if (!Array.isArray(message.swipes)) return;
+            message.swipes.forEach((swipe, swipeIndex) => {
+                if (typeof swipe === 'string') addSlot(message.swipes, swipeIndex, `[${messageIndex}].swipes[${swipeIndex}]`);
+                else if (swipe && typeof swipe === 'object') addSlot(swipe, 'mes', `[${messageIndex}].swipes[${swipeIndex}].mes`);
+            });
+        });
+        return slots;
+    }
 
-        for (let key in current) {
-            if (!Object.prototype.hasOwnProperty.call(current, key)) continue;
-            if (typeof key === 'string' && key.startsWith('__blai_')) continue;
-            const val = current[key];
-            if (typeof val === 'string') {
-                const cleaned = applyScopedReplacements(val);
-                if (cleaned !== val) {
-                    current[key] = cleaned;
-                    changes++;
-                }
-            } else if (val && typeof val === 'object') {
-                stack.push(val);
+    if (scope === 'characters') {
+        const characters = Array.isArray(rootObj) ? rootObj : [];
+        const fields = ['description', 'personality', 'scenario', 'first_mes'];
+        characters.forEach((character, index) => {
+            if (!character || typeof character !== 'object') return;
+            fields.forEach((field) => addSlot(character, field, `[${index}].${field}`));
+            if (Array.isArray(character.alternate_greetings)) {
+                character.alternate_greetings.forEach((_, greetingIndex) => addSlot(character.alternate_greetings, greetingIndex, `[${index}].alternate_greetings[${greetingIndex}]`));
             }
+        });
+        return slots;
+    }
+
+    if (scope === 'world-info') {
+        const entryContainer = rootObj?.entries ?? rootObj;
+        const entries = Array.isArray(entryContainer)
+            ? entryContainer
+            : entryContainer && typeof entryContainer === 'object'
+                ? Object.values(entryContainer)
+                : [];
+        entries.forEach((entry, index) => {
+            if (entry && typeof entry === 'object') addSlot(entry, 'content', `entries[${index}].content`);
+        });
+        return slots;
+    }
+
+    if (scope === 'personas') {
+        if (!rootObj || typeof rootObj !== 'object') return slots;
+        Object.entries(rootObj).forEach(([key, persona]) => {
+            if (typeof persona === 'string') addSlot(rootObj, key, `personas.${key}`);
+            else if (persona && typeof persona === 'object') addSlot(persona, 'description', `personas.${key}.description`);
+        });
+    }
+    return slots;
+}
+
+export function deepCleanObjectSync(rootObj, options = {}) {
+    if (!rootObj || typeof rootObj !== 'object') return 0;
+    const scope = String(options.scope || 'chat');
+    const transform = typeof options.transform === 'function' ? options.transform : applyScopedReplacements;
+    let changes = 0;
+    for (const slot of collectDeepCleanSlots(rootObj, scope)) {
+        const value = slot.owner[slot.key];
+        const cleaned = transform(value);
+        if (cleaned !== value) {
+            slot.owner[slot.key] = cleaned;
+            changes++;
         }
     }
     return changes;
@@ -75,15 +96,14 @@ export function deepCleanObjectSync(rootObj) {
 /**
  * 分片执行异步深度清理。
  * @param {object} rootObj 待清理对象根节点。
- * @param {boolean} [isGlobalSettings=false] 是否对全局设置执行清理。
+ * @param {'chat'|'characters'|'world-info'|'personas'} [scope='chat'] 明确的数据范围。
  * @param {{onProgress?: Function, deadline?: number, getDeadline?: Function, onTimeout?: Function, completedChanges?: number}} [options={}] 进度回调与截止时间。
  * @returns {Promise<number>} 命中并替换的字段数量。
  */
-export async function safeDeepScrub(rootObj, isGlobalSettings = false, options = {}) {
+export async function safeDeepScrub(rootObj, scope = 'chat', options = {}) {
     let changes = 0;
     if (!rootObj || typeof rootObj !== 'object') return changes;
-    const stack = [{ node: rootObj, depth: 0, rootNamespace: '' }];
-    const seen = new Set();
+    const slots = collectDeepCleanSlots(rootObj, String(scope || 'chat'));
     buildProcessors();
 
     const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
@@ -101,7 +121,7 @@ export async function safeDeepScrub(rootObj, isGlobalSettings = false, options =
         const deadline = Number(getDeadline());
         if (!Number.isFinite(deadline) || Date.now() <= deadline) return;
         if (onTimeout) {
-            const shouldContinue = await onTimeout({ visited: seen.size, pending: stack.length, changes });
+            const shouldContinue = await onTimeout({ visited: iterations, pending: Math.max(0, slots.length - iterations), changes });
             if (shouldContinue === true) return;
             throw createDeepCleanCancelledError(completedChanges + changes, changes);
         }
@@ -111,46 +131,24 @@ export async function safeDeepScrub(rootObj, isGlobalSettings = false, options =
         throw err;
     };
 
-    while (stack.length > 0) {
+    for (const slot of slots) {
         await assertWithinDeadline();
 
         if (++iterations % 500 === 0) {
-            if (onProgress) onProgress({ visited: seen.size, pending: stack.length, changes });
+            if (onProgress) onProgress({ visited: iterations, pending: Math.max(0, slots.length - iterations), changes });
             await new Promise(r => setTimeout(r, 0));
         }
-
-        const currentItem = stack.pop();
-        const current = currentItem?.node;
-        const depth = currentItem?.depth || 0;
-        const rootNamespace = currentItem?.rootNamespace || '';
-        if (!current || seen.has(current)) continue;
-        seen.add(current);
-        if (isRevertedMessageObject(current)) continue;
-
         try {
-            for (let key in current) {
-                if (Object.prototype.hasOwnProperty.call(current, key)) {
-                    if (isGlobalSettings && key === extensionName) continue;
-                    if (typeof key === 'string' && key.startsWith('__blai_')) continue;
-                    const nextDepth = depth + 1;
-                    const nextRootNamespace = depth === 0 ? key : rootNamespace;
-                    if (shouldSkipDbExtensionFieldByMeta(nextDepth, nextRootNamespace, key, isGlobalSettings)) continue;
-                    const val = current[key];
-                    if (typeof val === 'string') {
-                        const cleaned = applyScopedReplacements(val);
-                        if (val !== cleaned) {
-                            current[key] = cleaned;
-                            changes++;
-                        }
-                    } else if (val !== null && typeof val === 'object') {
-                        stack.push({ node: val, depth: nextDepth, rootNamespace: nextRootNamespace });
-                    }
-                }
+            const value = slot.owner[slot.key];
+            const cleaned = applyScopedReplacements(value);
+            if (value !== cleaned) {
+                slot.owner[slot.key] = cleaned;
+                changes++;
             }
         } catch (e) { }
     }
 
-    if (onProgress) onProgress({ visited: seen.size, pending: stack.length, changes });
+    if (onProgress) onProgress({ visited: slots.length, pending: 0, changes });
     return changes;
 }
 
@@ -168,7 +166,7 @@ export function getDeepCleanTimeoutMs() {
  */
 export async function performDeepCleanse() {
     logger.info('[performDeepCleanse] 深度清理开始');
-    const { chat, chat_metadata, extension_settings, saveSettingsDebounced } = getAppContext();
+    const { chat, extension_settings, saveSettingsDebounced } = getAppContext();
     buildProcessors();
     if (runtimeState.activeProcessors.length === 0) {
         alert('没有开启的屏蔽规则，无需清理。');
@@ -188,14 +186,13 @@ export async function performDeepCleanse() {
         let continueCount = 0;
 
         const phases = [];
-        if (chat && Array.isArray(chat)) phases.push({ label: '聊天记录', root: chat, isGlobalSettings: false });
-        if (typeof chat_metadata === 'object' && chat_metadata !== null) phases.push({ label: '聊天元数据', root: chat_metadata, isGlobalSettings: false });
-        if (typeof extension_settings === 'object' && extension_settings !== null) phases.push({ label: '插件设置', root: extension_settings, isGlobalSettings: true });
-        if (typeof window.characters !== 'undefined' && Array.isArray(window.characters)) phases.push({ label: '角色卡', root: window.characters, isGlobalSettings: false });
-        if (typeof window.world_info !== 'undefined' && window.world_info !== null) phases.push({ label: '世界书', root: window.world_info, isGlobalSettings: false });
+        if (chat && Array.isArray(chat)) phases.push({ label: '聊天记录', root: chat, scope: 'chat' });
+        if (typeof window.characters !== 'undefined' && Array.isArray(window.characters)) phases.push({ label: '角色卡', root: window.characters, scope: 'characters' });
+        if (typeof window.world_info !== 'undefined' && window.world_info !== null) phases.push({ label: '世界书', root: window.world_info, scope: 'world-info' });
         if (extension_settings?.[extensionName]?.protectPersonaDescription !== true && typeof window.power_user !== 'undefined' && window.power_user !== null && window.power_user.personas) {
-            phases.push({ label: '人设', root: window.power_user.personas, isGlobalSettings: false });
+            phases.push({ label: '人设', root: window.power_user.personas, scope: 'personas' });
         }
+        logger.info('深度清理已跳过聊天 metadata、插件设置和未知扩展字段。');
 
         for (let i = 0; i < phases.length; i++) {
             const phase = phases[i];
@@ -203,7 +200,7 @@ export async function performDeepCleanse() {
             const phaseBase = i / phases.length;
             const phaseSpan = 1 / phases.length;
 
-            const phaseChanges = await safeDeepScrub(phase.root, phase.isGlobalSettings, {
+            const phaseChanges = await safeDeepScrub(phase.root, phase.scope, {
                 completedChanges: scrubbedItems,
                 getDeadline: () => deadline,
                 shouldCancel: () => runtimeState.deepCleanCancelRequested === true,

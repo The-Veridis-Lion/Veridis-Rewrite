@@ -1,6 +1,6 @@
 import { defaultAiRewriteSettings, extensionName, getAppContext, runtimeState, markRulesDataDirty, markRulesUiDirty, markPresetsUiDirty } from './state.js';
 import { logger } from './log.js';
-import { COT_SCOPE_TAG_DISPLAY_TEXT, DEFAULT_SCOPE_TAG_GROUP_ID, DEFAULT_SCOPE_TAG_GROUP_NAME, buildPresetEntry, deepClone, getCurrentCharacterContext, getCurrentChatCompletionPresetName, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetBindingResolution, getPresetBindingUsage, getPresetForCharacter, getPresetRules, isCotScopeTagEntry, mergeScopeTagsWithBuiltins, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList, parseInputToWords } from './utils.js';
+import { COT_SCOPE_TAG_DISPLAY_TEXT, DEFAULT_SCOPE_TAG_GROUP_ID, DEFAULT_SCOPE_TAG_GROUP_NAME, buildPresetEntry, deepClone, getCurrentCharacterContext, getCurrentChatCompletionPresetName, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetBindingResolution, getPresetBindingUsage, getPresetForCharacter, getPresetRules, isCotScopeTagEntry, isRuleActivationWarningEnabled, mergeScopeTagsWithBuiltins, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList, parseInputToWords } from './utils.js';
 import { performGlobalCleanse } from './core.js';
 import { performDeepCleanse } from './cleanse.js';
 
@@ -235,7 +235,7 @@ export function showToast(message) {
 
 export function setupUI() {
     logger.debug('[setupUI] 开始初始化 UI');
-    $('#blai-purifier-popup, #blai-rule-edit-modal, #blai-confirm-modal, #blai-rule-transfer-modal, #blai-preset-import-choice-modal, #blai-rule-search-modal, #blai-scope-tags-modal, #blai-diff-modal, #blai-subrule-edit-modal, #blai-ai-prompt-modal, #blai-loading-overlay, .blai-toast').remove();
+    $('#blai-purifier-popup, #blai-rule-edit-modal, #blai-risk-confirm-modal, #blai-risk-info-modal, #blai-confirm-modal, #blai-rule-transfer-modal, #blai-preset-import-choice-modal, #blai-rule-search-modal, #blai-scope-tags-modal, #blai-diff-modal, #blai-subrule-edit-modal, #blai-ai-prompt-modal, #blai-loading-overlay, .blai-toast').remove();
 
     const ensureExtensionPanelEntry = () => {
         if ($('#blai-extension-settings-entry').length || !$('#extensions_settings').length) return;
@@ -390,7 +390,7 @@ export function setupUI() {
                                 </div>
                                 <div class="field-grid">
                                     <label class="field blai-ai-field"><span>Base URL</span><input type="text" id="blai-ai-base-url" class="blai-input" placeholder="https://api.openai.com/v1"></label>
-                                    <label class="field blai-ai-field"><span>XML 标签</span><input type="text" id="blai-ai-xml-scope" class="blai-input" placeholder="<content>"></label>
+                                    <label class="field blai-ai-field"><span>XML 标签</span><input type="text" id="blai-ai-xml-scope" class="blai-input" placeholder="留空则在消息结束后处理整条回复"><small>填写标签可在闭合后提前请求；留空则等待整条回复生成完成。</small></label>
                                     <label class="field blai-ai-field blai-ai-model-field">
                                         <span>模型</span>
                                         <span class="blai-ai-model-row">
@@ -477,7 +477,7 @@ export function setupUI() {
                                             <button type="button" class="blai-realtime-mask-option" data-mode="simple-visual">简单视觉屏蔽</button>
                                             <button type="button" class="blai-realtime-mask-option" data-mode="tavern-helper">酒馆助手实时渲染</button>
                                         </div>
-                                        <p id="blai-realtime-mask-note">生成中只扫当前输出消息 DOM，尽量保留酒馆美化。</p>
+                                        <p id="blai-realtime-mask-note">生成中只处理消息显示层文本，不重建代码块或控件。</p>
                                     </div>
                                 </div>
                                 <div class="clean-deep-section">
@@ -587,6 +587,29 @@ export function setupUI() {
                 <div class="blai-modal-actions">
                     <button id="blai-add-subrule-btn" class="blai-secondary-btn"><i class="fas fa-plus"></i> 新增规则</button>
                     <button id="blai-edit-save" class="blai-primary-btn"><i class="fas fa-check"></i> 保存合集</button>
+                </div>
+            </div>
+        </div>
+    `);
+
+    $('body').append(`
+        <div id="blai-risk-confirm-modal" class="blai-modal-shell" aria-hidden="true">
+            <div class="blai-modal-card blai-risk-confirm-card" role="dialog" aria-modal="true" aria-describedby="blai-risk-confirm-text">
+                <p id="blai-risk-confirm-text"></p>
+                <div class="blai-modal-actions">
+                    <button id="blai-risk-confirm-cancel" type="button" class="blai-secondary-btn">取消</button>
+                    <button id="blai-risk-confirm-ok" type="button" class="blai-primary-btn">确定</button>
+                </div>
+            </div>
+        </div>
+    `);
+
+    $('body').append(`
+        <div id="blai-risk-info-modal" class="blai-modal-shell" aria-hidden="true">
+            <div class="blai-modal-card blai-risk-info-card" role="dialog" aria-modal="true" aria-describedby="blai-risk-info-text">
+                <p id="blai-risk-info-text"></p>
+                <div class="blai-modal-actions">
+                    <button id="blai-risk-info-close" type="button" class="blai-primary-btn">知道了</button>
                 </div>
             </div>
         </div>
@@ -1327,6 +1350,42 @@ export function showConfirmModal(onConfirm = () => performDeepCleanse()) {
     });
 }
 
+export function showRiskConfirmModal(message) {
+    return new Promise((resolve) => {
+        const $modal = $('#blai-risk-confirm-modal');
+        const finish = (confirmed) => {
+            $modal.hide().attr('aria-hidden', 'true');
+            $('#blai-risk-confirm-cancel, #blai-risk-confirm-ok').off('.blaiRiskConfirm');
+            $modal.off('.blaiRiskConfirm');
+            resolve(confirmed);
+        };
+
+        $('#blai-risk-confirm-text').text(String(message || ''));
+        $modal.css('display', 'flex').attr('aria-hidden', 'false');
+        $('#blai-risk-confirm-cancel').on('click.blaiRiskConfirm', () => finish(false));
+        $('#blai-risk-confirm-ok').on('click.blaiRiskConfirm', () => finish(true));
+        $modal.on('click.blaiRiskConfirm', (event) => {
+            if (event.target === $modal[0]) finish(false);
+        });
+    });
+}
+
+export function showRiskInfoModal(message) {
+    const $modal = $('#blai-risk-info-modal');
+    const close = () => {
+        $modal.hide().attr('aria-hidden', 'true');
+        $('#blai-risk-info-close').off('.blaiRiskInfo');
+        $modal.off('.blaiRiskInfo');
+    };
+
+    $('#blai-risk-info-text').text(String(message || ''));
+    $modal.css('display', 'flex').attr('aria-hidden', 'false');
+    $('#blai-risk-info-close').on('click.blaiRiskInfo', close).trigger('focus');
+    $modal.on('click.blaiRiskInfo', (event) => {
+        if (event.target === $modal[0]) close();
+    });
+}
+
 function getAiTimeoutSeconds(timeoutMs) {
     const parsed = Number(timeoutMs);
     const fallback = Number(defaultAiRewriteSettings.timeoutMs) || 120000;
@@ -1533,8 +1592,8 @@ export function syncRealtimeMaskModeUI() {
     const mode = settings.realtimeMaskMode === 'simple-visual' ? 'simple-visual' : 'tavern-helper';
     const label = mode === 'simple-visual' ? '简单视觉' : '实时渲染';
     const note = mode === 'simple-visual'
-        ? '生成中只扫当前输出消息 DOM，尽量保留酒馆美化。'
-        : '生成中在进入实时渲染前替换文本，可能覆盖酒馆美化。';
+        ? '生成中只处理消息显示层文本，不重建代码块或控件。'
+        : '生成中只处理酒馆助手显示层文本，不重建代码块或控件。';
 
     $('#blai-realtime-mask-label').text(label);
     $('#blai-realtime-mask-note').text(note);
@@ -1709,6 +1768,14 @@ export function renderTags() {
             : '';
 
         const isEnabled = r.enabled !== false;
+        const riskIndicatorHtml = isRuleActivationWarningEnabled(r)
+            ? `<i class="fas fa-circle-exclamation blai-rule-risk-indicator"
+                  data-index="${i}"
+                  title="查看启用风险提示"
+                  aria-label="查看高风险规则组提示"
+                  role="button"
+                  tabindex="0"></i>`
+            : '';
         const checkedAttr = isEnabled ? 'checked' : '';
         const moveUpDisabled = i === 0 ? 'disabled' : '';
         const moveDownDisabled = i === rules.length - 1 ? 'disabled' : '';
@@ -1722,7 +1789,7 @@ export function renderTags() {
                             <input type="checkbox" class="batch-item-checkbox" data-index="${i}">
                             <span class="blai-custom-checkbox blai-square-2px"></span>
                         </label>
-                        <label class="blai-checkbox-label">
+                        <label class="blai-checkbox-label" title="启用或停用此规则组">
                             <input type="checkbox" class="blai-rule-toggle" data-index="${i}" ${checkedAttr}>
                             <span class="blai-custom-checkbox"></span>
                             <span class="blai-group-title">${name}</span>
@@ -1733,6 +1800,7 @@ export function renderTags() {
                         <button class="blai-rule-move-up" data-index="${i}" title="上移合集" ${moveUpDisabled}><i class="fas fa-arrow-up"></i></button>
                         <button class="blai-rule-move-down" data-index="${i}" title="下移合集" ${moveDownDisabled}><i class="fas fa-arrow-down"></i></button>
                         <button class="blai-rule-transfer" data-index="${i}" title="复制/转移到其他存档"><i class="fas fa-copy"></i></button>
+                        ${riskIndicatorHtml}
                         <button class="blai-rule-edit" data-index="${i}" title="打开合集"><i class="fas fa-pen"></i><span>打开</span></button>
                         <button class="blai-rule-del" data-index="${i}" title="删除合集"><i class="fas fa-trash"></i></button>
                     </div>

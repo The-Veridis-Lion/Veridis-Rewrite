@@ -25,6 +25,51 @@ export function deepClone(value) {
     return JSON.parse(JSON.stringify(value));
 }
 
+export function normalizeRuleActivationWarning(value = '') {
+    return String(value ?? '').trim();
+}
+
+export function getRuleActivationWarning(rule) {
+    return normalizeRuleActivationWarning(rule?.activationWarning);
+}
+
+export function isRuleActivationWarningEnabled(rule) {
+    return getRuleActivationWarning(rule) !== '' && rule?.activationWarningEnabled === true;
+}
+
+export function normalizeRuleActivationSafety(rule, options = {}) {
+    const next = rule && typeof rule === 'object' && !Array.isArray(rule)
+        ? { ...rule }
+        : {};
+    const activationWarning = getRuleActivationWarning(next);
+    const activationWarningEnabled = activationWarning !== '' && next.activationWarningEnabled === true;
+
+    if (activationWarning) {
+        next.activationWarning = activationWarning;
+        next.activationWarningEnabled = activationWarningEnabled;
+        if (activationWarningEnabled && (options.resetRiskyEnabled === true || next.enabled === undefined)) {
+            next.enabled = false;
+        } else if (next.enabled === undefined) {
+            next.enabled = true;
+        }
+    } else {
+        delete next.activationWarning;
+        delete next.activationWarningEnabled;
+        if (next.enabled === undefined) next.enabled = true;
+    }
+
+    return next;
+}
+
+export function buildRuleActivationConfirmMessage(rules) {
+    return [...new Set(
+        (Array.isArray(rules) ? rules : [rules])
+            .filter(isRuleActivationWarningEnabled)
+            .map(getRuleActivationWarning)
+            .filter(Boolean)
+    )].join('\n\n');
+}
+
 function clampNumberSetting(value, min, max, fallback) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallback;
@@ -226,7 +271,7 @@ export function compileRegexTarget(target) {
     if (!source) return { ok: false, error: { message: '规则不能为空。' } };
 
     let pattern = source;
-    let flags = 'gmu';
+    let flags = 'gu';
 
     if (source.startsWith('/')) {
         const lastSlash = findLastUnescapedSlash(source);
@@ -397,6 +442,11 @@ export function normalizeXmlTagNameInput(input, fallbackTagName = 'content') {
 
     const fallback = parseScopeTagInput(fallbackTagName);
     return fallback.ok ? fallback.value.tagName : 'content';
+}
+
+export function normalizeOptionalXmlTagNameInput(input, fallbackTagName = 'content') {
+    if (typeof input === 'string' && input.trim() === '') return '';
+    return normalizeXmlTagNameInput(input, fallbackTagName);
 }
 
 function normalizeScopeTagLabel(label) {

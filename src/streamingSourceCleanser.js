@@ -35,6 +35,7 @@ export class StreamingSourceCleanser {
         this.committedRawLength = 0;
         this.committedCleanText = '';
         this.lastRawLength = 0;
+        this.lastRawText = '';
     }
 
     clean(rawText) {
@@ -43,7 +44,8 @@ export class StreamingSourceCleanser {
             return rawText;
         }
 
-        if (rawText.length < this.lastRawLength || rawText.length < this.committedRawLength) {
+        const isAppendOnlyFrame = this.lastRawText === '' || rawText.startsWith(this.lastRawText);
+        if (!isAppendOnlyFrame || rawText.length < this.lastRawLength || rawText.length < this.committedRawLength) {
             this.reset();
         }
 
@@ -55,6 +57,7 @@ export class StreamingSourceCleanser {
         }
 
         this.lastRawLength = rawText.length;
+        this.lastRawText = rawText;
         const liveTail = rawText.slice(this.committedRawLength);
         return this.committedCleanText + applyVisualMask(liveTail);
     }
