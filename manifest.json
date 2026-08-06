@@ -1,0 +1,9 @@
+{
+    "display_name": "屏蔽词净化助手 AI 改写版",
+    "loading_order": 10,
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Assistant",
+    "version": "7.0.0-alpha",
+    "description": "在关键词净化基础上增加可选 OpenAI 兼容局部改写。"
+}
