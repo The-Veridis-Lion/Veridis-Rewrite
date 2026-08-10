@@ -91,6 +91,14 @@
                                     </label>
                                 </div>
                                 <div class="field-grid">
+                                    <div class="blai-ai-comment-protection-row">
+                                        <label class="blai-checkbox-label" title="开启后，content 等 XML 标签中的 HTML/XML 注释会原样保留，不参与 AI 改写">
+                                            <input type="checkbox" id="blai-ai-protect-comments">
+                                            <span class="blai-custom-checkbox blai-square"></span>
+                                            <span>HTML/XML 注释保护</span>
+                                        </label>
+                                        <small>保留 &lt;!-- ... --&gt;</small>
+                                    </div>
                                     <label class="field blai-ai-field blai-ai-api-preset-field">
                                         <span>API 预设</span>
                                         <span class="blai-ai-api-preset-row">
@@ -143,6 +151,12 @@
                                         </span>
                                         <span class="setting-value"><input type="number" id="blai-ai-temperature" class="setting-input blai-input" min="0" max="2" step="0.05"></span>
                                     </div>
+                                    <label class="field" title="控制候选 token 的累计概率范围，越低越保守"><span>Top P</span><span class="setting-value"><input type="number" id="blai-ai-top-p" class="setting-input blai-input" min="0" max="1" step="0.01"></span></label>
+                                    <label class="field" title="只保留概率最高的前 K 个 token；0 表示不额外限制"><span>Top K</span><span class="setting-value"><input type="number" id="blai-ai-top-k" class="setting-input blai-input" min="0" max="500" step="1"></span></label>
+                                    <label class="field" title="降低模型重复已经出现过的词；标准范围为 -2 到 2"><span>频率惩罚</span><span class="setting-value"><input type="number" id="blai-ai-frequency-penalty" class="setting-input blai-input" min="-2" max="2" step="0.01"></span></label>
+                                    <label class="field" title="降低模型谈论已经出现过的主题；标准范围为 -2 到 2"><span>存在惩罚</span><span class="setting-value"><input type="number" id="blai-ai-presence-penalty" class="setting-input blai-input" min="-2" max="2" step="0.01"></span></label>
+                                    <label class="field" title="部分兼容接口支持；1 表示不额外启用"><span>重复惩罚</span><span class="setting-value"><input type="number" id="blai-ai-repetition-penalty" class="setting-input blai-input" min="1" max="2" step="0.01"></span></label>
+                                    <label class="field" title="发送给接口的最大输出 token；0 表示使用接口默认值"><span>最大输出 token</span><span class="setting-value"><input type="number" id="blai-ai-max-tokens" class="setting-input blai-input" min="0" max="65536" step="1"></span></label>
                                     <label class="field"><span>超时</span><span class="setting-value"><input type="number" id="blai-ai-timeout" class="setting-input blai-input" min="1" max="120" step="1"><em class="setting-unit">s</em></span></label>
                                     <label class="field"><span>失败重试</span><span class="setting-value"><input type="number" id="blai-ai-max-retries" class="setting-input blai-input" min="0" max="5" step="1"><em class="setting-unit">次</em></span></label>
                                     <label class="field"><span>单次条目</span><span class="setting-value"><input type="number" id="blai-ai-max-items" class="setting-input blai-input" min="1" step="1"><em class="setting-unit">条</em></span></label>

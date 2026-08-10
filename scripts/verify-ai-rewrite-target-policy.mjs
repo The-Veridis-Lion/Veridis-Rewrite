@@ -26,18 +26,21 @@ for (const forbidden of [
 }
 
 assert.doesNotMatch(eventsSource, /MESSAGE_EDITED[\s\S]{0,160}cancelAutomaticGeneration/u);
-assert.match(eventsSource, /MESSAGE_SWIPED[\s\S]{0,160}cancelAutomaticGeneration\('message-swiped'\)/u);
-assert.match(eventsSource, /MESSAGE_DELETED[\s\S]{0,160}cancelAutomaticGeneration\('message-deleted'\)/u);
+assert.match(eventsSource, /MESSAGE_SWIPED[\s\S]{0,500}cancelAutomaticGeneration\('target-message-swiped'\)/u);
+assert.match(eventsSource, /MESSAGE_DELETED[\s\S]{0,500}reconcileMessageDeletion/u);
+assert.match(eventsSource, /MESSAGE_DELETED[\s\S]{0,1200}hasInvalidAiRewriteTarget/u);
+assert.doesNotMatch(eventsSource, /MESSAGE_DELETED[\s\S]{0,300}cancelAutomaticGeneration\('message-deleted'\)/u);
 
 const currentChatId = { value: 'chat-a' };
+const earlierMessage = { is_user: true, mes: 'earlier floor' };
 const originalMessage = { is_user: false, mes: '<content>before</content>' };
-const currentChat = { value: [originalMessage] };
+const currentChat = { value: [earlierMessage, originalMessage] };
 const registry = new GenerationLifecycleRegistry({
     getCurrentChatId: () => currentChatId.value,
     getCurrentChat: () => currentChat.value,
 });
 const session = registry.startGeneration({ chatId: currentChatId.value, chat: currentChat.value });
-assert.equal(registry.resolveMessage(0, {
+assert.equal(registry.resolveMessage(1, {
     generationId: session.generationId,
     chatId: currentChatId.value,
     chat: currentChat.value,
@@ -45,6 +48,18 @@ assert.equal(registry.resolveMessage(0, {
 
 originalMessage.mes = '<content>after host or user edit</content>';
 assert.equal(registry.validate(session.generationId).ok, true, '同一楼层内容变化不应使任务失效');
+
+currentChat.value.splice(0, 1);
+const deletionReconciliation = registry.reconcileMessageDeletion({
+    chatId: currentChatId.value,
+    chat: currentChat.value,
+});
+assert.deepEqual(deletionReconciliation, {
+    cancel: true,
+    reason: 'target-message-index-changed',
+    messageId: 1,
+});
+assert.equal(registry.validate(session.generationId).reason, 'message-reference-changed', '绑定后的楼层移动必须使任务失效');
 
 currentChat.value[0] = { is_user: false, mes: 'replacement' };
 assert.equal(registry.validate(session.generationId).reason, 'message-reference-changed');

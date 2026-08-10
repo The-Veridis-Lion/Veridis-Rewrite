@@ -1167,6 +1167,25 @@
 .blai-custom-checkbox { width: 16px; height: 16px; min-width: 16px; min-height: 16px; flex: 0 0 16px; flex-shrink: 0; aspect-ratio: 1 / 1; border: 1px solid var(--blai-checkbox-border); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background-color: var(--blai-checkbox-bg); box-sizing: border-box; }
 .blai-custom-checkbox.blai-square { border-radius: 4px; }
 .blai-custom-checkbox.blai-square-2px { border-radius: 2px; }
+.blai-ai-comment-protection-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 10px;
+    min-width: 0;
+    padding: 2px 0;
+}
+.blai-ai-comment-protection-row .blai-checkbox-label {
+    min-width: 0;
+    color: var(--blai-text-primary);
+    font-weight: 700;
+}
+.blai-ai-comment-protection-row small {
+    color: var(--blai-text-secondary);
+    font-size: 11px;
+    line-height: 1.35;
+}
 .blai-checkbox-label input:checked + .blai-custom-checkbox { background-color: var(--blai-checkbox-checked); border-color: var(--blai-checkbox-checked); }
 .blai-batch-checkbox-label input:checked + .blai-custom-checkbox.blai-square-2px { background-color: var(--blai-batch-checkbox-checked); border-color: var(--blai-batch-checkbox-checked); }
 .blai-checkbox-label input:checked + .blai-custom-checkbox::after, .blai-batch-checkbox-label input:checked + .blai-custom-checkbox.blai-square-2px::after {

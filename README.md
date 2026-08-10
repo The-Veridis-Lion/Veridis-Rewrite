@@ -2,11 +2,30 @@
 
 Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展。它在传统屏蔽词替换的基础上，加入了规则预设、范围标签保护、净化前文透视，以及可选的 OpenAI 兼容 AI 局部改写能力，用来在聊天生成、历史记录和相关数据中稳定处理不想保留的词句、句式或表达。
 
-当前版本：`2.2`
+当前版本：`2.4`
 
 使用、修改或再发布前，请阅读[许可与版权](#许可与版权)。
 
 ---
+
+## 2.4 版本更新
+
+- AI 生成参数：支持温度、Top P、Top K、频率惩罚、存在惩罚、重复惩罚和最大输出 token；参数随 API 预设与净化预设保存。
+- 独立请求参数：中性 Top K 和最大输出 token 会按 TavernHelper 合约显式清除主预设值，避免 SillyTavern 当前主预设影响插件的自定义 API 请求。
+- 共享上游配置：继续直接读取和保存 `ultimate_purifier_ai_rewrite` 下的规则、预设和 AI 设置。
+- 旧改版设置迁移：共享设置为空时，可一次性导入 `ultimate_purifier_ai_rewrite_modified` 中的旧改版配置，且不删除原数据。
+- 生成生命周期修正：SillyTavern 在 regenerate 建立新目标前删除旧助手消息时，不再误取消本轮自动 AI 改写；目标绑定后仍严格校验聊天、消息对象、固定楼层和 Swipe 分支，结构变化会终止旧任务而不会迁移写回位置。
+- MVU 诊断补全：生成日志记录宿主 generation mode、dry-run、尾部消息结构和 MVU extra-model 状态，便于区分主生成、regenerate 与额外模型请求。
+- Swipe 终稿持久化：AI 原子提交同时同步 `msg.mes`、当前 `msg.swipes[swipe_id]`、`msg.extra` 与当前 `swipe_info[swipe_id].extra`，生成新 Swipe 后返回旧分支不会恢复成改写前正文。
+- 生命周期验证：新增并更新 generation identity、AI target policy 与 AI 终稿持久化验证脚本。
+
+## 2.3 版本更新
+
+- AI 终稿持久化：已经完成的 AI 改写正文写入消息元数据；刷新、重载、切换预设或重启 SillyTavern 后，历史楼层继续保留改写终稿。
+- 手动编辑保护：手动编辑 AI 改写结果后记录为手动终稿，后续净化或刷新不会恢复成改写前文本。
+- HTML/XML 注释保护：AI 设置新增注释保护开关；开启后，`<!-- ... -->` 不会成为 AI 改写目标，提示词与本地程序改写均保留注释原文。
+- 原版身份保持：插件目录、`blai-*` UI 命名空间与 `__blai_*` 消息元数据保持不变，不引入改版的独立命名。
+- 验证工具：新增 AI 终稿持久化、HTML/XML 注释保护、AI 生成参数和共享设置迁移验证脚本。
 
 ## 2.2 版本更新
 
@@ -65,7 +84,7 @@ Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展
 
 ### AI 局部改写
 
-- AI 请求通过 `TavernHelper.generateRaw` 的自定义 API 链路非流式发送，使用插件内配置的 Base URL、API Key、模型与温度，不占用 SillyTavern 当前主模型；结果通过校验后再原子写回。
+- AI 请求通过 `TavernHelper.generateRaw` 的自定义 API 链路非流式发送，使用插件内配置的 Base URL、API Key、模型和生成参数，不占用 SillyTavern 当前主模型；结果通过校验后再原子写回。
 - AI 改写只处理命中 AI 改写规则的局部片段，不要求整段消息重写。
 - 默认只扫描完整的 `<content>...</content>` 范围，避免把非正文区域误送给 AI。
 - 支持按规则配置独立的 AI 提示词，让不同命中片段使用不同改写指令。

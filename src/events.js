@@ -1,4 +1,4 @@
-import { defaultAiRewriteSettings, extensionName, getAppContext, runtimeState, markRulesDataDirty, markPresetsUiDirty, minTrackedDiffMessages, maxTrackedDiffMessages, normalizeDiffTrackedMessageLimit } from './state.js';
+import { defaultAiRewriteSettings, extensionName, getAppContext, normalizeAiSamplingSettings, runtimeState, markRulesDataDirty, markPresetsUiDirty, minTrackedDiffMessages, maxTrackedDiffMessages, normalizeDiffTrackedMessageLimit } from './state.js';
 import { logger } from './log.js';
 import { DEFAULT_SCOPE_TAG_GROUP_ID, buildPresetEntry, buildRuleActivationConfirmMessage, createScopeTagGroupId, createScopeTagId, deepClone, formatScopeTagInput, getBuiltinScopeTagKeyForStartTag, getCotScopeTagBuiltinKeys, getCurrentChatCompletionPresetName, getCurrentCharacterContext, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetBindingUsage, getPresetRules, getRuleActivationWarning, isCotScopeTagEntry, isRuleActivationWarningEnabled, mergeScopeTagsWithBuiltins, normalizeImportedRulesPayload, normalizeOptionalXmlTagNameInput, normalizePresetAiRewriteSettings, normalizeRuleActivationSafety, normalizeScopeTagBuiltinDismissedList, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList, normalizeScopeTagList, parseInputToWords, parseScopeTagInput, resolveAiModelListBaseUrl, validateRegexTargetInput } from './utils.js';
 import {
@@ -58,7 +58,7 @@ import { buildDiffSnippetsFromText, clearTrackedDiffEntry, computeMessageSignatu
 import { getCurrentMessageOriginalMes, getMessageSwipeIndex, setCurrentSwipeText, writeMessageDiffManualFinal } from './messageMeta.js';
 import { findRelatedRulesForDiffChange } from './relatedRules.js';
 import { getCurrentChatIdentity, getMvuExtraModelTransaction, isBaiBaiToolkitInstalled, isTauriTavernHost, shouldWaitForMvuExtraModelTransaction } from './platform.js';
-import { adoptMvuMessageContentForAiRewrite, getAiRewriteDebugLogText, handleAiRewriteFinalTimerSkipped, handleAiRewriteGenerationStarted, markAiRewriteFinalCleanseReady, maybeNotifyAiRewriteReadyFromStreamingText, recordAiRewriteRuntimeDebug, requestManualAiRewriteForMessage, resetAiRewriteRuntimeState, shouldDeferFinalCleanseForAiRewrite, validateAiRewriteFinalTimer, validateAiRewriteMessageTarget, waitForAutomaticAiRewrite } from './aiRewrite.js';
+import { adoptMvuMessageContentForAiRewrite, getActiveAiRewriteBranchKeyForMessage, getAiRewriteDebugLogText, handleAiRewriteFinalTimerSkipped, handleAiRewriteGenerationStarted, hasInvalidAiRewriteTarget, isLiveAiRewriteTargetMessage, markAiRewriteFinalCleanseReady, maybeNotifyAiRewriteReadyFromStreamingText, recordAiRewriteRuntimeDebug, requestManualAiRewriteForMessage, resetAiRewriteRuntimeState, shouldDeferFinalCleanseForAiRewrite, validateAiRewriteFinalTimer, validateAiRewriteMessageTarget, waitForAutomaticAiRewrite } from './aiRewrite.js';
 import { generationLifecycle } from './generationLifecycle.js';
 import { StreamingSourceCleanser } from './streamingSourceCleanser.js';
 import { classifyHostGenerationStart } from './hostGenerationEvent.js';
@@ -1329,9 +1329,7 @@ export function bindEvents() {
         apiKey: String(value.apiKey || ''),
         model: String(value.model || '').trim(),
         modelOptions: normalizeAiModelOptions(value.modelOptions),
-        temperature: Number.isFinite(Number(value.temperature))
-            ? Math.min(Math.max(Number(value.temperature), 0), 2)
-            : defaultAiRewriteSettings.temperature,
+        ...normalizeAiSamplingSettings(value),
         xmlScopeTag: normalizeOptionalXmlTagNameInput(value.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag),
     });
     const getCurrentAiApiPresetSnapshot = (aiSettings = ensureAiRewriteSettings()) => normalizeAiApiPresetSnapshot(aiSettings);
@@ -1443,6 +1441,7 @@ export function bindEvents() {
             if (!$field.is(':focus')) $field.val(value);
         };
         $('#blai-ai-enabled').prop('checked', aiSettings.enabled === true);
+        $('#blai-ai-protect-comments').prop('checked', aiSettings.protectXmlComments === true);
         const xmlScopeTag = normalizeOptionalXmlTagNameInput(aiSettings.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
         setValueIfNotFocused('#blai-ai-base-url', aiSettings.baseUrl || '');
         setValueIfNotFocused('#blai-ai-xml-scope', xmlScopeTag ? `<${xmlScopeTag}>` : '');
@@ -1450,6 +1449,12 @@ export function bindEvents() {
         syncAiApiPresetSelect(aiSettings);
         syncAiModelSelect(aiSettings);
         setValueIfNotFocused('#blai-ai-temperature', aiSettings.temperature);
+        setValueIfNotFocused('#blai-ai-top-p', aiSettings.topP);
+        setValueIfNotFocused('#blai-ai-top-k', aiSettings.topK);
+        setValueIfNotFocused('#blai-ai-frequency-penalty', aiSettings.frequencyPenalty);
+        setValueIfNotFocused('#blai-ai-presence-penalty', aiSettings.presencePenalty);
+        setValueIfNotFocused('#blai-ai-repetition-penalty', aiSettings.repetitionPenalty);
+        setValueIfNotFocused('#blai-ai-max-tokens', aiSettings.maxTokens);
         setValueIfNotFocused('#blai-ai-timeout', getAiTimeoutSeconds(aiSettings.timeoutMs));
         setValueIfNotFocused('#blai-ai-max-retries', aiSettings.maxRetries);
         setValueIfNotFocused('#blai-ai-max-items', aiSettings.maxItemsPerRequest);
@@ -1661,6 +1666,10 @@ export function bindEvents() {
         updateAiRewriteSetting('baseUrl', String($(this).val() || '').trim());
     });
 
+    $(document).off('change', '#blai-ai-protect-comments').on('change', '#blai-ai-protect-comments', function() {
+        updateAiRewriteSetting('protectXmlComments', $(this).prop('checked') === true);
+    });
+
     $(document).off('change blur', '#blai-ai-xml-scope').on('change blur', '#blai-ai-xml-scope', function() {
         const rawValue = String($(this).val() || '').trim();
         if (!rawValue) {
@@ -1684,21 +1693,31 @@ export function bindEvents() {
         updateAiRewriteSetting('model', String($(this).val() || '').trim(), { markRulesDirty: false });
     });
 
-    $(document).off('input change', '#blai-ai-temperature, #blai-ai-timeout, #blai-ai-max-retries, #blai-ai-max-items, #blai-ai-max-context, #blai-ai-max-rewrite').on('input change', '#blai-ai-temperature, #blai-ai-timeout, #blai-ai-max-retries, #blai-ai-max-items, #blai-ai-max-context, #blai-ai-max-rewrite', function() {
+    $(document).off('input change', '#blai-ai-temperature, #blai-ai-top-p, #blai-ai-top-k, #blai-ai-frequency-penalty, #blai-ai-presence-penalty, #blai-ai-repetition-penalty, #blai-ai-max-tokens, #blai-ai-timeout, #blai-ai-max-retries, #blai-ai-max-items, #blai-ai-max-context, #blai-ai-max-rewrite').on('input change', '#blai-ai-temperature, #blai-ai-top-p, #blai-ai-top-k, #blai-ai-frequency-penalty, #blai-ai-presence-penalty, #blai-ai-repetition-penalty, #blai-ai-max-tokens, #blai-ai-timeout, #blai-ai-max-retries, #blai-ai-max-items, #blai-ai-max-context, #blai-ai-max-rewrite', function() {
         const id = String(this.id || '');
         const value = Number($(this).val());
         const keyMap = {
             'blai-ai-temperature': 'temperature',
+            'blai-ai-top-p': 'topP',
+            'blai-ai-top-k': 'topK',
+            'blai-ai-frequency-penalty': 'frequencyPenalty',
+            'blai-ai-presence-penalty': 'presencePenalty',
+            'blai-ai-repetition-penalty': 'repetitionPenalty',
+            'blai-ai-max-tokens': 'maxTokens',
             'blai-ai-timeout': 'timeoutMs',
             'blai-ai-max-retries': 'maxRetries',
             'blai-ai-max-items': 'maxItemsPerRequest',
             'blai-ai-max-context': 'maxContextChars',
             'blai-ai-max-rewrite': 'maxRewriteCharsPerItem',
         };
-        const normalizedValue = id === 'blai-ai-timeout'
+        const key = keyMap[id];
+        const samplingKeys = new Set(['temperature', 'topP', 'topK', 'frequencyPenalty', 'presencePenalty', 'repetitionPenalty', 'maxTokens']);
+        const normalizedValue = samplingKeys.has(key)
+            ? normalizeAiSamplingSettings({ [key]: value })[key]
+            : id === 'blai-ai-timeout'
             ? Math.min(Math.max(Math.round(value || 0), 1), 120) * 1000
             : value;
-        updateAiRewriteSetting(keyMap[id], normalizedValue, { markRulesDirty: false });
+        updateAiRewriteSetting(key, normalizedValue, { markRulesDirty: false });
     });
 
     $(document).off('input change', '#blai-ai-prompt').on('input change', '#blai-ai-prompt', function() {
@@ -3595,14 +3614,38 @@ export function bindEvents() {
 
     if (event_types.GENERATION_STARTED) eventSource.on(event_types.GENERATION_STARTED, (type, options, dryRun) => {
         const generationStart = classifyHostGenerationStart(type, options, dryRun);
+        const { chat } = getAppContext();
+        const tail = Array.isArray(chat) && chat.length > 0 ? chat[chat.length - 1] : null;
+        const mvuTransaction = getMvuExtraModelTransaction();
+        let mvuDuringExtraAnalysis = null;
+        try {
+            mvuDuringExtraAnalysis = Boolean(mvuTransaction.api?.isDuringExtraAnalysis?.());
+        } catch (error) {
+            recordAiRewriteRuntimeDebug('mvu-analysis-state-read-failed', {
+                reason: error?.message || String(error || 'unknown'),
+            }, 'warn');
+        }
+        const diagnostic = {
+            mode: generationStart.mode,
+            dryRun: dryRun === true,
+            chatId: getCurrentChatIdentity(),
+            chatLength: Array.isArray(chat) ? chat.length : null,
+            tailRole: tail?.is_user === true ? 'user' : (tail ? 'assistant' : 'empty'),
+            tailSwipeId: Number.isInteger(tail?.swipe_id) ? tail.swipe_id : null,
+            tailSwipeCount: Array.isArray(tail?.swipes) ? tail.swipes.length : null,
+            mvuExtraModelConfiguredFromHostSettings: mvuTransaction.enabled,
+            mvuApiAvailable: Boolean(mvuTransaction.api),
+            mvuDuringExtraAnalysis,
+            automaticTrigger: options?.automatic_trigger === true,
+        };
         if (!generationStart.track) {
             recordAiRewriteRuntimeDebug('generation-start-ignored', {
-                mode: generationStart.mode,
+                ...diagnostic,
                 reason: generationStart.reason,
             });
             return;
         }
-        const { chat } = getAppContext();
+        recordAiRewriteRuntimeDebug('generation-start-observed', diagnostic);
         const session = generationLifecycle.startGeneration({
             chatId: getCurrentChatIdentity(),
             chat,
@@ -3640,7 +3683,17 @@ export function bindEvents() {
     }
     if (event_types.GENERATION_ENDED) eventSource.on(event_types.GENERATION_ENDED, (payload) => delayedIncrementalCleanse('generation-ended', payload, { allowBoundMessage: true }));
     if (event_types.GENERATION_STOPPED) eventSource.on(event_types.GENERATION_STOPPED, (payload) => delayedIncrementalCleanse('generation-stopped', payload, { allowBoundMessage: true }));
-    if (event_types.MESSAGE_RECEIVED) eventSource.on(event_types.MESSAGE_RECEIVED, (payload) => delayedIncrementalCleanse('message-received', payload));
+    if (event_types.MESSAGE_RECEIVED) eventSource.on(event_types.MESSAGE_RECEIVED, (payload, hostGenerationType) => {
+        const activeSession = generationLifecycle.getActive();
+        recordAiRewriteRuntimeDebug('message-received-observed', {
+            eventMessageIndex: getMessageIndexFromEvent(payload),
+            hostGenerationType: String(hostGenerationType || ''),
+            generationId: activeSession?.generationId || '',
+            mode: activeSession?.mode || '',
+            chatLength: Array.isArray(getAppContext().chat) ? getAppContext().chat.length : null,
+        });
+        return delayedIncrementalCleanse('message-received', payload);
+    });
     const mvuBeforeMessageUpdateEvent = getMvuExtraModelTransaction().beforeMessageUpdateEvent;
     eventSource.on(mvuBeforeMessageUpdateEvent, async (context) => {
         await runMvuFinalTransaction(context, 'mvu-before-message-update');
@@ -3657,21 +3710,67 @@ export function bindEvents() {
         });
     }
     if (event_types.MESSAGE_SWIPED) eventSource.on(event_types.MESSAGE_SWIPED, (payload) => {
-        cancelAutomaticGeneration('message-swiped');
         const index = getMessageIndexFromEvent(payload);
         if (index < 0) return;
+        const { chat } = getAppContext();
+        const msg = Array.isArray(chat) ? chat[index] : null;
+        const activeSession = generationLifecycle.getActive();
+        const isGenerationTarget = activeSession?.messageRef === msg;
+        if (isGenerationTarget || isLiveAiRewriteTargetMessage(msg)) {
+            cancelAutomaticGeneration('target-message-swiped');
+        } else if (activeSession) {
+            recordAiRewriteRuntimeDebug('message-swipe-ignored', {
+                generationId: activeSession.generationId,
+                index,
+                reason: activeSession.messageRef ? 'other-message-swiped' : 'generation-target-not-bound',
+            });
+        }
         runtimeState.streamingCommittedMessageCache.delete(index);
         streamEventTextByMessageId.delete(index);
         streamEventProbeByMessageId.delete(index);
         clearStreamingPresentations(index);
 
-        const { chat } = getAppContext();
-        const msg = Array.isArray(chat) ? chat[index] : null;
         const hasMaterializedSwipe = getMessageSwipeIndex(msg) >= 0;
         if (hasMaterializedSwipe) runFinalStreamingCleanse(index, { clearRawSource: true });
     });
-    if (event_types.MESSAGE_DELETED) eventSource.on(event_types.MESSAGE_DELETED, () => {
-        cancelAutomaticGeneration('message-deleted');
+    if (event_types.MESSAGE_SWIPE_DELETED) eventSource.on(event_types.MESSAGE_SWIPE_DELETED, (payload) => {
+        const messageId = getMessageIndexFromEvent(payload);
+        const deletedSwipeIndex = Number(payload?.swipeId);
+        const { chat } = getAppContext();
+        const msg = Number.isInteger(messageId) && messageId >= 0 && Array.isArray(chat) ? chat[messageId] : null;
+        if (!msg || !Number.isInteger(deletedSwipeIndex) || deletedSwipeIndex < 0) return;
+
+        const activeBranchKey = getActiveAiRewriteBranchKeyForMessage(msg);
+        const branchMatch = /^swipe:(\d+)$/.exec(activeBranchKey);
+        const activeBranchIndex = branchMatch ? Number(branchMatch[1]) : -1;
+        const invalidatesActiveBranch = activeBranchIndex >= 0 && deletedSwipeIndex <= activeBranchIndex;
+        if (invalidatesActiveBranch) cancelAutomaticGeneration('target-swipe-structure-changed');
+    });
+    if (event_types.MESSAGE_DELETED) eventSource.on(event_types.MESSAGE_DELETED, (payload) => {
+        const { chat } = getAppContext();
+        const activeSession = generationLifecycle.getActive();
+        const boundMessageRef = activeSession?.messageRef || null;
+        const reconciliation = generationLifecycle.reconcileMessageDeletion({
+            chatId: getCurrentChatIdentity(),
+            chat,
+        });
+
+        const invalidAiRewriteTarget = hasInvalidAiRewriteTarget(chat);
+        recordAiRewriteRuntimeDebug('message-deleted-observed', {
+            eventMessageIndex: getMessageIndexFromEvent(payload),
+            chatId: getCurrentChatIdentity(),
+            chatLength: Array.isArray(chat) ? chat.length : null,
+            generationId: activeSession?.generationId || '',
+            mode: activeSession?.mode || '',
+            targetBound: Boolean(boundMessageRef),
+            messageId: reconciliation.messageId,
+            outcome: reconciliation.cancel || invalidAiRewriteTarget
+                ? 'target-invalidated'
+                : reconciliation.reason,
+        });
+        if (reconciliation.cancel || invalidAiRewriteTarget) {
+            cancelAutomaticGeneration(reconciliation.cancel ? reconciliation.reason : 'target-message-structure-changed');
+        }
     });
     if (event_types.PRESET_CHANGED) {
         eventSource.on(event_types.PRESET_CHANGED, (payload) => {

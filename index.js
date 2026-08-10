@@ -2,7 +2,7 @@ import * as extensionsModule from "../../../extensions.js";
 import * as scriptModule from "../../../../script.js";
 import { saveSettingsDebounced, eventSource, event_types, chat_metadata, chat } from "../../../../script.js";
 
-import { aiRewritePromptProtocolVersion, defaultAiRewriteSettings, defaultSettings, extensionName, legacyExtensionName, initAppContext, runtimeState, markRulesDataDirty, normalizeDiffTrackedMessageLimit } from './src/state.js';
+import { aiRewritePromptProtocolVersion, defaultAiRewriteSettings, defaultSettings, extensionName, modifiedExtensionName, legacyExtensionName, initAppContext, runtimeState, markRulesDataDirty, normalizeAiSamplingSettings, normalizeDiffTrackedMessageLimit } from './src/state.js';
 import { logger } from './src/log.js';
 import { bindEvents, initRealtimeInterceptor } from './src/events.js';
 import { setupUI, updateToolbarUI, applyCharacterPresetBinding, cleanupInvalidPresetBindings, showToast } from './src/ui.js';
@@ -44,9 +44,7 @@ function normalizeAiApiPresetEntry(value) {
         modelOptions: Array.isArray(value.modelOptions)
             ? [...new Set(value.modelOptions.map((model) => String(model || '').trim()).filter(Boolean))]
             : [],
-        temperature: Number.isFinite(Number(value.temperature))
-            ? Math.min(Math.max(Number(value.temperature), 0), 2)
-            : defaultAiRewriteSettings.temperature,
+        ...normalizeAiSamplingSettings(value),
         xmlScopeTag: normalizeOptionalXmlTagNameInput(value.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag),
     };
 }
@@ -86,7 +84,7 @@ function normalizeAiRewriteSettings(settings) {
         ? defaultAiRewriteSettings.promptTemplate
         : String(next.promptTemplate || defaultAiRewriteSettings.promptTemplate);
     next.promptProtocolVersion = aiRewritePromptProtocolVersion;
-    next.temperature = Number.isFinite(Number(next.temperature)) ? Math.min(Math.max(Number(next.temperature), 0), 2) : defaultAiRewriteSettings.temperature;
+    Object.assign(next, normalizeAiSamplingSettings(next));
     const normalizedTimeoutMs = Number.isFinite(Number(next.timeoutMs)) ? Math.min(Math.max(Math.round(Number(next.timeoutMs)), 1000), 120000) : defaultAiRewriteSettings.timeoutMs;
     next.timeoutMs = current.timeoutDefault120sApplied !== true && normalizedTimeoutMs === 20000
         ? defaultAiRewriteSettings.timeoutMs
@@ -101,14 +99,36 @@ function normalizeAiRewriteSettings(settings) {
     next.maxContextChars = Number.isFinite(Number(next.maxContextChars)) ? Math.min(Math.max(Math.round(Number(next.maxContextChars)), 1000), 60000) : defaultAiRewriteSettings.maxContextChars;
     next.maxRewriteCharsPerItem = Number.isFinite(Number(next.maxRewriteCharsPerItem)) ? Math.min(Math.max(Math.round(Number(next.maxRewriteCharsPerItem)), 50), 10000) : defaultAiRewriteSettings.maxRewriteCharsPerItem;
     next.xmlScopeTag = normalizeOptionalXmlTagNameInput(next.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
+    next.protectXmlComments = next.protectXmlComments === true;
     settings.aiRewrite = next;
+}
+
+function hasConfiguredAiRewrite(settings) {
+    const aiSettings = settings?.aiRewrite;
+    if (!aiSettings || typeof aiSettings !== 'object') return false;
+    return Object.entries(defaultAiRewriteSettings).some(([key, defaultValue]) => (
+        Object.prototype.hasOwnProperty.call(aiSettings, key)
+        && JSON.stringify(aiSettings[key]) !== JSON.stringify(defaultValue)
+    ));
 }
 
 function isSettingsEffectivelyEmpty(settings) {
     if (!settings || typeof settings !== 'object') return true;
     const hasRules = Array.isArray(settings.rules) && settings.rules.length > 0;
     const hasPresets = settings.presets && typeof settings.presets === 'object' && Object.keys(settings.presets).length > 0;
-    return !hasRules && !hasPresets && !settings.activePreset;
+    return !hasRules && !hasPresets && !settings.activePreset && !hasConfiguredAiRewrite(settings);
+}
+
+function maybeImportModifiedSettingsIntoSharedNamespace() {
+    const sharedSettings = extension_settings[extensionName];
+    const modifiedSettings = extension_settings[modifiedExtensionName];
+    if (!sharedSettings || !modifiedSettings || sharedSettings === modifiedSettings) return false;
+    if (!isSettingsEffectivelyEmpty(sharedSettings) || isSettingsEffectivelyEmpty(modifiedSettings)) return false;
+
+    extension_settings[extensionName] = clonePlain(modifiedSettings);
+    runtimeState.modifiedSettingsImportedThisBoot = true;
+    logger.info('[屏蔽词净化助手 AI 改写版] 已将旧改版设置导入共享设置命名空间');
+    return true;
 }
 
 function maybeCopyLegacySettings() {
@@ -273,6 +293,7 @@ jQuery(() => {
     if (runtimeState.isBooted) return;
     extension_settings[extensionName] = extension_settings[extensionName] || createDefaultSettings();
 
+    maybeImportModifiedSettingsIntoSharedNamespace();
     maybeCopyLegacySettings();
     migrateOldData();
     ensureSettingsShape();
@@ -286,7 +307,9 @@ jQuery(() => {
         if (isBaiBaiToolkitInstalled()) logger.info('[屏蔽词净化助手] 已启用柏宝箱兼容层');
         if (isLoreFrameInstalled()) logger.info('[屏蔽词净化助手] 已启用 LoreFrame 兼容层');
         await setupUI(extensionsModule.renderExtensionTemplateAsync);
-        if (runtimeState.legacySettingsCopiedThisBoot === true) {
+        if (runtimeState.modifiedSettingsImportedThisBoot === true) {
+            setTimeout(() => showToast('已导入旧改版的规则、预设与 AI 配置'), 250);
+        } else if (runtimeState.legacySettingsCopiedThisBoot === true) {
             setTimeout(() => showToast('已复制旧版规则与预设到 AI 改写版'), 250);
         }
         bindEvents();
