@@ -1,4 +1,4 @@
-import { defaultAiRewriteSettings, extensionName, getAppContext, runtimeState } from './state.js';
+import { defaultAiRewriteSettings, extensionName, getAppContext, normalizeAiSamplingSettings, runtimeState } from './state.js';
 import { logger } from './log.js';
 import {
     applyScopedReplacements,
@@ -16,10 +16,12 @@ import { compileRegexTarget, mergeScopeTagsWithBuiltins, normalizeOptionalXmlTag
 import { getZhVariantCompatOptions, isZhDictionaryReady } from './zhConversion.js';
 import { buildDiffResultFromChain, computeMessageSignature, isAssistantMessage, writeReadyDiffCache } from './diff.js';
 import { beginAtomicMessageDisplaySwap } from './dom.js';
-import { commitCurrentMessageText, getMessageDiffBranchKey, isMessageManualFinal, setMessageTextForMvuTransaction, writeMessageDiffAiTrace } from './messageMeta.js';
+import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, isMessageManualFinal, setMessageTextForMvuTransaction, syncCurrentSwipeExtra, writeMessageDiffAiTrace } from './messageMeta.js';
 import { getCurrentChatIdentity, markHostChatDirtyFromIndex } from './platform.js';
 import { generationLifecycle, parseStableMessagePayload } from './generationLifecycle.js';
 import { showToast } from './ui.js';
+import { applyWithXmlCommentsProtected, collectXmlCommentRanges, maskXmlCommentRanges } from './aiCommentProtection.js';
+import { buildAiRewriteGenerateRawConfig } from './aiGeneration.js';
 
 const responseGuard = `输出必须是一个 JSON 对象，键必须恰好为本次全部 rewrite_target 的 id，值必须是可直接替换对应标签内容的字符串；空字符串表示删除。禁止 markdown、解释和额外包装。`;
 
@@ -433,6 +435,8 @@ function escapeRegExp(value = '') {
 
 function collectAiXmlScopeSegments(text, aiSettings) {
     const source = String(text || '');
+    const commentRanges = aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
+    const searchSource = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const { wholeMessage, tagName } = getAiXmlScopeTag(aiSettings);
     if (wholeMessage) {
         return source.length > 0 ? [{
@@ -449,11 +453,11 @@ function collectAiXmlScopeSegments(text, aiSettings) {
     const segments = [];
     let startMatch;
 
-    while ((startMatch = startRegex.exec(source)) !== null) {
+    while ((startMatch = startRegex.exec(searchSource)) !== null) {
         const bodyStart = startRegex.lastIndex;
         endRegex.lastIndex = bodyStart;
 
-        const endMatch = endRegex.exec(source);
+        const endMatch = endRegex.exec(searchSource);
         const endIndex = endMatch?.index ?? -1;
         if (endIndex < 0) break;
 
@@ -504,12 +508,19 @@ function buildAiRewriteVersionToken(settings) {
             apiKeyFingerprint: hashString(aiSettings.apiKey || ''),
             model: aiSettings.model || '',
             temperature: aiSettings.temperature,
+            topP: aiSettings.topP,
+            topK: aiSettings.topK,
+            frequencyPenalty: aiSettings.frequencyPenalty,
+            presencePenalty: aiSettings.presencePenalty,
+            repetitionPenalty: aiSettings.repetitionPenalty,
+            maxTokens: aiSettings.maxTokens,
             timeoutMs: aiSettings.timeoutMs,
             maxItemsPerRequest: aiSettings.maxItemsPerRequest,
             maxContextChars: aiSettings.maxContextChars,
             maxRewriteCharsPerItem: aiSettings.maxRewriteCharsPerItem,
             streamingRoughPreview: aiSettings.streamingRoughPreview !== false,
             xmlScopeTag: normalizeOptionalXmlTagNameInput(aiSettings.xmlScopeTag, 'content'),
+            protectXmlComments: aiSettings.protectXmlComments === true,
             promptTemplate: aiSettings.promptTemplate || '',
         },
         activePreset: settings.activePreset || '',
@@ -688,7 +699,9 @@ function collectAiMatches(text, settings, aiSettings) {
     const segments = collectAiXmlScopeSegments(text, aiSettings);
     if (segments.length === 0) return [];
     const codeRanges = collectCodeRanges(text);
-    const scopeRanges = collectScopeRanges(text, settings);
+    const commentRanges = aiSettings.protectXmlComments === true ? collectXmlCommentRanges(text) : [];
+    const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(text, commentRanges) : text;
+    const scopeRanges = collectScopeRanges(scopeScanText, settings);
     const scopeTagMode = settings.scopeTagMode === 'cleanse-inside' ? 'cleanse-inside' : 'protect';
     const isAllowedByScope = (start, end) => {
         if (scopeTagMode === 'cleanse-inside') {
@@ -715,7 +728,9 @@ function collectAiMatches(text, settings, aiSettings) {
                     matcher.regex.lastIndex += 1;
                     continue;
                 }
-                if (isAllowedByScope(start, end) && !rangeOverlapsAny(start, end, codeRanges)) {
+                if (isAllowedByScope(start, end)
+                    && !rangeOverlapsAny(start, end, codeRanges)
+                    && !rangeOverlapsAny(start, end, commentRanges)) {
                     matches.push({
                         ...matcher,
                         matchedText,
@@ -955,6 +970,40 @@ function validateAutomaticAiRewriteContent(taskLike, options = {}) {
     return { ok: true, reason: '', session: lifecycleValidation.session, message: identity.messageRef, identity };
 }
 
+function getLiveAiRewriteTargets() {
+    const state = runtimeState.aiRewrite;
+    const targets = [];
+    if (state?.activeTaskMeta?.messageRef) targets.push(state.activeTaskMeta);
+    for (const meta of getRunningTaskMetaMap().values()) {
+        if (meta?.messageRef) targets.push(meta);
+    }
+    for (const identity of getContentIdentityMap().values()) {
+        if (identity?.messageRef) targets.push({
+            index: identity.messageId,
+            messageRef: identity.messageRef,
+            branchKey: identity.branchKey,
+        });
+    }
+    for (const entry of state?.pendingApplyByKey?.values?.() || []) {
+        if (entry?.task?.messageRef) targets.push(entry.task);
+    }
+    return targets;
+}
+
+export function getActiveAiRewriteBranchKeyForMessage(messageRef) {
+    const target = getLiveAiRewriteTargets().find(entry => entry.messageRef === messageRef);
+    return String(target?.branchKey || '');
+}
+
+export function isLiveAiRewriteTargetMessage(messageRef) {
+    return getLiveAiRewriteTargets().some(target => target.messageRef === messageRef);
+}
+
+export function hasInvalidAiRewriteTarget(chat) {
+    if (!Array.isArray(chat)) return false;
+    return getLiveAiRewriteTargets().some(target => chat[Number(target.index)] !== target.messageRef);
+}
+
 function markStreamingAiRewriteStarted(task) {
     if (task?.waitForFinalCleanse !== true) return;
     runtimeState.aiRewrite.streamingStartedMessageIndices.add(getAiRewriteMessageIndexKey(task.index));
@@ -1188,11 +1237,20 @@ function buildCompactPromptPayload(items) {
     };
 }
 
-function buildAnnotatedSource(originalText, items, settings, maxContextChars, ruleIdsByItem, candidateIdByItem) {
+function buildAnnotatedSource(originalText, items, settings, maxContextChars, ruleIdsByItem, candidateIdByItem, aiSettings) {
     const source = String(originalText || '');
     const sortedItems = [...items].sort((a, b) => a.start - b.start || a.end - b.end);
     const window = getContextWindow(source, sortedItems, maxContextChars);
-    const protectedRanges = settings.scopeTagMode === 'cleanse-inside' ? [] : collectScopeRanges(source, settings);
+    const commentRanges = aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
+    const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
+    const scopeRanges = settings.scopeTagMode === 'cleanse-inside' ? [] : collectScopeRanges(scopeScanText, settings);
+    const protectedRanges = [
+        ...scopeRanges,
+        ...commentRanges.map((range) => ({
+            bodyStart: range.start + 4,
+            bodyEnd: Math.max(range.start + 4, range.end - 3),
+        })),
+    ].sort((a, b) => (a.bodyStart || 0) - (b.bodyStart || 0));
     let rendered = window.start > 0 ? '[前文已省略]\n' : '';
     let cursor = window.start;
 
@@ -1235,7 +1293,8 @@ function renderPrompt(originalText, items, settings, aiSettings, promptTemplate 
         settings,
         aiSettings.maxContextChars,
         payload.ruleIdsByItem,
-        payload.candidateIdByItem
+        payload.candidateIdByItem,
+        aiSettings
     );
     const template = String(promptTemplate || '');
     const hasRulesPlaceholder = template.includes('{{rewriteRulesJson}}');
@@ -1529,8 +1588,12 @@ function locateRewriteItem(currentText, item, task) {
     return null;
 }
 
-function buildFinalAiRewriteText(text, msg, sources = []) {
-    const cleansedText = applyScopedReplacements(String(text || ''), { deterministic: true });
+function buildFinalAiRewriteText(text, msg, sources = [], aiSettings = getAiSettings()) {
+    const cleansedText = applyWithXmlCommentsProtected(
+        String(text || ''),
+        (segment) => applyScopedReplacements(segment, { deterministic: true }),
+        aiSettings?.protectXmlComments === true,
+    );
     return preserveMvuStatusPlaceholder(cleansedText, msg, sources);
 }
 
@@ -1557,6 +1620,8 @@ function commitAiRewriteText(taskLike, prepared) {
             atomicSwap?.release();
             return { committed: false, reason: textCommit.reason };
         }
+        clearMessageDisplayText(msg);
+        syncCurrentSwipeExtra(msg);
         syncMessageDiffMetadata(msg, sourceText, finalText);
         writeMessageDiffAiTrace(msg, branchKey, programText, finalText);
         const signature = computeMessageSignature(msg);
@@ -1626,7 +1691,7 @@ function applyAiProgramFallback(taskLike, options = {}) {
     }
 
     const fallbackText = applyAiProgramFallbackMatches(currentText, currentMatches);
-    const nextText = buildFinalAiRewriteText(fallbackText, msg, [currentText, fallbackText, taskLike.snapshotText]);
+    const nextText = buildFinalAiRewriteText(fallbackText, msg, [currentText, fallbackText, taskLike.snapshotText], aiSettings);
     if (nextText === currentText) {
         recordAiRewriteDebug('fallback-skip', {
             reason: 'no-text-change',
@@ -1734,8 +1799,8 @@ function applyAcceptedRewrites(task, accepted) {
         return { appliedCount: 0, skippedCount: skippedIds.length, reason: 'item-locate-failed' };
     }
 
-    const programText = buildFinalAiRewriteText(currentText, msg, [currentText, currentSourceText, task.snapshotText]);
-    nextText = buildFinalAiRewriteText(nextText, msg, [currentText, currentSourceText, task.snapshotText]);
+    const programText = buildFinalAiRewriteText(currentText, msg, [currentText, currentSourceText, task.snapshotText], task.aiSettings);
+    nextText = buildFinalAiRewriteText(nextText, msg, [currentText, currentSourceText, task.snapshotText], task.aiSettings);
     if (nextText === currentText) {
         recordAiRewriteDebug('apply-skip', { reason: 'no-text-change', task: hashString(task.dedupeKey) }, 'warn');
         return { appliedCount: 0, skippedCount: skippedIds.length, reason: 'no-text-change' };
@@ -2022,6 +2087,8 @@ async function requestAiRewrite(prompt, aiSettings, signal, task = null) {
     const tavernHelper = getTavernHelperApi();
     if (!tavernHelper) throw new Error('TavernHelper.generateRaw 不可用');
     const generationId = `veridis-ai-rewrite-${hashString(`${Date.now()}:${task?.dedupeKey || prompt.length}`)}`;
+    const requestConfig = buildAiRewriteGenerateRawConfig(prompt, aiSettings, generationId);
+    const sampling = normalizeAiSamplingSettings(aiSettings);
     const startedAt = Date.now();
     recordAiRewriteDebug('fetch-start', {
         endpoint: 'TavernHelper.generateRaw',
@@ -2029,6 +2096,15 @@ async function requestAiRewrite(prompt, aiSettings, signal, task = null) {
         model: aiSettings.model,
         apiSource: 'custom',
         responseFormat: 'json_object',
+        sampling: {
+            temperature: sampling.temperature,
+            topP: sampling.topP,
+            topK: sampling.topK,
+            frequencyPenalty: sampling.frequencyPenalty,
+            presencePenalty: sampling.presencePenalty,
+            repetitionPenalty: sampling.repetitionPenalty,
+            maxTokens: sampling.maxTokens,
+        },
         promptLength: String(prompt || '').length,
         timeoutMs: aiSettings.timeoutMs,
         generationId: task?.generationId || '',
@@ -2046,21 +2122,7 @@ async function requestAiRewrite(prompt, aiSettings, signal, task = null) {
     };
     signal?.addEventListener?.('abort', stopGeneration, { once: true });
     try {
-        const response = await tavernHelper.generateRaw({
-            generation_id: generationId,
-            ordered_prompts: [{ role: 'user', content: prompt }],
-            should_stream: false,
-            custom_api: {
-                apiurl: String(aiSettings.baseUrl || '').trim(),
-                key: String(aiSettings.apiKey || ''),
-                model: String(aiSettings.model || '').trim(),
-                source: 'custom',
-                temperature: Number(aiSettings.temperature),
-                custom_include_body: {
-                    response_format: { type: 'json_object' },
-                },
-            },
-        });
+        const response = await tavernHelper.generateRaw(requestConfig);
         if (signal?.aborted) {
             const abortError = new Error('请求已取消');
             abortError.name = 'AbortError';
@@ -2558,6 +2620,7 @@ async function requestAcceptedRewritesOnce(task, rewriteState, attempt, maxAttem
         rewriteState.activeTaskKey = task.dedupeKey;
         rewriteState.activeTaskMeta = {
             index: task.index,
+            messageRef: task.messageRef,
             branchKey: task.branchKey,
             snapshotHash: getAiRewriteTaskSnapshotHash(task),
             versionToken: task.versionToken,
@@ -2737,6 +2800,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
     markStreamingAiRewriteStarted(task);
     getRunningTaskMetaMap().set(dedupeKey, {
         index: task.index,
+        messageRef: task.messageRef,
         branchKey: task.branchKey,
         snapshotHash: getAiRewriteTaskSnapshotHash(task),
         versionToken: task.versionToken,

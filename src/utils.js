@@ -1,4 +1,4 @@
-import { aiRewritePromptProtocolVersion, defaultAiRewriteSettings, extensionName, getAppContext } from './state.js';
+import { aiRewritePromptProtocolVersion, defaultAiRewriteSettings, extensionName, getAppContext, normalizeAiSamplingSettings } from './state.js';
 import { logger } from './log.js';
 
 const SIMPLE_WILDCARD_STOP_CHARS = ",，。.!?！？；;\n";
@@ -108,6 +108,7 @@ export function normalizePresetAiRewriteSettings(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const shouldUpgradePromptProtocol = Number(value.promptProtocolVersion) !== aiRewritePromptProtocolVersion;
     return {
+        ...normalizeAiSamplingSettings(value),
         timeoutMs: clampIntegerSetting(value.timeoutMs, 1000, 120000, defaultAiRewriteSettings.timeoutMs),
         maxRetries: clampIntegerSetting(value.maxRetries, 0, 5, defaultAiRewriteSettings.maxRetries),
         maxItemsPerRequest: normalizePositiveIntegerSetting(value.maxItemsPerRequest, defaultAiRewriteSettings.maxItemsPerRequest),

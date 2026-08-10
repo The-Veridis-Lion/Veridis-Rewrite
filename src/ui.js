@@ -810,7 +810,14 @@ function syncPresetAiRewriteGenerationSettingsUI(settings) {
         const $field = $(selector);
         if (!$field.is(':focus')) $field.val(value);
     };
+    $('#blai-ai-protect-comments').prop('checked', aiSettings.protectXmlComments === true);
     setValueIfNotFocused('#blai-ai-temperature', aiSettings.temperature);
+    setValueIfNotFocused('#blai-ai-top-p', aiSettings.topP);
+    setValueIfNotFocused('#blai-ai-top-k', aiSettings.topK);
+    setValueIfNotFocused('#blai-ai-frequency-penalty', aiSettings.frequencyPenalty);
+    setValueIfNotFocused('#blai-ai-presence-penalty', aiSettings.presencePenalty);
+    setValueIfNotFocused('#blai-ai-repetition-penalty', aiSettings.repetitionPenalty);
+    setValueIfNotFocused('#blai-ai-max-tokens', aiSettings.maxTokens);
     setValueIfNotFocused('#blai-ai-timeout', getAiTimeoutSeconds(aiSettings.timeoutMs));
     setValueIfNotFocused('#blai-ai-max-retries', aiSettings.maxRetries);
     setValueIfNotFocused('#blai-ai-max-items', aiSettings.maxItemsPerRequest);

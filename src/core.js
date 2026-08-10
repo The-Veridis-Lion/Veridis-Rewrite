@@ -4,7 +4,7 @@ import { buildSimpleWildcardPattern, compileRegexTarget, mergeScopeTagsWithBuilt
 import { buildChineseVariantPattern, getChineseTextVariantLengths, getZhVariantCompatOptions, isZhDictionaryReady } from './zhConversion.js';
 import { buildDiffSnippetsFromText, computeMessageSignature, ensureMessageDiffButton, getLatestTrackableDiffIndices, hasRealDiffCache, injectDiffButtons, isAssistantMessage, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, writeReadyDiffCache, clearTrackedDiffEntry } from './diff.js';
 import { beginAtomicMessageDisplaySwap, getMessageDomNode, purifyDOM } from './dom.js';
-import { clearMessageDiffMeta, commitCurrentMessageText, getMessageDiffBranchKey, getMessageDiffMeta, isMessageFinalizedForCurrentBranch, isMessageManualFinal, writeMessageDiffMeta } from './messageMeta.js';
+import { clearMessageDiffMeta, commitCurrentMessageText, getMessageDiffBranchKey, getMessageDiffMeta, isMessageAiFinal, isMessageFinalizedForCurrentBranch, isMessageManualFinal, restoreMessageAiFinal, writeMessageDiffMeta } from './messageMeta.js';
 import { getMaxHostChatSaveDefers, getRecommendedChatSaveDelay, getSillyTavernContextSnapshot, isBaiBaiToolkitInstalled, isLoreFrameInstalled, isTauriTavernHost, markHostChatDirtyFromIndex, runPreferredSaveChat, shouldDelayChatSaveForHost } from './platform.js';
 
 const chatChangedSyncMessageLimit = 80;
@@ -796,7 +796,10 @@ export function refreshMessageDisplay(index, options = {}) {
  * @returns {number} 解析出的索引，失败返回 -1。
  */
 export function getMessageIndexFromEvent(payload) {
-    if (Number.isInteger(payload)) return payload;
+    const direct = typeof payload === 'number'
+        ? payload
+        : (typeof payload === 'string' && payload.trim() !== '' ? Number(payload) : NaN);
+    if (Number.isInteger(direct)) return direct;
     if (!payload || typeof payload !== 'object') return -1;
     const candidates = [payload.messageId, payload.message_id, payload.mesid, payload.index, payload.id];
     for (const value of candidates) {
@@ -843,6 +846,7 @@ export function resolveLatestTrackableMessageIndex(payload) {
 
 export function resolveMessageDiffSource(msg, explicitSource) {
     const currentMes = typeof msg?.mes === 'string' ? msg.mes : '';
+    if (isMessageAiFinal(msg)) return currentMes;
     if (typeof explicitSource === 'string') return explicitSource;
 
     const diffMeta = getMessageDiffMeta(msg);
@@ -949,13 +953,20 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     const msg = chat[index];
     if (!msg || typeof msg !== 'object') return false;
     if (msg.__blai_is_reverted) return false;
-    if (isMessageManualFinal(msg) && options.allowManualFinal !== true) return false;
 
     const isAssistant = isAssistantMessage(msg);
     if (!isAssistant) {
         clearTrackedDiffEntry(index);
         return false;
     }
+
+    const restoredAiFinal = restoreMessageAiFinal(msg);
+    if (restoredAiFinal) {
+        markHostChatDirtyFromIndex(index);
+        return true;
+    }
+    if (isMessageAiFinal(msg)) return false;
+    if (isMessageManualFinal(msg) && options.allowManualFinal !== true) return false;
 
     const currentMes = typeof msg.mes === 'string' ? msg.mes : '';
     const hasExplicitSource = typeof options.diffSourceMes === 'string';
@@ -1010,6 +1021,22 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     runtimeState.diffRawSourceCache.delete(index);
 
     if (changed) markHostChatDirtyFromIndex(index);
+    return changed;
+}
+
+export function restoreAiFinalMessagesFromChat() {
+    const { chat } = getAppContext();
+    if (!Array.isArray(chat)) return false;
+
+    let changed = false;
+    chat.forEach((msg, index) => {
+        if (!isAssistantMessage(msg)) return;
+        if (!restoreMessageAiFinal(msg)) return;
+        changed = true;
+        markHostChatDirtyFromIndex(index);
+    });
+
+    if (changed) queueIncrementalChatSave();
     return changed;
 }
 
@@ -1183,7 +1210,15 @@ function processGlobalCleanseMessage(msg, index, latestDiffIndices, skipUser, op
     let mainCache = { snippets: [], fullDiff: '' };
     const assistant = isAssistantMessage(msg);
     if (skipUser && !assistant) return false;
-    if (assistant && isMessageManualFinal(msg)) return false;
+    if (assistant) {
+        const restoredAiFinal = restoreMessageAiFinal(msg);
+        if (restoredAiFinal) {
+            if (refreshDom) refreshMessageDisplay(index, { delay: 50, emitRenderedEvent: 'auto' });
+            markHostChatDirtyFromIndex(index);
+            return true;
+        }
+        if (isMessageAiFinal(msg) || isMessageManualFinal(msg)) return false;
+    }
     let signature = assistant ? computeMessageSignature(msg) : '';
     const isReverted = msg?.__blai_is_reverted === true;
 
@@ -1311,6 +1346,7 @@ function purifyMessageDomByIndices(indices) {
 export function performGlobalCleanse(options = {}) {
     logger.info(`[performGlobalCleanse] 全局净化开始`);
     const { chat } = getAppContext();
+    const restoredAiFinal = restoreAiFinalMessagesFromChat();
     cancelGlobalCleanseJob();
     buildProcessors();
     if (runtimeState.activeProcessors.length === 0) {
@@ -1318,7 +1354,7 @@ export function performGlobalCleanse(options = {}) {
         return;
     }
 
-    let chatChanged = false;
+    let chatChanged = restoredAiFinal;
     const latestDiffIndices = new Set(getLatestTrackableDiffIndices());
     let syncIndices = [];
     let useDeferredLongChat = false;

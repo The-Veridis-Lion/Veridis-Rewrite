@@ -84,6 +84,7 @@ export class GenerationLifecycleRegistry {
             generationId: session?.generationId || '',
             chatId: session?.chatId || '',
             messageId: Number.isInteger(session?.messageId) ? session.messageId : null,
+            mode: session?.mode || '',
             phase: session?.phase || '',
             requestState: session?.requestState || '',
             ...details,
@@ -131,6 +132,34 @@ export class GenerationLifecycleRegistry {
 
     getSession(generationId) {
         return this.sessions.get(String(generationId || '')) || null;
+    }
+
+    reconcileMessageDeletion({ chatId, chat } = {}) {
+        const session = this.active;
+        if (!session || session.phase === 'cancelled') {
+            return { cancel: false, reason: 'no-active-generation', messageId: null };
+        }
+        if (String(chatId || '') !== session.chatId) {
+            return { cancel: true, reason: 'chat-changed', messageId: session.messageId };
+        }
+        if (!Array.isArray(chat) || (session.chatRef && session.chatRef !== chat)) {
+            return { cancel: true, reason: 'chat-reference-changed', messageId: session.messageId };
+        }
+        if (!session.messageRef) {
+            this.log('message-deletion-ignored', session, { reason: 'generation-target-not-bound' });
+            return { cancel: false, reason: 'generation-target-not-bound', messageId: null };
+        }
+
+        if (chat[session.messageId] !== session.messageRef) {
+            const reason = chat.includes(session.messageRef)
+                ? 'target-message-index-changed'
+                : 'target-message-deleted';
+            this.log('message-deletion-target-invalidated', session, { reason });
+            return { cancel: true, reason, messageId: session.messageId };
+        }
+
+        this.log('message-deletion-ignored', session, { reason: 'other-message-deleted' });
+        return { cancel: false, reason: 'other-message-deleted', messageId: session.messageId };
     }
 
     resolveMessage(payload, options = {}) {

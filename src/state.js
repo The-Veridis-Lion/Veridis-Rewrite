@@ -1,5 +1,6 @@
 export const legacyExtensionName = "ultimate_purifier";
 export const extensionName = "ultimate_purifier_ai_rewrite";
+export const modifiedExtensionName = "ultimate_purifier_ai_rewrite_modified";
 export const diffMetadataKey = `${extensionName}_diff_state_v3`;
 export const minTrackedDiffMessages = 1;
 export const defaultTrackedDiffMessages = 3;
@@ -53,6 +54,12 @@ export const defaultAiRewriteSettings = {
     apiPresets: {},
     activeApiPreset: "",
     temperature: 0.3,
+    topP: 1,
+    topK: 0,
+    frequencyPenalty: 0,
+    presencePenalty: 0,
+    repetitionPenalty: 1,
+    maxTokens: 0,
     timeoutMs: 120000,
     timeoutDefault120sApplied: true,
     maxRetries: 2,
@@ -62,9 +69,29 @@ export const defaultAiRewriteSettings = {
     maxRewriteCharsPerItem: 2000,
     streamingRoughPreview: true,
     xmlScopeTag: "content",
+    protectXmlComments: false,
     promptTemplate: defaultAiRewritePrompt,
     promptProtocolVersion: aiRewritePromptProtocolVersion,
 };
+
+export function normalizeAiSamplingSettings(value = {}) {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const readNumber = (key, min, max, fallback) => {
+        const parsed = Number(source[key]);
+        if (!Number.isFinite(parsed)) return fallback;
+        return Math.min(Math.max(parsed, min), max);
+    };
+    const readInteger = (key, min, max, fallback) => Math.round(readNumber(key, min, max, fallback));
+    return {
+        temperature: readNumber('temperature', 0, 2, defaultAiRewriteSettings.temperature),
+        topP: readNumber('topP', 0, 1, defaultAiRewriteSettings.topP),
+        topK: readInteger('topK', 0, 500, defaultAiRewriteSettings.topK),
+        frequencyPenalty: readNumber('frequencyPenalty', -2, 2, defaultAiRewriteSettings.frequencyPenalty),
+        presencePenalty: readNumber('presencePenalty', -2, 2, defaultAiRewriteSettings.presencePenalty),
+        repetitionPenalty: readNumber('repetitionPenalty', 1, 2, defaultAiRewriteSettings.repetitionPenalty),
+        maxTokens: readInteger('maxTokens', 0, 65536, defaultAiRewriteSettings.maxTokens),
+    };
+}
 
 export const defaultSettings = {
     rules: [],
@@ -132,6 +159,7 @@ export const runtimeState = {
     chatSaveDelayCount: 0,
     isBooted: false,
     legacySettingsCopiedThisBoot: false,
+    modifiedSettingsImportedThisBoot: false,
     diffSnippetsCache: new Map(),
     diffRawSourceCache: new Map(),
     nonStreamingRawMessageCache: new Map(),

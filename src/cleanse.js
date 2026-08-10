@@ -2,6 +2,7 @@ import { defaultDeepCleanTimeoutSec, extensionName, getAppContext, runtimeState 
 import { logger } from './log.js';
 import { applyScopedReplacements, buildProcessors } from './core.js';
 import { showDeepCleanOverlay, updateDeepCleanOverlay } from './ui.js';
+import { isMessageAiFinal, isMessageAiFinalForBranch } from './messageMeta.js';
 import { markHostChatDirtyFromIndex, runPreferredSaveChat } from './platform.js';
 
 function isRevertedMessageObject(value) {
@@ -31,9 +32,12 @@ function collectDeepCleanSlots(rootObj, scope = 'chat') {
         const messages = Array.isArray(rootObj) ? rootObj : [rootObj];
         messages.forEach((message, messageIndex) => {
             if (!message || typeof message !== 'object' || isRevertedMessageObject(message)) return;
-            addSlot(message, 'mes', `[${messageIndex}].mes`);
+            if (!isMessageAiFinal(message)) addSlot(message, 'mes', `[${messageIndex}].mes`);
             if (!Array.isArray(message.swipes)) return;
             message.swipes.forEach((swipe, swipeIndex) => {
+                const branchKey = `swipe:${swipeIndex}`;
+                const swipeText = typeof swipe === 'string' ? swipe : swipe?.mes;
+                if (isMessageAiFinalForBranch(message, branchKey, swipeText)) return;
                 if (typeof swipe === 'string') addSlot(message.swipes, swipeIndex, `[${messageIndex}].swipes[${swipeIndex}]`);
                 else if (swipe && typeof swipe === 'object') addSlot(swipe, 'mes', `[${messageIndex}].swipes[${swipeIndex}].mes`);
             });
