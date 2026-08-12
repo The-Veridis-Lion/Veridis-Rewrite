@@ -1,0 +1,712 @@
+/* === Veridis Rewrite real UI shell: generated DOM + real event bindings === */
+#blai-purifier-popup,
+.blai-modal-shell,
+#blai-diff-modal,
+#blai-scope-tag-editor-modal,
+#blai-rule-search-modal,
+#blai-rule-transfer-modal,
+#blai-preset-import-choice-modal {
+    --blai-bg-body: var(--SmartThemeBlurTintColor, #f5f2eb);
+    --blai-background-popup: var(--SmartThemeBlurTintColor, #fffdfa);
+    --blai-background-secondary: color-mix(in srgb, var(--blai-background-popup) 98%, var(--blai-text-primary) 2%);
+    --blai-background-tertiary: color-mix(in srgb, var(--blai-background-popup) 96%, var(--blai-text-primary) 4%);
+    --blai-bg-button: transparent;
+    --blai-bg-card: color-mix(in srgb, var(--blai-background-popup) 97%, var(--blai-text-primary) 3%);
+    --blai-card-border: color-mix(in srgb, var(--blai-text-primary) 14%, transparent);
+    --blai-border-color: color-mix(in srgb, var(--blai-text-primary) 14%, transparent);
+    --blai-border-color-base: color-mix(in srgb, var(--blai-text-primary) 16%, transparent);
+    --blai-border-dash: color-mix(in srgb, var(--blai-text-primary) 18%, transparent);
+    --blai-text-primary: var(--SmartThemeBodyColor, #20251f);
+    --blai-text-main: var(--SmartThemeBodyColor, #20251f);
+    --blai-text-secondary: color-mix(in srgb, var(--blai-text-primary) 68%, transparent);
+    --blai-text-mute: color-mix(in srgb, var(--blai-text-primary) 52%, transparent);
+    --blai-accent-color: var(--SmartThemeQuoteColor, #4f7759);
+    --blai-accent-color-hover: color-mix(in srgb, var(--blai-accent-color) 86%, var(--blai-text-primary) 14%);
+    --blai-chip-text: var(--blai-background-popup);
+    --blai-btn-danger: #9c4b44;
+    --blai-panel-shadow: 0 18px 48px rgba(43, 39, 31, 0.16);
+    --blai-control-radius: 12px;
+    --blai-card-radius: 16px;
+    --blai-surface-panel: color-mix(in srgb, var(--blai-background-popup) 96%, var(--blai-text-primary) 4%);
+    --blai-surface-soft: color-mix(in srgb, var(--blai-background-popup) 98%, var(--blai-text-primary) 2%);
+    --blai-surface-muted: color-mix(in srgb, var(--blai-background-popup) 96%, var(--blai-text-primary) 4%);
+    --blai-control-bg: color-mix(in srgb, var(--blai-background-popup) 98%, var(--blai-text-primary) 2%);
+    --app-bg: var(--blai-bg-body);
+    --panel: var(--blai-surface-panel);
+    --soft: var(--blai-surface-soft);
+    --soft-2: var(--blai-surface-muted);
+    --text: var(--blai-text-primary);
+    --subtle: var(--blai-text-secondary);
+    --border: var(--blai-card-border);
+    --accent: var(--blai-accent-color);
+    --accent-ink: var(--blai-chip-text);
+}
+
+#blai-purifier-popup[data-blai-theme="light"],
+.blai-modal-shell[data-blai-theme="light"],
+#blai-diff-modal[data-blai-theme="light"],
+#blai-scope-tag-editor-modal[data-blai-theme="light"],
+#blai-rule-search-modal[data-blai-theme="light"],
+#blai-rule-transfer-modal[data-blai-theme="light"],
+#blai-preset-import-choice-modal[data-blai-theme="light"] {
+    --blai-bg-body: #fcfbf8;
+    --blai-background-popup: #fffefa;
+    --blai-background-secondary: #fdfcf9;
+    --blai-background-tertiary: #faf9f6;
+    --blai-bg-button: transparent;
+    --blai-bg-card: #fffefa;
+    --blai-card-border: rgba(32, 37, 31, 0.11);
+    --blai-border-color: rgba(32, 37, 31, 0.11);
+    --blai-border-color-base: rgba(32, 37, 31, 0.13);
+    --blai-border-dash: rgba(32, 37, 31, 0.15);
+    --blai-text-primary: #20251f;
+    --blai-text-main: #20251f;
+    --blai-text-secondary: #687063;
+    --blai-text-mute: #828878;
+    --blai-accent-color: #5a7c61;
+    --blai-accent-color-hover: #4d6f54;
+    --blai-chip-text: #fffefa;
+    --blai-surface-panel: color-mix(in srgb, var(--blai-background-popup) 97%, var(--blai-text-primary) 3%);
+    --blai-surface-soft: color-mix(in srgb, var(--blai-background-popup) 98%, var(--blai-text-primary) 2%);
+    --blai-surface-muted: color-mix(in srgb, var(--blai-background-popup) 96%, var(--blai-text-primary) 4%);
+    --blai-control-bg: #fdfcf9;
+    --app-bg: var(--blai-bg-body);
+    --panel: var(--blai-surface-panel);
+    --soft: var(--blai-surface-soft);
+    --soft-2: var(--blai-surface-muted);
+    --text: var(--blai-text-primary);
+    --subtle: var(--blai-text-secondary);
+    --border: var(--blai-card-border);
+    --accent: var(--blai-accent-color);
+    --accent-ink: var(--blai-chip-text);
+}
+
+#blai-purifier-popup {
+    width: min(560px, calc(100vw - 28px)) !important;
+    max-height: min(760px, calc(100dvh - 32px)) !important;
+    padding: 16px !important;
+    gap: 10px !important;
+    border-radius: 20px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    background:
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--blai-background-popup) 96%, white 4%),
+            color-mix(in srgb, var(--blai-bg-body) 96%, var(--blai-text-primary) 4%)
+        ),
+        var(--blai-bg-body) !important;
+    box-shadow: var(--blai-panel-shadow) !important;
+    color: var(--blai-text-primary) !important;
+}
+
+#blai-purifier-popup[data-blai-theme="dark"],
+#blai-rule-edit-modal[data-blai-theme="dark"],
+#blai-scope-tags-modal[data-blai-theme="dark"],
+#blai-subrule-edit-modal[data-blai-theme="dark"] {
+    --blai-bg-body: #151812;
+    --blai-background-popup: #1d2119;
+    --blai-background-secondary: #22261f;
+    --blai-background-tertiary: #272b24;
+    --blai-bg-button: #22261f;
+    --blai-bg-card: #20231e;
+    --blai-card-border: rgba(226, 220, 204, 0.10);
+    --blai-border-color: rgba(226, 220, 204, 0.10);
+    --blai-border-color-base: rgba(226, 220, 204, 0.12);
+    --blai-border-dash: rgba(226, 220, 204, 0.14);
+    --blai-text-primary: #f1eee4;
+    --blai-text-main: #f1eee4;
+    --blai-text-secondary: #bbb7a9;
+    --blai-text-mute: #8f9287;
+    --blai-accent-color: #e3a742;
+    --blai-accent-color-hover: #f0b958;
+    --blai-chip-text: #151812;
+    --blai-panel-shadow: 0 22px 54px rgba(0, 0, 0, 0.42);
+    --blai-surface-panel: color-mix(in srgb, var(--blai-background-popup) 96%, white 4%);
+    --blai-surface-soft: color-mix(in srgb, var(--blai-background-popup) 91%, white 9%);
+    --blai-surface-muted: color-mix(in srgb, var(--blai-background-popup) 87%, white 13%);
+    --blai-control-bg: color-mix(in srgb, var(--blai-background-popup) 96%, white 4%);
+    --app-bg: var(--blai-bg-body);
+    --panel: var(--blai-surface-panel);
+    --soft: var(--blai-surface-soft);
+    --soft-2: var(--blai-surface-muted);
+    --text: var(--blai-text-primary);
+    --subtle: var(--blai-text-secondary);
+    --border: var(--blai-card-border);
+    --accent: var(--blai-accent-color);
+    --accent-ink: var(--blai-chip-text);
+}
+
+#blai-purifier-popup .blai-header,
+#blai-purifier-popup .blai-toolbar {
+    flex-shrink: 0 !important;
+}
+
+#blai-purifier-popup .blai-header {
+    align-items: center !important;
+    padding: 2px 2px 6px !important;
+}
+
+
+
+
+#blai-purifier-popup .blai-icon-group button,
+#blai-purifier-popup .blai-icon-btn,
+.blai-modal-shell .blai-icon-btn {
+    min-width: 34px !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    background: transparent !important;
+    color: var(--blai-text-primary) !important;
+    box-shadow: none !important;
+}
+
+#blai-purifier-popup .blai-icon-group button:hover,
+#blai-purifier-popup .blai-icon-btn:hover,
+.blai-modal-shell .blai-icon-btn:hover {
+    background: var(--blai-background-tertiary) !important;
+    transform: none !important;
+}
+
+#blai-purifier-popup .blai-toolbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+    padding: 8px !important;
+    border-radius: 16px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    background: var(--blai-surface-panel) !important;
+}
+
+#blai-purifier-popup .blai-select-box,
+#blai-purifier-popup .blai-input,
+.blai-modal-shell .blai-input,
+.blai-modal-shell .blai-textarea {
+    min-height: 38px !important;
+    border-radius: var(--blai-control-radius) !important;
+    border: 1px solid var(--blai-border-color-base) !important;
+    background: transparent !important;
+    color: var(--blai-text-primary) !important;
+    box-shadow: none !important;
+}
+
+
+.blai-modal-shell .blai-secondary-btn,
+.blai-modal-shell .blai-primary-btn {
+    min-height: 38px !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    background: transparent !important;
+    color: var(--blai-text-primary) !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    box-shadow: none !important;
+}
+
+.blai-modal-shell .blai-primary-btn,
+.blai-modal-shell .blai-primary-btn:hover {
+    background: var(--blai-accent-color) !important;
+    border-color: var(--blai-accent-color) !important;
+    color: var(--blai-chip-text) !important;
+}
+
+
+
+
+
+#blai-tags-container {
+    display: grid;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    gap: 10px !important;
+    overflow: auto;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding: 2px 2px 4px !important;
+    scrollbar-width: none;
+}
+
+#blai-tags-container .blai-card {
+    min-width: 0;
+    display: grid !important;
+    gap: 7px !important;
+    padding: 12px !important;
+    border-radius: 16px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+#blai-tags-container .blai-card.blai-is-disabled {
+    opacity: 0.56 !important;
+}
+
+#blai-tags-container .blai-card-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 0 0 8px !important;
+    margin: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+#blai-tags-container .blai-header-left {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+}
+
+#blai-tags-container .blai-checkbox-label {
+    min-width: 0 !important;
+    gap: 8px !important;
+}
+
+#blai-tags-container .blai-group-title {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    line-height: 1.25 !important;
+    font-size: 15px !important;
+    font-weight: 850 !important;
+    color: var(--blai-text-primary) !important;
+}
+
+#blai-tags-container .blai-rule-count {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 34px !important;
+    min-height: 20px !important;
+    height: 24px !important;
+    padding: 0 8px !important;
+    border-radius: 999px !important;
+    background: transparent !important;
+    color: var(--blai-accent-color) !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    place-items: center !important;
+    white-space: nowrap !important;
+}
+
+#blai-tags-container .blai-card-body {
+    display: grid !important;
+    gap: 6px !important;
+    padding: 8px !important;
+    border-radius: 13px !important;
+    background: transparent !important;
+}
+
+#blai-tags-container .blai-rule-item {
+    display: grid !important;
+    grid-template-columns: minmax(0, 2fr) auto minmax(0, 1fr) !important;
+    gap: 8px !important;
+    align-items: stretch !important;
+    min-height: 48px !important;
+    padding: 6px !important;
+    border-radius: 10px !important;
+    background: var(--blai-surface-panel) !important;
+    font-size: 12px !important;
+}
+
+#blai-tags-container .blai-rule-source,
+#blai-tags-container .blai-rule-target {
+    min-width: 0 !important;
+    display: grid !important;
+    grid-template-rows: 24px minmax(0, 1fr) !important;
+    align-content: center !important;
+    gap: 2px !important;
+}
+
+#blai-tags-container .blai-rule-target {
+    padding-left: 8px !important;
+    border-left: 1px solid var(--blai-border-color) !important;
+}
+
+#blai-tags-container .blai-rule-labels {
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    overflow: hidden !important;
+}
+
+#blai-tags-container .blai-preview-label {
+    height: 24px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    color: var(--blai-text-secondary) !important;
+    font-size: 11px !important;
+    font-weight: 750 !important;
+    white-space: nowrap !important;
+}
+
+
+#blai-tags-container .blai-rule-item .blai-source,
+#blai-tags-container .blai-rule-item .blai-target {
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    line-height: 18px !important;
+}
+
+#blai-tags-container .blai-rule-item .blai-source {
+    color: var(--blai-text-secondary) !important;
+}
+
+#blai-tags-container .blai-rule-item .blai-target {
+    color: var(--blai-text-primary) !important;
+    font-weight: 800 !important;
+}
+
+#blai-tags-container .blai-tag,
+#blai-edit-subrules-container .blai-tag {
+    height: 24px !important;
+    padding: 0 8px !important;
+    border-radius: 999px !important;
+    background: var(--blai-accent-color) !important;
+    color: var(--blai-chip-text) !important;
+    font-size: 12px !important;
+    font-weight: 850 !important;
+}
+
+#blai-tags-container .blai-more-text {
+    padding: 3px 6px 0 !important;
+    color: var(--blai-text-secondary) !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+}
+
+#blai-purifier-popup:not(.blai-is-batch-mode) #blai-tags-container .blai-rule-move-up,
+#blai-purifier-popup:not(.blai-is-batch-mode) #blai-tags-container .blai-rule-move-down,
+#blai-purifier-popup:not(.blai-is-batch-mode) #blai-tags-container .blai-rule-transfer,
+#blai-purifier-popup:not(.blai-is-batch-mode) #blai-tags-container .blai-rule-del,
+#blai-purifier-popup:not(.blai-is-batch-mode) #blai-tags-container .blai-batch-checkbox-label {
+    display: none !important;
+}
+
+#blai-tags-container .blai-icon-group.blai-compact {
+    display: inline-flex !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
+    gap: 5px !important;
+}
+
+#blai-tags-container .blai-icon-group.blai-compact button {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    min-width: 34px !important;
+    height: 32px !important;
+    padding: 0 9px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 11px !important;
+    background: var(--soft) !important;
+    color: var(--text) !important;
+    box-shadow: none !important;
+    font-size: 12px !important;
+    font-weight: 850 !important;
+}
+
+#blai-tags-container .blai-rule-edit {
+    width: 34px !important;
+    min-width: 34px !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    background: transparent !important;
+    border-color: var(--blai-border-color) !important;
+    color: var(--blai-text-secondary) !important;
+}
+
+#blai-tags-container .blai-rule-risk-indicator {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 24px !important;
+    width: 24px !important;
+    height: 32px !important;
+    cursor: pointer !important;
+    color: var(--blai-btn-danger) !important;
+    font-size: 18px !important;
+    line-height: 1 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+#blai-tags-container .blai-rule-risk-indicator:focus-visible {
+    outline: 2px solid var(--blai-btn-danger) !important;
+    outline-offset: 2px !important;
+    border-radius: 50% !important;
+}
+
+#blai-purifier-popup.blai-is-batch-mode #blai-tags-container .blai-rule-edit span {
+    display: none !important;
+}
+
+#blai-purifier-popup .blai-batch-operations {
+    min-height: 42px !important;
+    padding: 6px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    border-radius: 14px !important;
+    background: transparent !important;
+}
+
+
+#blai-rule-edit-modal .blai-edit-modal-card,
+#blai-subrule-edit-modal .blai-subrule-modal-card,
+#blai-scope-tags-modal > .blai-scope-tags-card {
+    width: min(520px, calc(100vw - 28px)) !important;
+    max-height: min(760px, calc(100dvh - 28px)) !important;
+    border-radius: 20px !important;
+    padding: 16px !important;
+}
+
+#blai-risk-confirm-modal .blai-risk-confirm-card,
+#blai-risk-info-modal .blai-risk-info-card {
+    width: min(440px, calc(100vw - 28px)) !important;
+    max-height: calc(100dvh - 28px) !important;
+    padding: 18px !important;
+}
+
+#blai-risk-confirm-text,
+#blai-risk-info-text {
+    max-height: min(55dvh, 420px) !important;
+    margin: 0 !important;
+    overflow-y: auto !important;
+    color: var(--blai-text-primary) !important;
+    font-size: 14px !important;
+    line-height: 1.7 !important;
+    white-space: pre-wrap !important;
+}
+
+#blai-risk-confirm-modal .blai-modal-actions,
+#blai-risk-info-modal .blai-modal-actions {
+    margin-top: 16px !important;
+}
+
+#blai-rule-edit-modal .blai-edit-modal-title,
+#blai-subrule-edit-modal .blai-edit-modal-title {
+    font-size: 18px !important;
+    font-weight: 850 !important;
+    letter-spacing: 0 !important;
+    color: var(--blai-text-primary) !important;
+}
+
+#blai-edit-subrules-container {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    min-height: 160px !important;
+    max-height: min(420px, 50dvh) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin: 10px 0 !important;
+    padding-right: 2px !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-card {
+    margin: 0 !important;
+    padding: 12px !important;
+    border-radius: 15px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-btn-group {
+    flex: 0 0 auto !important;
+    gap: 5px !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-btn-group .blai-icon-btn {
+    min-width: 30px !important;
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 10px !important;
+}
+
+#blai-rule-edit-modal .blai-modal-actions,
+#blai-subrule-edit-modal .blai-subrule-footer {
+    gap: 8px !important;
+    padding-top: 10px !important;
+}
+
+#blai-add-subrule-btn,
+#blai-modal-sub-save {
+    background: var(--blai-accent-color) !important;
+    border-color: var(--blai-accent-color) !important;
+    color: var(--blai-chip-text) !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-modal-header {
+    gap: 10px !important;
+    align-items: flex-start !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-mode-block {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-mode-select-wrap {
+    border-radius: 14px !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-mode-hint {
+    margin-top: 7px !important;
+    color: var(--blai-text-secondary) !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-field {
+    margin-bottom: 10px !important;
+}
+
+#blai-subrule-edit-modal .blai-textarea {
+    min-height: 92px !important;
+    resize: vertical !important;
+}
+
+#blai-scope-tags-modal .blai-scope-tags-card {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+}
+
+
+#blai-scope-tags-modal .blai-scope-mode-segment {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    padding: 5px !important;
+    border-radius: 14px !important;
+    background: var(--blai-background-secondary) !important;
+}
+
+#blai-scope-tags-modal .blai-scope-mode-option {
+    min-height: 38px !important;
+    border-radius: 11px !important;
+    font-weight: 850 !important;
+}
+
+#blai-scope-tags-modal .blai-scope-mode-option.is-active {
+    background: var(--blai-accent-color) !important;
+    color: var(--blai-chip-text) !important;
+}
+
+#blai-scope-tags-modal .blai-scope-tags-list {
+    max-height: 290px !important;
+    overflow-y: auto !important;
+    gap: 8px !important;
+}
+
+#blai-scope-tags-modal .blai-scope-tag-group {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 5px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    border-radius: 15px !important;
+    background: var(--blai-surface-soft) !important;
+}
+
+#blai-scope-tags-modal .blai-scope-tag-chip {
+    grid-template-columns: 36px minmax(0, 1fr) auto !important;
+    padding: 8px !important;
+    background: transparent !important;
+}
+
+#blai-scope-tags-modal .blai-scope-tag-chip-title {
+    flex: 1 1 auto !important;
+    font-size: 14px !important;
+    font-weight: 850 !important;
+}
+
+#blai-scope-tags-modal .blai-scope-tag-chip-text {
+    flex: 0 1 auto !important;
+    margin-top: 2px !important;
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace !important;
+    font-size: 11px !important;
+    color: var(--blai-text-secondary) !important;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#blai-scope-tags-modal .blai-persona-description-protect-toggle {
+    min-height: 32px !important;
+    margin: 0 !important;
+    padding: 0 12px !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--blai-card-border) !important;
+    background: var(--blai-bg-button) !important;
+    color: var(--blai-text-primary) !important;
+    font-size: 12px !important;
+    font-weight: 850 !important;
+}
+
+#blai-scope-tags-modal .blai-persona-description-protect-toggle.is-active {
+    background: var(--blai-accent-color) !important;
+    border-color: var(--blai-accent-color) !important;
+    color: var(--blai-chip-text) !important;
+}
+
+
+
+#blai-scope-tags-modal #blai-deep-clean-btn {
+    min-width: 116px !important;
+    min-height: 38px !important;
+    border-radius: 12px !important;
+    background: var(--blai-accent-color) !important;
+    border: 1px solid var(--blai-accent-color) !important;
+    color: var(--blai-chip-text) !important;
+    font-weight: 850 !important;
+}
+
+#blai-rule-search-modal .blai-modal-card {
+    width: min(520px, calc(100vw - 28px)) !important;
+    border-radius: 20px !important;
+}
+
+@media screen and (max-width: 600px) {
+
+    #blai-purifier-popup .blai-toolbar {
+        grid-template-columns: 1fr !important;
+    }
+
+
+
+    #blai-rule-edit-modal .blai-edit-modal-card,
+    #blai-subrule-edit-modal .blai-subrule-modal-card,
+    #blai-scope-tags-modal > .blai-scope-tags-card {
+        width: calc(100vw - 20px) !important;
+        max-height: calc(100dvh - 20px) !important;
+        padding: 12px !important;
+    }
+
+    #blai-scope-tags-modal .blai-scope-tags-list {
+        min-height: 120px !important;
+        max-height: 240px !important;
+    }
+}
+

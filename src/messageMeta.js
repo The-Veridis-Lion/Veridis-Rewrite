@@ -2,7 +2,6 @@ const branchMetaKey = '__blai_diff_branch_meta';
 const legacySwipeKey = '__blai_diff_swipe_key';
 const legacyFinalSourceKey = '__blai_diff_final_source';
 const legacyHasAiTraceKey = '__blai_diff_has_ai_trace';
-const branchMetaLimit = 8;
 
 function isObject(value) {
     return !!(value && typeof value === 'object');
@@ -175,15 +174,6 @@ export function getMessageDiffMeta(msg, branchKey = getMessageDiffBranchKey(msg)
     return null;
 }
 
-function pruneBranchMeta(container, keepBranchKey) {
-    const keys = Object.keys(container);
-    if (keys.length <= branchMetaLimit) return;
-    const removable = keys.filter(key => key !== keepBranchKey);
-    while (Object.keys(container).length > branchMetaLimit && removable.length > 0) {
-        delete container[removable.shift()];
-    }
-}
-
 export function writeMessageDiffMeta(msg, branchKey, sourceMes, cleanedMes, signature) {
     if (!isObject(msg)) return false;
     const normalizedBranchKey = branchKey || getMessageDiffBranchKey(msg);
@@ -208,8 +198,6 @@ export function writeMessageDiffMeta(msg, branchKey, sourceMes, cleanedMes, sign
         container[normalizedBranchKey] = meta;
         changed = true;
     }
-    pruneBranchMeta(container, normalizedBranchKey);
-
     changed = setValue(msg, '__blai_original_mes', meta.originalMes) || changed;
     changed = setValue(msg, '__blai_diff_source_signature', meta.sourceSignature) || changed;
     changed = setValue(msg, '__blai_diff_last_cleaned_mes', meta.lastCleanedMes) || changed;
@@ -283,7 +271,6 @@ export function writeMessageDiffManualFinal(msg, branchKey = getMessageDiffBranc
     let changed = false;
     const container = getBranchMetaContainer(msg, true);
     container[normalizedBranchKey] = nextMeta;
-    pruneBranchMeta(container, normalizedBranchKey);
     changed = true;
 
     const storedLegacyBranch = typeof msg[legacySwipeKey] === 'string' ? msg[legacySwipeKey] : 'main';
@@ -324,6 +311,20 @@ export function clearMessageDiffMeta(msg, branchKey = getMessageDiffBranchKey(ms
         changed = deleteValue(msg, legacySwipeKey) || changed;
     }
 
+    return changed;
+}
+
+export function clearAllMessageDiffMeta(msg) {
+    if (!isObject(msg)) return false;
+    let changed = deleteValue(msg, branchMetaKey);
+    changed = deleteValue(msg, '__blai_original_mes') || changed;
+    changed = deleteValue(msg, '__blai_diff_source_signature') || changed;
+    changed = deleteValue(msg, '__blai_diff_last_cleaned_mes') || changed;
+    changed = deleteValue(msg, '__blai_diff_ai_program_mes') || changed;
+    changed = deleteValue(msg, '__blai_diff_ai_final_mes') || changed;
+    changed = deleteValue(msg, legacyHasAiTraceKey) || changed;
+    changed = deleteValue(msg, legacyFinalSourceKey) || changed;
+    changed = deleteValue(msg, legacySwipeKey) || changed;
     return changed;
 }
 

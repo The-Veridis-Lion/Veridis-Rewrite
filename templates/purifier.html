@@ -225,14 +225,6 @@
                                         <div class="row-main"><strong>人设描述保护</strong><button type="button" class="blai-persona-description-protect-toggle text-btn" aria-pressed="false" title="点击保护用户设定描述"><span class="blai-persona-protect-text">关闭</span></button></div>
                                         <p>保护 persona_description，深度清理时也避让。</p>
                                     </div>
-                                    <div class="cleanse-target-item blai-realtime-mask-item">
-                                        <div class="row-main"><strong>实时屏蔽模式</strong><span id="blai-realtime-mask-label">简单视觉</span></div>
-                                        <div class="segmented blai-realtime-mask-segment" role="group" aria-label="实时屏蔽模式">
-                                            <button type="button" class="blai-realtime-mask-option" data-mode="simple-visual">简单视觉屏蔽</button>
-                                            <button type="button" class="blai-realtime-mask-option" data-mode="tavern-helper">酒馆助手实时渲染</button>
-                                        </div>
-                                        <p id="blai-realtime-mask-note">生成中只处理消息显示层文本，不重建代码块或控件。</p>
-                                    </div>
                                 </div>
                                 <div class="clean-deep-section">
                                     <div class="panel-head"><strong>深度净化</strong></div>
@@ -282,6 +274,15 @@
                                 <button id="blai-default-toggle" type="button" class="blai-hidden-real-button" title="设为全局默认净化预设" aria-hidden="true" tabindex="-1"><i class="fas fa-star"></i></button>
                             </div>
                             <div class="panel tools-combined-panel">
+                                <section class="tools-subsection tools-composer-section">
+                                    <div class="panel-head"><strong>输入框快捷入口</strong><em>由 TavernHelper 提供</em></div>
+                                    <div class="list">
+                                        <div class="tool-row">
+                                            <div class="row-main"><strong>在输入框区域显示手动 AI 改写按钮</strong><button id="blai-composer-button-toggle" type="button" class="text-btn" aria-pressed="false">关闭</button></div>
+                                            <p>启用后，由酒馆助手在输入框区域显示“AI 改写”按钮；点击后对当前聊天中最新一条助手消息执行手动 AI 改写。</p>
+                                        </div>
+                                    </div>
+                                </section>
                                 <section class="tools-subsection tools-perspective-section">
                                     <div class="panel-head"><strong>透视楼层</strong><em>对比范围</em></div>
                                     <div class="list">
