@@ -39,7 +39,7 @@ function getMvuGlobalApi() {
     return null;
 }
 
-function getTavernHelperGlobalApi() {
+export function getTavernHelperGlobalApi() {
     const root = getGlobalObject();
     if (root?.TavernHelper && typeof root.TavernHelper === 'object') return root.TavernHelper;
     try {

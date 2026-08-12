@@ -1,5 +1,13 @@
 import { extensionName, getAppContext, runtimeState } from './state.js';
-import { applyScopedReplacements, buildProcessors } from './core.js';
+import {
+    applyScopedReplacements,
+    applyVisualMask,
+    buildProcessors,
+    collectScopedReplacementRanges,
+    hasEnabledScopeTags,
+    isStreamingVisualProcessorSafe,
+    resolveProcessorReplacement,
+} from './replacementEngine.js';
 import { isCotScopeSkippingEnabled } from './utils.js';
 import { loreFrameDomSelector } from './platform.js';
 import { isMessageManualFinal } from './messageMeta.js';
@@ -32,10 +40,6 @@ const excludedMessageContentSelector = [
     '.TH-collapse-code-block-button',
     '[class*="blai-diff"]',
 ].join(', ');
-
-const streamingPresentationByMessageId = new Map();
-const pendingStreamingPresentationIds = new Set();
-let streamingPresentationFrameId = 0;
 
 const knownPluginContainerSelector = [
     '#tavern_helper',
@@ -266,9 +270,7 @@ export function purifyDOM(rootNode) {
 
 function findTavernHelperStreamingSurface(messageNode) {
     const local = messageNode?.querySelectorAll?.('.TH-streaming');
-    if (local?.length) return local[local.length - 1];
-    const global = document.querySelectorAll?.('#chat .TH-streaming');
-    return global?.length ? global[global.length - 1] : null;
+    return local?.length ? local[local.length - 1] : null;
 }
 
 function shouldSkipStreamingPresentationTextNode(node, surface) {
@@ -292,9 +294,9 @@ function stripStreamingWrapperTags(text) {
     return String(text || '').replace(/<\/?[A-Za-z][\w:.-]*(?:\s[^<>]*?)?>/g, '');
 }
 
-export function resolveSingleNodeStreamingProjection(presentation, currentText) {
-    const rawText = String(presentation?.rawText || '');
-    const cleanText = String(presentation?.cleanText || '');
+export function resolveSingleNodeStreamingProjection(rawSource, cleanSource, currentText) {
+    const rawText = String(rawSource || '');
+    const cleanText = String(cleanSource || '');
     if (!rawText || rawText === cleanText) return null;
     if (currentText === rawText) return cleanText;
 
@@ -303,103 +305,296 @@ export function resolveSingleNodeStreamingProjection(presentation, currentText) 
     return stripStreamingWrapperTags(cleanText);
 }
 
-function applyStreamingVisualMask(surface, presentation = null) {
-    if (!surface) return false;
-    const walker = document.createTreeWalker(surface, NodeFilter.SHOW_TEXT, null, false);
-    const textNodes = [];
-    let node;
-    while (node = walker.nextNode()) textNodes.push(node);
+function isStreamingRunBoundaryElement(element) {
+    return element?.matches?.('p, div, li, blockquote, h1, h2, h3, h4, h5, h6, table, thead, tbody, tfoot, tr, td, th, ul, ol');
+}
 
-    const eligibleTextNodes = textNodes.filter((textNode) => !shouldSkipStreamingPresentationTextNode(textNode, surface));
-    if (eligibleTextNodes.length === 1) {
+function collectStreamingTextRuns(surface) {
+    const runs = [];
+    let currentRun = [];
+    const flush = () => {
+        if (currentRun.length > 0) runs.push(currentRun);
+        currentRun = [];
+    };
+
+    const walk = (node) => {
+        if (node?.nodeType === Node.TEXT_NODE) {
+            if (shouldSkipStreamingPresentationTextNode(node, surface)) {
+                flush();
+                return;
+            }
+            currentRun.push(node);
+            return;
+        }
+        if (node?.nodeType !== Node.ELEMENT_NODE) return;
+
+        if (node !== surface && (
+            node.matches?.('br, hr')
+            || node.matches?.(excludedMessageContentSelector)
+            || isProtectedNode(node)
+            || isRevertedMessageDomNode(node)
+            || isManualFinalMessageDomNode(node)
+            || (document.activeElement && (document.activeElement === node || node.contains?.(document.activeElement)))
+        )) {
+            flush();
+            return;
+        }
+
+        const isBoundary = node !== surface && isStreamingRunBoundaryElement(node);
+        if (isBoundary) flush();
+        Array.from(node.childNodes || []).forEach(walk);
+        if (isBoundary) flush();
+    };
+
+    walk(surface);
+    flush();
+    return runs;
+}
+
+function collectStreamingSurfaceText(surface) {
+    let text = '';
+    const walk = (node) => {
+        if (node?.nodeType === Node.TEXT_NODE) {
+            text += node.nodeValue || '';
+            return;
+        }
+        Array.from(node?.childNodes || []).forEach(walk);
+    };
+    walk(surface);
+    return text;
+}
+
+function buildNodeRangeSnapshot(nodes, startNode = null, startOffset = 0, endNode = null, endOffset = 0) {
+    const firstIndex = startNode ? nodes.indexOf(startNode) : 0;
+    const lastIndex = endNode ? nodes.indexOf(endNode) : nodes.length - 1;
+    const ranges = [];
+    let text = '';
+
+    for (let index = firstIndex; index <= lastIndex; index++) {
+        const node = nodes[index];
+        const value = node?.nodeValue || '';
+        const localStart = node === startNode ? startOffset : 0;
+        const localEnd = node === endNode ? endOffset : value.length;
+        const slice = value.slice(localStart, localEnd);
+        ranges.push({
+            node,
+            nodeIndex: index,
+            localStart,
+            localEnd,
+            globalStart: text.length,
+            globalEnd: text.length + slice.length,
+        });
+        text += slice;
+    }
+
+    return { text, ranges };
+}
+
+function locateRangeStart(ranges, offset) {
+    for (const range of ranges) {
+        if (offset === range.globalStart) {
+            return { node: range.node, nodeIndex: range.nodeIndex, offset: range.localStart };
+        }
+        if (offset < range.globalEnd) {
+            return { node: range.node, nodeIndex: range.nodeIndex, offset: range.localStart + offset - range.globalStart };
+        }
+    }
+    const last = ranges[ranges.length - 1];
+    return last ? { node: last.node, nodeIndex: last.nodeIndex, offset: last.localEnd } : null;
+}
+
+function locateRangeEnd(ranges, offset) {
+    for (const range of ranges) {
+        if (offset > range.globalStart && offset <= range.globalEnd) {
+            return { node: range.node, nodeIndex: range.nodeIndex, offset: range.localStart + offset - range.globalStart };
+        }
+    }
+    return locateRangeStart(ranges, offset);
+}
+
+function createStreamingSegment(nodes, runSnapshot, range) {
+    const start = locateRangeStart(runSnapshot.ranges, range.start);
+    const end = locateRangeEnd(runSnapshot.ranges, range.end);
+    if (!start || !end) return null;
+    return {
+        nodes: nodes.slice(start.nodeIndex, end.nodeIndex + 1),
+        startNode: start.node,
+        startOffset: start.offset,
+        endNode: end.node,
+        endOffset: end.offset,
+    };
+}
+
+function collectProcessorMatches(text, processor, processorIndex) {
+    const matches = [];
+    text.replace(processor.regex, (match, ...args) => {
+        const hasNamedGroups = typeof args[args.length - 1] === 'object' && args[args.length - 1] !== null;
+        const offset = Number(args[args.length - (hasNamedGroups ? 3 : 2)]);
+        const replacement = String(resolveProcessorReplacement(processor, processorIndex, match, args, true) ?? '');
+        if (replacement === match) return match;
+        matches.push({
+            start: offset,
+            end: offset + match.length,
+            replacement,
+        });
+        return match;
+    });
+    return matches;
+}
+
+function insertAtStreamingOffset(segment, snapshot, offset, replacement) {
+    const location = locateRangeStart(snapshot.ranges, offset);
+    if (!location) return;
+    const value = location.node.nodeValue || '';
+    location.node.nodeValue = value.slice(0, location.offset) + replacement + value.slice(location.offset);
+    if (location.node === segment.endNode && location.offset <= segment.endOffset) {
+        segment.endOffset += replacement.length;
+    }
+}
+
+function replaceStreamingRange(segment, snapshot, match) {
+    if (match.start === match.end) {
+        insertAtStreamingOffset(segment, snapshot, match.start, match.replacement);
+        return;
+    }
+
+    const start = locateRangeStart(snapshot.ranges, match.start);
+    const end = locateRangeEnd(snapshot.ranges, match.end);
+    if (!start || !end) return;
+
+    if (start.node === end.node) {
+        const value = start.node.nodeValue || '';
+        start.node.nodeValue = value.slice(0, start.offset) + match.replacement + value.slice(end.offset);
+        if (start.node === segment.endNode && start.offset < segment.endOffset) {
+            segment.endOffset += match.replacement.length - (end.offset - start.offset);
+        }
+        return;
+    }
+
+    const startValue = start.node.nodeValue || '';
+    const endValue = end.node.nodeValue || '';
+    start.node.nodeValue = startValue.slice(0, start.offset) + match.replacement;
+    for (let index = start.nodeIndex + 1; index < end.nodeIndex; index++) {
+        snapshot.ranges[index].node.nodeValue = '';
+    }
+    end.node.nodeValue = endValue.slice(end.offset);
+    if (end.node === segment.endNode) segment.endOffset -= end.offset;
+}
+
+function applyStreamingMaskToRun(nodes, processors, scopedRanges = null) {
+    const runSnapshot = buildNodeRangeSnapshot(nodes);
+    const ranges = scopedRanges || [{ start: 0, end: runSnapshot.text.length }];
+    const segments = ranges
+        .map((range) => createStreamingSegment(nodes, runSnapshot, range))
+        .filter(Boolean)
+        .reverse();
+    let changed = false;
+
+    for (const segment of segments) {
+        processors.forEach((processor, processorIndex) => {
+            const snapshot = buildNodeRangeSnapshot(
+                segment.nodes,
+                segment.startNode,
+                segment.startOffset,
+                segment.endNode,
+                segment.endOffset,
+            );
+            const matches = collectProcessorMatches(snapshot.text, processor, processorIndex);
+            for (let index = matches.length - 1; index >= 0; index--) {
+                replaceStreamingRange(segment, snapshot, matches[index]);
+                changed = true;
+            }
+        });
+    }
+    return changed;
+}
+
+function projectStreamingScopeRanges(rawText) {
+    const rawRanges = collectScopedReplacementRanges(rawText);
+    return rawRanges
+        .map((range) => ({
+            start: stripStreamingWrapperTags(rawText.slice(0, range.start)).length,
+            end: stripStreamingWrapperTags(rawText.slice(0, range.end)).length,
+        }))
+        .filter((range) => range.end > range.start);
+}
+
+function applyScopedStreamingRuns(runs, processors, scopedRanges) {
+    let globalOffset = 0;
+    let changed = false;
+
+    for (const run of runs) {
+        const runLength = run.reduce((length, node) => length + String(node?.nodeValue || '').length, 0);
+        const runEnd = globalOffset + runLength;
+        const localRanges = scopedRanges
+            .map((range) => ({
+                start: Math.max(range.start, globalOffset) - globalOffset,
+                end: Math.min(range.end, runEnd) - globalOffset,
+            }))
+            .filter((range) => range.end > range.start);
+        changed = applyStreamingMaskToRun(run, processors, localRanges) || changed;
+        globalOffset = runEnd;
+    }
+
+    return changed;
+}
+
+export function applyStreamingVisualMask(surface, rawSource, cleanSource, options = {}) {
+    if (!surface) return false;
+    const runs = collectStreamingTextRuns(surface);
+    const eligibleTextNodes = runs.flat();
+    const rawText = String(rawSource || '');
+    const cleanText = String(cleanSource || '');
+    const currentVisibleText = eligibleTextNodes.map((node) => node.nodeValue || '').join('');
+    const currentSurfaceText = collectStreamingSurfaceText(surface);
+    const visibleRawText = stripStreamingWrapperTags(rawText);
+    const visibleCleanText = stripStreamingWrapperTags(cleanText);
+    if (visibleCleanText !== visibleRawText && currentSurfaceText === visibleCleanText) return false;
+    if (options.requireSourceCorrespondence === true
+        && currentSurfaceText !== visibleRawText
+        && currentSurfaceText !== visibleCleanText) return false;
+
+    const processors = buildProcessors({ includeAiRewrite: true });
+    const streamingProcessors = processors.filter((processor) => (
+        isStreamingVisualProcessorSafe(processor, {
+            anchorsChangeSemantics: runs.length !== 1 || currentVisibleText !== visibleRawText,
+        })
+    ));
+
+    if (eligibleTextNodes.length === 1 && streamingProcessors.length === processors.length) {
         const textNode = eligibleTextNodes[0];
         const currentText = textNode.nodeValue || '';
-        const projectedText = resolveSingleNodeStreamingProjection(presentation, currentText);
+        const projectedText = resolveSingleNodeStreamingProjection(rawText, cleanText, currentText);
         if (projectedText !== null && projectedText !== currentText) {
             textNode.nodeValue = projectedText;
             return true;
         }
     }
 
-    let changed = false;
-    for (const textNode of eligibleTextNodes) {
-        const original = textNode.nodeValue || '';
-        if (!original.trim()) continue;
-        const nextValue = applyScopedReplacements(original, { deterministic: true, includeAiRewrite: true, domSafeOnly: true });
-        if (nextValue === original) continue;
-        textNode.nodeValue = nextValue;
-        changed = true;
+    if (hasEnabledScopeTags()) {
+        if (currentVisibleText !== visibleRawText) return false;
+        return applyScopedStreamingRuns(runs, streamingProcessors, projectStreamingScopeRanges(rawText));
     }
-    return changed;
+    return runs.reduce((changed, run) => applyStreamingMaskToRun(run, streamingProcessors) || changed, false);
 }
 
-function renderStreamingPresentationNow(messageId) {
-    const presentation = streamingPresentationByMessageId.get(messageId);
-    if (!presentation || runtimeState.isStreamingGeneration !== true) return false;
+export function renderStreamingVisualMask(messageId, committedRawText, options = {}) {
+    const index = Number(messageId);
+    if (!Number.isInteger(index) || index < 0 || runtimeState.isStreamingGeneration !== true) return false;
 
-    const messageNode = getMessageDomNode(messageId);
+    const messageNode = getMessageDomNode(index);
     if (!messageNode || isRevertedMessageDomNode(messageNode) || isManualFinalMessageDomNode(messageNode)) return false;
-    const surface = presentation.mode === 'tavern-helper'
-        ? findTavernHelperStreamingSurface(messageNode)
-        : messageNode.querySelector?.('.mes_text');
-    return applyStreamingVisualMask(surface, presentation);
+    const surface = findTavernHelperStreamingSurface(messageNode) || messageNode.querySelector?.('.mes_text');
+    const rawText = String(committedRawText || '');
+    return applyStreamingVisualMask(surface, rawText, applyVisualMask(rawText), options);
 }
 
-function flushStreamingPresentationQueue() {
-    streamingPresentationFrameId = 0;
-    const messageIds = [...pendingStreamingPresentationIds];
-    pendingStreamingPresentationIds.clear();
-    messageIds.forEach((messageId) => renderStreamingPresentationNow(messageId));
-}
-
-/**
- * 将净化后的累计快照排队投影到宿主已渲染的显示面，不重建 DOM，也不修改 chat 数据。
- * @param {number} messageId 消息索引。
- * @param {string} rawText 宿主原始累计快照。
- * @param {string} cleanText 净化后的累计快照。
- * @param {'simple-visual'|'tavern-helper'} mode 显示面模式。
- */
-export function queueStreamingPresentation(messageId, rawText, cleanText, mode) {
+export function replayStreamingVisualMask(messageId) {
     const index = Number(messageId);
-    if (!Number.isInteger(index) || index < 0 || runtimeState.isStreamingGeneration !== true) return;
-    if (String(rawText || '') === String(cleanText || '')) {
-        if (streamingPresentationByMessageId.has(index)) clearStreamingPresentations(index);
-        return;
-    }
-    streamingPresentationByMessageId.set(index, {
-        mode: mode === 'simple-visual' ? 'simple-visual' : 'tavern-helper',
-        rawText: String(rawText || ''),
-        cleanText: String(cleanText || ''),
+    if (!runtimeState.streamingCommittedMessageCache.has(index)) return false;
+    return renderStreamingVisualMask(index, runtimeState.streamingCommittedMessageCache.get(index), {
+        requireSourceCorrespondence: true,
     });
-    pendingStreamingPresentationIds.add(index);
-    if (streamingPresentationFrameId) return;
-    const schedule = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
-        ? window.requestAnimationFrame.bind(window)
-        : (callback) => setTimeout(callback, 0);
-    streamingPresentationFrameId = schedule(flushStreamingPresentationQueue);
-}
-
-export function replayStreamingPresentation(messageId) {
-    const index = Number(messageId);
-    if (!streamingPresentationByMessageId.has(index)) return;
-    pendingStreamingPresentationIds.add(index);
-    if (streamingPresentationFrameId) return;
-    const schedule = typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
-        ? window.requestAnimationFrame.bind(window)
-        : (callback) => setTimeout(callback, 0);
-    streamingPresentationFrameId = schedule(flushStreamingPresentationQueue);
-}
-
-export function clearStreamingPresentations(messageId) {
-    const index = Number(messageId);
-    const clearAll = !Number.isInteger(index) || index < 0;
-    if (clearAll) {
-        streamingPresentationByMessageId.clear();
-        pendingStreamingPresentationIds.clear();
-    } else {
-        streamingPresentationByMessageId.delete(index);
-        pendingStreamingPresentationIds.delete(index);
-    }
 }
 
 /**

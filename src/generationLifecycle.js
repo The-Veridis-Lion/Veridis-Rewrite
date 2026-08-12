@@ -1,61 +1,3 @@
-const MESSAGE_INDEX_FIELDS = ['messageId', 'message_id', 'mesId', 'mesid', 'index'];
-
-function normalizeMessageIndex(value) {
-    if (Number.isInteger(value) && value >= 0) return value;
-    if (typeof value !== 'string' || !/^\d+$/.test(value.trim())) return -1;
-    const parsed = Number(value.trim());
-    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : -1;
-}
-
-export function parseStableMessagePayload(payload) {
-    const candidates = [];
-
-    const visit = (value, source, depth = 0) => {
-        if (depth > 3 || value === null || value === undefined) return;
-
-        const direct = normalizeMessageIndex(value);
-        if (direct >= 0) {
-            candidates.push({ messageIndex: direct, source });
-            return;
-        }
-
-        if (Array.isArray(value)) {
-            value.forEach((entry, index) => visit(entry, `${source}[${index}]`, depth + 1));
-            return;
-        }
-
-        if (typeof value !== 'object') return;
-        for (const field of MESSAGE_INDEX_FIELDS) {
-            if (!Object.prototype.hasOwnProperty.call(value, field)) continue;
-            const parsed = normalizeMessageIndex(value[field]);
-            if (parsed >= 0) candidates.push({ messageIndex: parsed, source: `${source}.${field}` });
-        }
-    };
-
-    const rootSource = typeof payload === 'number'
-        ? 'number'
-        : typeof payload === 'string'
-            ? 'numeric-string'
-            : 'payload';
-    visit(payload, rootSource);
-
-    if (candidates.length === 0) {
-        return { ok: false, messageIndex: -1, source: rootSource, reason: 'missing-message-index' };
-    }
-
-    const uniqueIndices = [...new Set(candidates.map((candidate) => candidate.messageIndex))];
-    if (uniqueIndices.length !== 1) {
-        return { ok: false, messageIndex: -1, source: rootSource, reason: 'ambiguous-message-index' };
-    }
-
-    return {
-        ok: true,
-        messageIndex: uniqueIndices[0],
-        source: candidates[0].source,
-        reason: '',
-    };
-}
-
 function isAssistantMessage(message) {
     return Boolean(message && typeof message === 'object'
         && message.is_user !== true
@@ -64,8 +6,6 @@ function isAssistantMessage(message) {
 
 export class GenerationLifecycleRegistry {
     constructor(options = {}) {
-        this.setTimeoutFn = options.setTimeoutFn || globalThis.setTimeout.bind(globalThis);
-        this.clearTimeoutFn = options.clearTimeoutFn || globalThis.clearTimeout.bind(globalThis);
         this.getCurrentChatId = typeof options.getCurrentChatId === 'function'
             ? options.getCurrentChatId
             : null;
@@ -75,7 +15,7 @@ export class GenerationLifecycleRegistry {
         this.onLog = typeof options.onLog === 'function' ? options.onLog : null;
         this.sequence = 0;
         this.active = null;
-        this.sessions = new Map();
+        this.pendingStreamingHostReceipts = [];
     }
 
     log(name, session, details = {}) {
@@ -101,20 +41,13 @@ export class GenerationLifecycleRegistry {
             chatRef: Array.isArray(chat) ? chat : null,
             messageId: null,
             messageRef: null,
-            internalMutationCount: 0,
             mode: String(mode || 'unknown'),
             phase: 'active',
-            finalSources: new Set(),
             requestState: 'idle',
             requestSource: '',
-            requestStarted: false,
             cancelReason: '',
-            timers: new Map(),
-            completedTimerPhases: new Set(),
-            externalActions: [],
         };
         this.active = session;
-        this.sessions.set(generationId, session);
         this.log('generation-created', session);
         return session;
     }
@@ -131,7 +64,8 @@ export class GenerationLifecycleRegistry {
     }
 
     getSession(generationId) {
-        return this.sessions.get(String(generationId || '')) || null;
+        const active = this.active;
+        return active?.generationId === generationId ? active : null;
     }
 
     reconcileMessageDeletion({ chatId, chat } = {}) {
@@ -162,7 +96,7 @@ export class GenerationLifecycleRegistry {
         return { cancel: false, reason: 'other-message-deleted', messageId: session.messageId };
     }
 
-    resolveMessage(payload, options = {}) {
+    bindMessage(messageId, options = {}) {
         const session = options.generationId
             ? this.getSession(options.generationId)
             : this.active;
@@ -179,55 +113,86 @@ export class GenerationLifecycleRegistry {
             return { ok: false, messageIndex: -1, source: '', reason: 'chat-reference-changed' };
         }
 
-        const parsed = parseStableMessagePayload(payload);
-        let messageIndex = parsed.messageIndex;
-        let resolutionSource = parsed.source;
-        if (!parsed.ok) {
-            if (options.allowBoundMessage === true && Number.isInteger(session.messageId)) {
-                messageIndex = session.messageId;
-                resolutionSource = 'active-generation-binding';
-            } else {
-                this.log('payload-rejected', session, { source: options.source || '', reason: parsed.reason });
-                return parsed;
-            }
+        if (!Number.isInteger(messageId) || messageId < 0) {
+            this.log('message-id-rejected', session, { source: options.source || '', reason: 'invalid-message-id' });
+            return { ok: false, messageIndex: -1, source: options.source || '', reason: 'invalid-message-id' };
         }
 
-        if (messageIndex < 0 || messageIndex >= chat.length) {
-            return { ok: false, messageIndex: -1, source: resolutionSource, reason: 'message-index-out-of-range' };
+        if (messageId >= chat.length) {
+            return { ok: false, messageIndex: -1, source: options.source || '', reason: 'message-index-out-of-range' };
         }
-        const message = chat[messageIndex];
+        const message = chat[messageId];
         if (!isAssistantMessage(message)) {
-            return { ok: false, messageIndex: -1, source: resolutionSource, reason: 'message-not-assistant' };
+            return { ok: false, messageIndex: -1, source: options.source || '', reason: 'message-not-assistant' };
         }
-        if (Number.isInteger(session.messageId) && session.messageId !== messageIndex) {
-            return { ok: false, messageIndex: -1, source: resolutionSource, reason: 'generation-message-mismatch' };
+        if (Number.isInteger(session.messageId) && session.messageId !== messageId) {
+            return { ok: false, messageIndex: -1, source: options.source || '', reason: 'generation-message-mismatch' };
         }
         if (session.messageRef && session.messageRef !== message) {
-            return { ok: false, messageIndex: -1, source: resolutionSource, reason: 'message-reference-changed' };
+            return { ok: false, messageIndex: -1, source: options.source || '', reason: 'message-reference-changed' };
         }
 
-        session.messageId = messageIndex;
+        session.messageId = messageId;
         session.messageRef = message;
-        this.log('payload-resolved', session, {
-            source: options.source || resolutionSource,
-            payloadSource: resolutionSource,
-        });
+        this.log('message-bound', session, { source: options.source || '' });
         return {
             ok: true,
-            messageIndex,
+            messageIndex: messageId,
             message,
             generationId: session.generationId,
             chatId: session.chatId,
-            source: resolutionSource,
+            source: options.source || '',
             reason: '',
         };
+    }
+
+    recordStreamingHostReceipt(generationId, messageId, messageRef) {
+        if (typeof generationId !== 'string'
+            || !generationId
+            || !Number.isInteger(messageId)
+            || messageId < 0
+            || !isAssistantMessage(messageRef)) {
+            return false;
+        }
+        this.pendingStreamingHostReceipts.push({
+            generationId,
+            messageId,
+            messageRef,
+        });
+        return true;
+    }
+
+    discardStreamingHostReceipt(generationId, messageId) {
+        if (typeof generationId !== 'string'
+            || !generationId
+            || !Number.isInteger(messageId)
+            || messageId < 0) {
+            return 0;
+        }
+        let discardedCount = 0;
+        for (let index = this.pendingStreamingHostReceipts.length - 1; index >= 0; index -= 1) {
+            const receipt = this.pendingStreamingHostReceipts[index];
+            if (receipt.generationId === generationId && receipt.messageId === messageId) {
+                this.pendingStreamingHostReceipts.splice(index, 1);
+                discardedCount += 1;
+            }
+        }
+        return discardedCount;
+    }
+
+    consumeStreamingHostReceipt(messageId, messageRef) {
+        if (!Number.isInteger(messageId) || messageId < 0 || !messageRef) return null;
+        const receiptIndex = this.pendingStreamingHostReceipts.findIndex((receipt) => (
+            receipt.messageId === messageId && receipt.messageRef === messageRef
+        ));
+        if (receiptIndex < 0) return null;
+        return this.pendingStreamingHostReceipts.splice(receiptIndex, 1)[0];
     }
 
     validate(generationId, options = {}) {
         const session = this.getSession(generationId);
         if (!session) return { ok: false, reason: 'generation-missing' };
         if (session.phase === 'cancelled') return { ok: false, reason: session.cancelReason || 'generation-cancelled' };
-        if (this.active !== session) return { ok: false, reason: 'generation-not-active' };
 
         const chatId = String(options.chatId || (this.getCurrentChatId ? this.getCurrentChatId() : '') || '');
         if (chatId && chatId !== session.chatId) return { ok: false, reason: 'chat-changed' };
@@ -250,7 +215,7 @@ export class GenerationLifecycleRegistry {
 
     acknowledgeInternalMessageMutation(generationId, options = {}) {
         const session = this.getSession(generationId);
-        if (!session || session.phase === 'cancelled' || this.active !== session) {
+        if (!session || session.phase === 'cancelled') {
             return { ok: false, reason: 'generation-inactive' };
         }
         const chatId = String(options.chatId || '');
@@ -286,72 +251,28 @@ export class GenerationLifecycleRegistry {
             return { ok: true, changed: false, reason: '', session, message };
         }
 
-        session.internalMutationCount += 1;
         this.log('internal-message-mutation-acknowledged', session, {
             source: String(options.source || 'internal-cleanse'),
             previousLength: beforeText.length,
             messageLength: afterText.length,
-            internalMutationCount: session.internalMutationCount,
         });
         return { ok: true, changed: true, reason: '', session, message };
     }
 
     markFinalSource(generationId, source) {
         const session = this.getSession(generationId);
-        if (!session || session.phase === 'cancelled') return false;
-        session.finalSources.add(String(source || 'unknown'));
+        if (!session || session.phase !== 'active') {
+            if (session) this.log('finalization-deduped', session, { source: String(source || 'unknown') });
+            return false;
+        }
         session.phase = 'finalizing';
         this.log('event-received', session, { source: String(source || 'unknown') });
         return true;
     }
 
-    scheduleTimer(generationId, phase, delay, callback, options = {}) {
-        const session = this.getSession(generationId);
-        if (!session || session.phase === 'cancelled') return { ok: false, reason: 'generation-inactive' };
-        const timerPhase = String(phase || 'timer');
-        if (session.timers.has(timerPhase) || session.completedTimerPhases.has(timerPhase)) {
-            this.log('timer-deduped', session, { timerPhase });
-            return { ok: false, reason: 'timer-already-scheduled' };
-        }
-
-        const handle = this.setTimeoutFn(() => {
-            session.timers.delete(timerPhase);
-            session.completedTimerPhases.add(timerPhase);
-            const validation = this.validate(generationId, options.validationOptions || {});
-            if (!validation.ok) {
-                this.log('timer-skipped', session, { timerPhase, reason: validation.reason });
-                if (typeof options.onSkip === 'function') options.onSkip(validation.reason, session);
-                return;
-            }
-            const customValidation = typeof options.validate === 'function'
-                ? options.validate(validation.session)
-                : { ok: true, reason: '' };
-            if (!customValidation?.ok) {
-                const reason = String(customValidation?.reason || 'custom-validation-failed');
-                this.log('timer-skipped', session, { timerPhase, reason });
-                if (typeof options.onSkip === 'function') options.onSkip(reason, session);
-                return;
-            }
-            this.log('timer-fired', session, { timerPhase });
-            callback(validation.session);
-        }, delay);
-        session.timers.set(timerPhase, handle);
-        this.log('timer-created', session, { timerPhase, delay: Number(delay) || 0 });
-        return { ok: true, handle, reason: '' };
-    }
-
-    clearTimers(session, reason = 'cleared') {
-        if (!session) return;
-        for (const [timerPhase, handle] of session.timers.entries()) {
-            this.clearTimeoutFn(handle);
-            this.log('timer-cleared', session, { timerPhase, reason });
-        }
-        session.timers.clear();
-    }
-
     claimRequest(generationId, source) {
         const session = this.getSession(generationId);
-        if (!session || session.phase === 'cancelled' || this.active !== session) {
+        if (!session || session.phase === 'cancelled') {
             return { ok: false, reason: 'generation-inactive' };
         }
         if (session.requestState !== 'idle') {
@@ -371,7 +292,6 @@ export class GenerationLifecycleRegistry {
         const session = this.getSession(generationId);
         if (!session || session.requestState !== 'scheduled') return false;
         session.requestState = 'running';
-        session.requestStarted = true;
         this.log('run-start', session, { source: session.requestSource });
         return true;
     }
@@ -392,9 +312,12 @@ export class GenerationLifecycleRegistry {
             this.log('fetch-failure-ignored', session, { source: session.requestSource, reason });
             return false;
         }
-        session.requestState = session.requestStarted ? 'failed' : 'idle';
+        const previousRequestState = session.requestState;
+        session.requestState = ['running', 'succeeded', 'failed'].includes(previousRequestState)
+            ? 'failed'
+            : 'idle';
         this.log('fetch-failure', session, { source: session.requestSource, reason });
-        if (!session.requestStarted) session.requestSource = '';
+        if (session.requestState === 'idle') session.requestSource = '';
         return true;
     }
 
@@ -412,21 +335,18 @@ export class GenerationLifecycleRegistry {
     }
 
     cancelActive(reason = 'cancelled') {
+        const normalizedReason = String(reason || 'cancelled');
+        if (normalizedReason === 'chat-changed' || normalizedReason === 'page-unload') {
+            this.pendingStreamingHostReceipts.length = 0;
+        }
         const session = this.active;
         if (!session) return false;
-        this.clearTimers(session, reason);
         session.phase = 'cancelled';
-        session.cancelReason = String(reason || 'cancelled');
+        session.cancelReason = normalizedReason;
         session.requestState = session.cancelReason === 'superseded-by-new-generation' ? 'superseded' : 'cancelled';
         this.log('task-cancelled', session, { reason: session.cancelReason });
         this.active = null;
         return true;
-    }
-
-    recordExternalAction(name, details = {}) {
-        const session = this.active;
-        if (!session) return;
-        session.externalActions.push({ name: String(name || ''), details });
     }
 }
 

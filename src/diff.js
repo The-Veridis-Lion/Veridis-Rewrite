@@ -1,8 +1,9 @@
 import { diffMetadataKey, extensionName, getAppContext, getDiffTrackedMessageLimit, runtimeState } from './state.js';
 import { logger } from './log.js';
-import { applyScopedReplacements, queueIncrementalChatSave } from './core.js';
+import { applyScopedReplacements } from './replacementEngine.js';
+import { queueIncrementalChatSave } from './chatPersistence.js';
 import { getMessageDomNode, resolveMessageIndexFromDomNode, isTrackableMessageDomNode } from './dom.js';
-import { getMessageDiffBranchKey, getMessageDiffMeta } from './messageMeta.js';
+import { clearAllMessageDiffMeta, getMessageDiffBranchKey, getMessageDiffMeta } from './messageMeta.js';
 
 /**
  * 将原始文本进行 HTML 转义，避免差异片段注入标签。
@@ -37,18 +38,13 @@ const diffRenderVersion = 6;
 function getDiffRulesSignature() {
     const { extension_settings } = getAppContext();
     const settings = extension_settings?.[extensionName] || {};
-    try {
-        return hashString(JSON.stringify({
-            rules: settings.rules || [],
-            scopeTags: settings.scopeTags || [],
-            scopeTagBuiltinDismissed: settings.scopeTagBuiltinDismissed || [],
-            scopeTagMode: settings.scopeTagMode || 'protect',
-            diffRenderVersion,
-        }));
-    } catch (err) {
-        logger.warn('规则签名计算失败，使用固定兜底', err);
-        return 'rules-unavailable';
-    }
+    return hashString(JSON.stringify({
+        rules: settings.rules || [],
+        scopeTags: settings.scopeTags || [],
+        scopeTagBuiltinDismissed: settings.scopeTagBuiltinDismissed || [],
+        scopeTagMode: settings.scopeTagMode || 'protect',
+        diffRenderVersion,
+    }));
 }
 
 export function isTrackableDiffMessage(msg) {
@@ -92,6 +88,16 @@ export function getLatestAssistantMessageIndices(chat, limit = getDiffTrackedMes
 export function getLatestTrackableDiffIndices(limit = getDiffTrackedMessageLimit()) {
     const { chat } = getAppContext();
     return getLatestAssistantMessageIndices(chat, limit);
+}
+
+function clearDiffMetadataOutsideRetainedFloors(chat, retainedSet) {
+    if (!Array.isArray(chat)) return false;
+    let changed = false;
+    for (let index = 0; index < chat.length; index++) {
+        if (retainedSet.has(index) || !isAssistantMessage(chat[index])) continue;
+        if (clearAllMessageDiffMeta(chat[index])) changed = true;
+    }
+    return changed;
 }
 
 export function captureDiffRawSource(index) {
@@ -188,11 +194,15 @@ export function restoreDiffStateFromChatMetadata() {
     const { chat, chat_metadata } = getAppContext();
     resetDiffRuntimeState();
 
+    const validLatest = new Set(getLatestAssistantMessageIndices(chat));
+    const clearedHistoricalMetadata = clearDiffMetadataOutsideRetainedFloors(chat, validLatest);
     const saved = chat_metadata?.[diffMetadataKey];
-    if (!saved || typeof saved !== 'object') return;
+    if (!saved || typeof saved !== 'object') {
+        if (clearedHistoricalMetadata) queueIncrementalChatSave();
+        return;
+    }
     let needsMetadataRewrite = saved.version !== 2;
 
-    const validLatest = new Set(getLatestAssistantMessageIndices(chat));
     const rawOrder = Array.isArray(saved.order) ? saved.order : [];
     const restoredOrder = rawOrder
         .map(v => Number(v))
@@ -212,6 +222,7 @@ export function restoreDiffStateFromChatMetadata() {
 
     runtimeState.trackedDiffMessageOrder = restoredOrder;
     if (needsMetadataRewrite) persistTrackedDiffState();
+    else if (clearedHistoricalMetadata) queueIncrementalChatSave();
     logger.debug(`从 chat_metadata 恢复差异状态: 还原了 ${restoredOrder.length} 条记录`);
 }
 
@@ -220,20 +231,16 @@ function removeTrackedIndex(index) {
 }
 
 function pushTrackedIndex(index) {
-    removeTrackedIndex(index);
-    runtimeState.trackedDiffMessageOrder.push(index);
-    while (runtimeState.trackedDiffMessageOrder.length > getDiffTrackedMessageLimit()) {
-        const evicted = runtimeState.trackedDiffMessageOrder.shift();
-        runtimeState.diffMessageStates.delete(evicted);
-        runtimeState.diffSnippetsCache.delete(evicted);
-        const oldNode = getMessageDomNode(evicted);
-        if (oldNode) ensureMessageDiffButton(evicted, oldNode);
-    }
+    syncTrackedIndicesToLatestAssistantMessages();
+    return runtimeState.trackedDiffMessageOrder.includes(index);
 }
 
-export function syncTrackedIndicesToLatestAssistantMessages() {
+export function syncTrackedIndicesToLatestAssistantMessages({ cleanupHistoricalResidue = false } = {}) {
+    const { chat } = getAppContext();
+    const previouslyTracked = runtimeState.trackedDiffMessageOrder;
     const latestIndices = getLatestTrackableDiffIndices();
     const latestSet = new Set(latestIndices);
+    let messageMetaChanged = false;
 
     for (const index of [...runtimeState.diffMessageStates.keys()]) {
         if (!latestSet.has(index)) runtimeState.diffMessageStates.delete(index);
@@ -244,6 +251,22 @@ export function syncTrackedIndicesToLatestAssistantMessages() {
     }
 
     runtimeState.trackedDiffMessageOrder = latestIndices;
+
+    for (const index of previouslyTracked) {
+        if (latestSet.has(index)) continue;
+        runtimeState.diffRawSourceCache.delete(index);
+        runtimeState.nonStreamingRawMessageCache.delete(index);
+        if (Array.isArray(chat) && clearAllMessageDiffMeta(chat[index])) messageMetaChanged = true;
+        const oldNode = getMessageDomNode(index);
+        if (oldNode) ensureMessageDiffButton(index, oldNode);
+    }
+
+    if (cleanupHistoricalResidue) {
+        clearDiffMetadataOutsideRetainedFloors(chat, latestSet);
+        persistTrackedDiffState();
+    } else if (messageMetaChanged) {
+        queueIncrementalChatSave();
+    }
 }
 
 export function isTrackedDiffMessage(index) {
@@ -276,7 +299,7 @@ export function markDiffComparisonPending(index, signature = '', options = {}) {
 
     if (!shouldReplace) return false;
 
-    pushTrackedIndex(index);
+    if (!pushTrackedIndex(index)) return false;
     runtimeState.diffSnippetsCache.delete(index);
     runtimeState.diffMessageStates.set(index, {
         status: 'pending',
@@ -306,6 +329,7 @@ export function writeReadyDiffCache(index, signature, cacheData = {}, options = 
 
     const existing = runtimeState.diffSnippetsCache.get(index);
     const existingHasRealDiff = hasRealDiffCache(index);
+    if (!pushTrackedIndex(index)) return false;
 
     if (options.preserveExistingRealDiff === true && existingHasRealDiff && !nextHasRealDiff && existing?.signature === signature) {
         runtimeState.diffMessageStates.set(index, {
@@ -313,13 +337,11 @@ export function writeReadyDiffCache(index, signature, cacheData = {}, options = 
             signature: signature || existing?.signature || '',
             updatedAt: Date.now(),
         });
-        pushTrackedIndex(index);
         if (options.persist !== false) persistTrackedDiffState();
         notifyDiffStateChanged('cache-preserved', index);
         return true;
     }
 
-    pushTrackedIndex(index);
     runtimeState.diffSnippetsCache.set(index, {
         snippets: nextSnippets,
         fullDiff: nextFullDiff,
@@ -342,7 +364,7 @@ export function primeLatestDiffButtons() {
     if (!Array.isArray(chat)) return;
 
     const latestIndices = getLatestTrackableDiffIndices();
-    runtimeState.trackedDiffMessageOrder = latestIndices;
+    syncTrackedIndicesToLatestAssistantMessages();
 
     for (const index of latestIndices) {
         const msg = chat[index];
@@ -994,12 +1016,6 @@ function buildDiffResultFromSource(rawText) {
     return buildDiffResultFromPair(rawText, applyScopedReplacements(rawText));
 }
 
-function sourceHasCurrentDiff(sourceText = '') {
-    if (typeof sourceText !== 'string') return false;
-    const displayText = extractDiffDisplayText(sourceText);
-    return applyScopedReplacements(displayText) !== displayText;
-}
-
 function buildNormalFullDiffBlocks(value = '') {
     return String(value)
         .split('\n')
@@ -1030,10 +1046,10 @@ function buildFullDiffBlocksFromOperations(operations = []) {
 
     for (const operation of operations) {
         if (!operation?.text) continue;
-        const pieces = String(operation.text).split(/(\n{2,})/);
+        const pieces = String(operation.text).split(/(\r?\n)/);
         for (const piece of pieces) {
             if (!piece) continue;
-            if (/^\n{2,}$/.test(piece)) {
+            if (/^\r?\n$/.test(piece)) {
                 if (operation.type !== 'equal' && currentParts.length > 0) {
                     currentParts.push(renderDiffOperation({ ...operation, text: piece }));
                     currentHasChange = true;
@@ -1064,20 +1080,10 @@ export function buildDiffSnippetsFromText(rawText) {
     return buildDiffResultFromSource(rawText);
 }
 
-function resolveDiffCacheSource(msg) {
-    const currentMes = typeof msg?.mes === 'string' ? msg.mes : '';
-    const diffMeta = getMessageDiffMeta(msg);
-    if (diffMeta?.lastCleanedMes && currentMes === diffMeta.lastCleanedMes) {
-        return diffMeta.originalMes;
-    }
-    return currentMes;
-}
-
 function resolveDiffCachePair(msg) {
-    const currentMes = typeof msg?.mes === 'string' ? msg.mes : '';
     const diffMeta = getMessageDiffMeta(msg);
 
-    if (diffMeta?.originalMes && diffMeta?.lastCleanedMes && diffMeta.originalMes !== diffMeta.lastCleanedMes) {
+    if (diffMeta && diffMeta.originalMes !== diffMeta.lastCleanedMes) {
         return {
             sourceMes: diffMeta.originalMes,
             cleanedMes: diffMeta.lastCleanedMes,
@@ -1085,16 +1091,9 @@ function resolveDiffCachePair(msg) {
             aiFinalMes: diffMeta.aiFinalMes || '',
             hasAiTrace: diffMeta.hasAiTrace === true,
             finalSource: diffMeta.finalSource || '',
-            hasStoredPair: true,
         };
     }
-
-    const sourceMes = resolveDiffCacheSource(msg);
-    return {
-        sourceMes,
-        cleanedMes: currentMes && currentMes !== sourceMes ? currentMes : applyScopedReplacements(sourceMes),
-        hasStoredPair: false,
-    };
+    return null;
 }
 
 export function getDiffComparisonForMessage(index) {
@@ -1121,10 +1120,27 @@ export function refreshDiffCacheIfStale(index) {
     const signature = computeMessageSignature(msg);
     const state = runtimeState.diffMessageStates.get(index);
     const cache = sanitizeCacheEntry(runtimeState.diffSnippetsCache.get(index));
-    const { sourceMes, cleanedMes, aiProgramMes, aiFinalMes, hasAiTrace, finalSource, hasStoredPair } = resolveDiffCachePair(msg);
-    const shouldHaveCurrentDiff = hasStoredPair
-        ? extractDiffDisplayText(sourceMes) !== extractDiffDisplayText(cleanedMes)
-        : sourceHasCurrentDiff(sourceMes);
+    const pair = resolveDiffCachePair(msg);
+    if (!pair) {
+        const cacheHasDiff = hasRenderedSnippetDiff(cache?.snippets) || hasRenderedFullDiff(cache?.fullDiff);
+        if (state?.status === 'ready'
+            && state.signature === signature
+            && cache?.signature === signature
+            && !cacheHasDiff) {
+            return false;
+        }
+        writeReadyDiffCache(index, signature, {
+            snippets: [],
+            fullDiff: '',
+            signature,
+        }, {
+            persist: false,
+        });
+        return true;
+    }
+
+    const { sourceMes, cleanedMes, aiProgramMes, aiFinalMes, hasAiTrace, finalSource } = pair;
+    const shouldHaveCurrentDiff = extractDiffDisplayText(sourceMes) !== extractDiffDisplayText(cleanedMes);
     if (state?.status === 'ready'
         && state.signature === signature
         && cache?.signature === signature
@@ -1261,7 +1277,6 @@ function cleanupStrayDiffButtons(trackedSet) {
 export function injectDiffButtons(targetIndices = []) {
     const latest = getLatestTrackableDiffIndices();
     const latestSet = new Set(latest);
-    runtimeState.trackedDiffMessageOrder = latest;
 
     const indices = Array.isArray(targetIndices) && targetIndices.length > 0
         ? [...new Set(targetIndices.filter(index => latestSet.has(index)))]

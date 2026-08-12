@@ -1,6 +1,6 @@
 import { defaultDeepCleanTimeoutSec, extensionName, getAppContext, runtimeState } from './state.js';
 import { logger } from './log.js';
-import { applyScopedReplacements, buildProcessors } from './core.js';
+import { applyScopedReplacements, buildProcessors } from './replacementEngine.js';
 import { showDeepCleanOverlay, updateDeepCleanOverlay } from './ui.js';
 import { isMessageAiFinal, isMessageAiFinalForBranch } from './messageMeta.js';
 import { markHostChatDirtyFromIndex, runPreferredSaveChat } from './platform.js';

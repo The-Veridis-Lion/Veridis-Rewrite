@@ -113,7 +113,7 @@ export const defaultSettings = {
     themeMode: "auto",
     logLevel: 2,  // 0=off, 1=error, 2=warn(default), 3=info, 4=debug
     skipUserMessages: false,
-    realtimeMaskMode: "simple-visual",
+    showComposerAiRewriteButton: false,
     zhVariantCompatEnabled: false,
     zhVariantCompatOptions: { tw: true, hk: true },
     zhVariantDictionary: {
@@ -180,18 +180,12 @@ export const runtimeState = {
     aiRewrite: {
         activeController: null,
         activeTaskKey: "",
-        activeTaskMeta: null,
         statusToast: null,
         statusTaskKey: "",
         statusDismissedTaskKey: "",
         debugEvents: [],
         criticalDebugEvents: [],
-        pendingKeys: new Set(),
-        startedKeys: new Set(),
-        appliedKeys: new Set(),
         cancelledKeys: new Set(),
-        readyNoticeKeys: new Set(),
-        streamingStartedMessageIndices: new Set(),
         runningTaskMetaByKey: new Map(),
         contentIdentityByGenerationId: new Map(),
         finalCleanseSequence: 0,

@@ -1,0 +1,740 @@
+/* PC/tablet cascade seal: keep this after every legacy responsive rule. */
+@media (min-width: 601px) {
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .field,
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-ai-field,
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-api-key-field {
+        min-width: 0 !important;
+        padding: 0 !important;
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        align-items: stretch !important;
+        gap: 5px !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .clean-row {
+        padding: 7px 0 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-ai-debug-field {
+        padding-top: 12px !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        align-items: center !important;
+        border-top: 1px solid var(--border) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-connection-head .blai-custom-checkbox.blai-square {
+        position: relative !important;
+        width: 38px !important;
+        min-width: 38px !important;
+        height: 21px !important;
+        min-height: 21px !important;
+        padding: 2px !important;
+        border: 0 !important;
+        border-radius: 999px !important;
+        background: var(--soft-2) !important;
+        box-sizing: border-box !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-connection-head .blai-custom-checkbox.blai-square::after {
+        content: "" !important;
+        position: absolute !important;
+        top: 2px !important;
+        left: 2px !important;
+        width: 17px !important;
+        height: 17px !important;
+        border-radius: 50% !important;
+        background: var(--panel) !important;
+        transition: transform .16s ease !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-connection-head input:checked + .blai-custom-checkbox.blai-square {
+        background: var(--accent) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-connection-head input:checked + .blai-custom-checkbox.blai-square::after {
+        transform: translateX(17px) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell {
+        grid-template-columns: 82px minmax(0, 1fr) !important;
+        grid-template-rows: 64px minmax(0, 1fr) !important;
+        background: var(--app-bg) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .windowbar {
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        width: auto !important;
+        height: 64px !important;
+        min-height: 64px !important;
+        padding: 0 22px !important;
+        grid-template-columns: 48px minmax(0, 1fr) auto 48px !important;
+        gap: 8px !important;
+        border-bottom: 1px solid var(--border) !important;
+        background: transparent !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-window-close,
+    #blai-purifier-popup.blai-app-shell .blai-toolbar-icon-btn {
+        width: 40px !important;
+        min-width: 40px !important;
+        max-width: 40px !important;
+        height: 40px !important;
+        min-height: 40px !important;
+        max-height: 40px !important;
+        border-radius: 9px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .desktop-title {
+        display: grid !important;
+        justify-items: center !important;
+        align-items: center !important;
+        gap: 2px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .desktop-title strong {
+        font-size: 16px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .desktop-title span {
+        color: var(--subtle) !important;
+        font-size: 10px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .desktop-actions .pill {
+        display: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .app-main {
+        display: contents !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rail {
+        grid-column: 1 !important;
+        grid-row: 1 / -1 !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        padding: 18px 10px 14px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+        border-right: 1px solid var(--border) !important;
+        background: var(--soft) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rail-btn {
+        grid-template-columns: 1fr !important;
+        justify-items: center !important;
+        min-height: 58px !important;
+        padding: 6px 3px !important;
+        gap: 4px !important;
+        border-radius: 11px !important;
+        font-size: 10px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rail-btn:first-of-type {
+        margin-top: auto !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rail-btn:last-of-type {
+        margin-bottom: auto !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .pages {
+        grid-column: 2 !important;
+        grid-row: 2 !important;
+        padding: 18px 20px !important;
+        background: var(--app-bg) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel {
+        width: min(100%, 1440px) !important;
+        margin: 0 auto !important;
+        padding: 0 2px 18px 0 !important;
+        gap: 14px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .panel {
+        padding: 16px !important;
+        gap: 11px !important;
+        border-radius: 12px !important;
+        box-shadow: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .panel-head {
+        min-height: 24px !important;
+        margin: 0 0 2px !important;
+        padding: 0 !important;
+    }
+
+    /* Home */
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel {
+        padding: 12px 16px !important;
+        grid-template-columns: minmax(250px, 320px) auto minmax(420px, 1fr) !important;
+        align-items: center !important;
+        gap: 12px 16px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel > .panel-head {
+        display: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel > .field-grid {
+        display: contents !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel .blai-preset-field {
+        display: block !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel .blai-preset-field > span {
+        display: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel .metric-grid {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0 !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel .metric {
+        min-height: 36px !important;
+        padding: 0 12px !important;
+        display: inline-flex !important;
+        flex-direction: row !important;
+        align-items: baseline !important;
+        gap: 3px !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel .metric + .metric {
+        border-left: 1px solid var(--border) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-actions {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 4px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rules-panel {
+        padding: 0 !important;
+        grid-template-rows: auto minmax(0, 1fr) !important;
+        gap: 12px !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rules-panel > .panel-head {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 20 !important;
+        background: var(--app-bg) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell.blai-is-batch-mode .rules-panel {
+        grid-template-rows: auto auto minmax(0, 1fr) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-batch-operations {
+        min-height: 0 !important;
+        align-self: start !important;
+        overflow: visible !important;
+        position: sticky !important;
+        top: 38px !important;
+        z-index: 19 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-batch-operations .batch-actions .text-btn {
+        display: inline-flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 6px !important;
+        background: transparent !important;
+        white-space: nowrap !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rules-panel .panel-actions {
+        width: auto !important;
+        grid-template-columns: repeat(4, minmax(118px, 1fr)) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-tags-container {
+        padding: 0 !important;
+        display: grid !important;
+        align-content: start !important;
+        grid-auto-rows: max-content !important;
+        gap: 14px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-tags-container .blai-card {
+        padding: 0 !important;
+        border-radius: 12px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-tags-container .blai-card-header {
+        min-height: 44px !important;
+        padding: 0 12px !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-tags-container .blai-card-body {
+        padding: 8px 12px 10px !important;
+        gap: 0 !important;
+        border-radius: 0 0 12px 12px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-tags-container .blai-rule-item {
+        min-height: 60px !important;
+        padding: 0 2px !important;
+        grid-template-columns: minmax(0, 2fr) 12px minmax(0, 1fr) !important;
+        gap: 8px !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-tags-container .blai-rule-source,
+    #blai-purifier-popup.blai-app-shell #blai-tags-container .blai-rule-target {
+        padding-top: 8px !important;
+        padding-bottom: 8px !important;
+        box-sizing: border-box !important;
+    }
+
+    /* AI */
+    #blai-purifier-popup.blai-app-shell .blai-ai-settings {
+        gap: 14px !important;
+        align-items: stretch !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-api-preset-actions {
+        grid-template-columns: repeat(3, 36px) !important;
+        gap: 6px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-api-preset-actions .text-btn {
+        width: 36px !important;
+        min-width: 36px !important;
+        padding: 0 !important;
+        background: transparent !important;
+        border-color: var(--border) !important;
+        color: var(--text) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-api-preset-actions .text-btn span {
+        display: none !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-key-row {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) 36px 36px !important;
+        gap: 6px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-ai-limit-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-ai-settings .edit-field.blai-ai-field {
+        padding: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-ai-prompt {
+        min-height: 112px !important;
+    }
+
+    /* Clean */
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .clean-page-shell {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 14px !important;
+        align-items: start !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .clean-control-panel {
+        height: auto !important;
+        align-self: start !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        grid-template-rows: auto auto auto !important;
+        align-content: start !important;
+        gap: 0 16px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .clean-mode-section {
+        grid-column: 1 / -1 !important;
+        padding-bottom: 14px !important;
+        display: grid !important;
+        gap: 10px !important;
+        border-bottom: 1px solid var(--border) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .cleanse-target-card {
+        grid-column: 1 / -1 !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-template-rows: auto auto auto !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .cleanse-target-head {
+        grid-column: 1 / -1 !important;
+        padding: 14px 0 10px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .cleanse-target-item {
+        padding: 12px 14px 12px 0 !important;
+        align-content: center !important;
+        border-top: 1px solid var(--border) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .cleanse-target-item:nth-child(3) {
+        padding-right: 0 !important;
+        padding-left: 14px !important;
+        border-left: 1px solid var(--border) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .clean-deep-section {
+        grid-column: 1 !important;
+        padding: 14px 0 0 !important;
+        border-top: 1px solid var(--border) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .deep-action-row {
+        grid-column: 2 !important;
+        align-self: end !important;
+        margin: 0 !important;
+        padding-top: 14px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] #blai-deep-clean-btn {
+        width: auto !important;
+        min-width: 92px !important;
+    }
+
+    /* Tools */
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .content-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 14px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .preset-management-panel {
+        grid-column: 1 / -1 !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .binding-tools-panel {
+        grid-column: auto !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .tools-combined-panel {
+        display: grid !important;
+        grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+        gap: 0 !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .tools-subsection {
+        display: grid !important;
+        align-content: center !important;
+        gap: 10px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .tools-subsection + .tools-subsection {
+        margin-top: 14px !important;
+        padding-top: 16px !important;
+        border-top: 1px solid var(--border) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .binding-actions-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    /* Dialogs */
+    .blai-modal-shell,
+    #blai-rule-transfer-modal,
+    #blai-diff-modal,
+    #blai-ai-prompt-modal {
+        padding: clamp(24px, 4vw, 44px) !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    #blai-ai-prompt-modal .blai-ai-prompt-modal-card {
+        width: min(760px, 100%) !important;
+        height: min(560px, calc(100dvh - clamp(48px, 8vw, 88px))) !important;
+        max-width: 760px !important;
+        max-height: calc(100dvh - clamp(48px, 8vw, 88px)) !important;
+        padding: 18px !important;
+        border-radius: 14px !important;
+    }
+
+    #blai-rule-edit-modal > .blai-edit-modal-card,
+    #blai-subrule-edit-modal > .blai-subrule-modal-card,
+    #blai-scope-tags-modal > .blai-scope-tags-card,
+    #blai-rule-transfer-modal > .blai-transfer-content {
+        width: min(720px, 100%) !important;
+        max-width: 720px !important;
+        max-height: calc(100dvh - clamp(48px, 8vw, 88px)) !important;
+        border-radius: 14px !important;
+    }
+
+}
+
+@media (min-width: 1025px) {
+    #blai-purifier-popup.blai-app-shell #blai-tags-container,
+    #blai-purifier-popup.blai-app-shell .blai-ai-settings {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (min-width: 601px) and (max-width: 1024px) {
+    #blai-purifier-popup.blai-app-shell {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        grid-template-columns: 70px minmax(0, 1fr) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rail {
+        padding-inline: 7px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .pages {
+        padding: 18px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-panel {
+        grid-template-columns: minmax(240px, 1fr) auto !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .overview-preset-actions {
+        grid-column: 1 / -1 !important;
+        justify-content: flex-start !important;
+        padding-top: 8px !important;
+        border-top: 0 !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rules-panel > .panel-head {
+        grid-template-columns: 1fr !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .rules-panel .panel-actions {
+        width: 100% !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell #blai-tags-container,
+    #blai-purifier-popup.blai-app-shell .blai-ai-settings,
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="clean"] .clean-page-shell,
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .content-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .preset-management-panel {
+        grid-column: auto !important;
+    }
+}
+
+/* 首页预设操作：紧凑图标文字按钮，不使用按钮外框。 */
+#blai-purifier-popup.blai-app-shell .overview-preset-actions > button {
+    min-height: 32px !important;
+    padding: 0 7px !important;
+    gap: 4px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--blai-text-secondary) !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+}
+
+#blai-purifier-popup.blai-app-shell .overview-preset-actions > button:hover,
+#blai-purifier-popup.blai-app-shell .overview-preset-actions > button:focus-visible {
+    background: transparent !important;
+    color: var(--blai-text-primary) !important;
+}
+
+#blai-purifier-popup.blai-app-shell .overview-preset-actions > button > i {
+    font-size: 14px !important;
+}
+
+#blai-purifier-popup.blai-app-shell .overview-preset-actions > button.blai-danger {
+    color: var(--blai-btn-danger) !important;
+}
+
+/* 模型温度建议：标签旁渐进展开，温度值优先于耗时与质量。 */
+#blai-purifier-popup.blai-app-shell .blai-temperature-field {
+    position: relative !important;
+    overflow: visible !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-label-row {
+    min-height: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 2px !important;
+    overflow: visible !important;
+    white-space: normal !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-label-row > label {
+    color: var(--blai-text-secondary) !important;
+    font: inherit !important;
+    font-weight: 600 !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide {
+    display: inline-flex !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide > summary {
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    margin: -10px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #d89b44 !important;
+    color: oklch(0.78 0.16 82) !important;
+    background: transparent !important;
+    cursor: pointer !important;
+    list-style: none !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide > summary::-webkit-details-marker {
+    display: none !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide > summary:hover,
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide[open] > summary {
+    background: color-mix(in oklch, oklch(0.78 0.16 82) 15%, transparent) !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide > summary:focus-visible {
+    outline: 2px solid #d89b44 !important;
+    outline: 2px solid oklch(0.78 0.16 82) !important;
+    outline-offset: -6px !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide > summary i {
+    font-size: 15px !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide-card {
+    width: min(520px, calc(100vw - 48px)) !important;
+    position: absolute !important;
+    top: calc(100% + 6px) !important;
+    left: 0 !important;
+    z-index: 30 !important;
+    padding: 6px 12px 10px !important;
+    border: 1px solid var(--blai-border-color) !important;
+    border-radius: 10px !important;
+    background: var(--blai-bg-container) !important;
+    box-shadow: 0 12px 28px color-mix(in srgb, black 18%, transparent) !important;
+    color: var(--blai-text-primary) !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide-row {
+    min-width: 0 !important;
+    min-height: 40px !important;
+    display: grid !important;
+    grid-template-columns: minmax(92px, 0.8fr) auto minmax(150px, 1.35fr) !important;
+    align-items: center !important;
+    gap: 10px !important;
+    border-bottom: 1px solid var(--blai-divider-color) !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide-row b {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    font-size: 12px !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide-row strong {
+    color: var(--blai-text-primary) !important;
+    font-size: 17px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide-row strong em {
+    margin-left: 2px !important;
+    color: var(--blai-text-secondary) !important;
+    font-size: 9px !important;
+    font-style: normal !important;
+    font-weight: 650 !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide-row small {
+    min-width: 0 !important;
+    overflow: visible !important;
+    color: var(--blai-text-secondary) !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    line-height: 1.35 !important;
+    text-align: right !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide-card > p {
+    margin: 9px 0 0 !important;
+    color: var(--blai-text-secondary) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    line-height: 1.5 !important;
+}
+
+#blai-purifier-popup.blai-app-shell .blai-temperature-guide-card > p strong {
+    color: var(--blai-text-primary) !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+}
+
+@media (max-width: 600px) {
+    #blai-purifier-popup.blai-app-shell .blai-temperature-guide-card {
+        width: min(420px, calc(100vw - 36px)) !important;
+        padding-inline: 10px !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-temperature-guide-row {
+        min-height: 54px !important;
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        gap: 2px 10px !important;
+        padding: 6px 0 !important;
+    }
+
+    #blai-purifier-popup.blai-app-shell .blai-temperature-guide-row small {
+        grid-column: 1 / -1 !important;
+        text-align: left !important;
+    }
+}

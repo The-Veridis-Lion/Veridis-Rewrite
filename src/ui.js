@@ -2,7 +2,6 @@ import { defaultAiRewriteSettings, extensionName, getAppContext, runtimeState, m
 import { logger } from './log.js';
 import { COT_SCOPE_TAG_DISPLAY_TEXT, DEFAULT_SCOPE_TAG_GROUP_ID, DEFAULT_SCOPE_TAG_GROUP_NAME, buildPresetEntry, deepClone, getCurrentCharacterContext, getCurrentChatCompletionPresetName, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetBindingResolution, getPresetBindingUsage, getPresetForCharacter, getPresetRules, isCotScopeTagEntry, isRuleActivationWarningEnabled, mergeScopeTagsWithBuiltins, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList, parseInputToWords } from './utils.js';
 import { performGlobalCleanse } from './core.js';
-import { performDeepCleanse } from './cleanse.js';
 
 function safeHtml(str) {
     return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -721,7 +720,7 @@ export function updateDeepCleanOverlay(progressRatio, statusText) {
     if (statusText) $('#blai-loading-status').text(statusText);
 }
 
-export function showConfirmModal(onConfirm = () => performDeepCleanse()) {
+export function showConfirmModal(onConfirm) {
     const $modal = $('#blai-confirm-modal');
     const $confirmBtn = $('#blai-modal-confirm');
     const $cancelBtn = $('#blai-modal-cancel');
@@ -1012,28 +1011,6 @@ export function applyCharacterPresetBinding(force = false, options = {}) {
     refreshCharacterBindingUI();
 }
 
-export function syncRealtimeMaskModeUI() {
-    const { extension_settings } = getAppContext();
-    const settings = extension_settings?.[extensionName] || {};
-    const mode = settings.realtimeMaskMode === 'simple-visual' ? 'simple-visual' : 'tavern-helper';
-    const label = mode === 'simple-visual' ? '简单视觉' : '实时渲染';
-    const note = mode === 'simple-visual'
-        ? '生成中只处理消息显示层文本，不重建代码块或控件。'
-        : '生成中只处理酒馆助手显示层文本，不重建代码块或控件。';
-
-    $('#blai-realtime-mask-label').text(label);
-    $('#blai-realtime-mask-note').text(note);
-    $('#blai-responsive-model-pill').text(mode === 'simple-visual' ? '简单视觉' : '实时渲染');
-    $('#blai-realtime-mask-label, #blai-responsive-model-pill').attr('title', note);
-    $('.blai-realtime-mask-option').each(function() {
-        const active = String($(this).attr('data-mode') || '') === mode;
-        $(this)
-            .toggleClass('active', active)
-            .toggleClass('is-active', active)
-            .attr('aria-pressed', String(active));
-    });
-}
-
 export function updateToolbarUI() {
     const { extension_settings } = getAppContext();
     const settings = extension_settings[extensionName];
@@ -1058,7 +1035,6 @@ export function updateToolbarUI() {
     $('#blai-responsive-preset-title, #blai-responsive-mobile-preset-title, #blai-bind-active-preset').text(activePresetLabel);
     $('#blai-rule-group-count').text(String(rules.length));
     $('#blai-ai-rule-count').text(String(aiRuleCount));
-    syncRealtimeMaskModeUI();
     refreshCharacterBindingUI();
 }
 

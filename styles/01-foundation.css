@@ -1,0 +1,905 @@
+/* ==========================================
+   屏蔽词净化助手 CSS (模块化与卡片美化版)
+========================================== */
+
+/* --- 1. 局部变量与主题声明 --- */
+#blai-purifier-popup,
+.blai-modal-shell,
+#blai-scope-tag-editor-modal,
+#blai-rule-transfer-modal,
+#blai-diff-modal,
+.blai-toast,
+#blai-loading-overlay {
+    --blai-bg-body: var(--SmartThemeBlurTintColor, #ffffff);
+    --blai-bg-container: var(--SmartThemeBlurTintColor, rgba(255, 255, 255, 0.96));
+    --blai-text-main: var(--SmartThemeBodyColor, #333333);
+    --blai-text-sub: color-mix(in srgb, var(--SmartThemeBodyColor, #333333) 78%, transparent);
+    --blai-text-mute: color-mix(in srgb, var(--SmartThemeBodyColor, #333333) 58%, transparent);
+    --blai-bg-button: color-mix(in srgb, var(--SmartThemeBodyColor, #333333) 8%, transparent);
+    --blai-border-color-base: var(--SmartThemeBorderColor, #f0f0f0);
+    --blai-border-dash: color-mix(in srgb, var(--SmartThemeBorderColor, #dddddd) 78%, transparent);
+    --blai-bg-card: color-mix(in srgb, var(--SmartThemeBodyColor, #333333) 4%, transparent);
+    --blai-card-border: var(--SmartThemeBorderColor, #eeeeee);
+    --blai-tag-bg: #c15555;
+    --blai-btn-danger: #d15656;
+    --blai-checkbox-bg: var(--SmartThemeInputBackground, #ffffff);
+    --blai-checkbox-border: var(--SmartThemeBorderColor, #cccccc);
+    --blai-checkbox-checked: #f19070;
+    --blai-batch-checkbox-checked: #c15555;
+    --blai-divider-color: color-mix(in srgb, var(--SmartThemeBorderColor, #bbbbbb) 70%, transparent);
+    --blai-icon-color: color-mix(in srgb, var(--SmartThemeBodyColor, #333333) 76%, transparent);
+    --blai-btn-secondary-color: var(--SmartThemeBodyColor, #333333);
+    --blai-batch-bar-bg: color-mix(in srgb, var(--SmartThemeBodyColor, #333333) 12%, transparent);
+
+    --blai-accent-color: var(--SmartThemeQuoteColor, rgba(148, 0, 211, 0.7));
+    --blai-accent-color-hover: color-mix(in srgb, var(--blai-accent-color) 82%, white 18%);
+    --blai-danger-color: var(--SmartThemeEmColor, #ff4757);
+    --blai-deep-clean-bg: #d9534f;
+    --blai-background-popup: var(--SmartThemeBlurTintColor, rgba(255, 255, 255, 0.96));
+    --blai-background-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #343a40) 8%, transparent);
+    --blai-background-tertiary: color-mix(in srgb, var(--SmartThemeBodyColor, #343a40) 12%, transparent);
+    --blai-border-color: var(--SmartThemeBorderColor, #dee2e6);
+    --blai-text-primary: var(--SmartThemeBodyColor, #343a40);
+    --blai-text-secondary: color-mix(in srgb, var(--SmartThemeBodyColor, #343a40) 68%, transparent);
+    --blai-input-bg: var(--SmartThemeInputBackground, rgba(255, 255, 255, 0.94));
+    --blai-overlay-bg: color-mix(in srgb, black 58%, transparent);
+    --blai-success-color: var(--SmartThemeUnderlineColor, #0ca678);
+    --blai-danger-soft: color-mix(in srgb, var(--blai-danger-color) 16%, transparent);
+    --blai-success-soft: color-mix(in srgb, var(--blai-success-color) 16%, transparent);
+    --blai-panel-shadow: 0 10px 30px color-mix(in srgb, black 18%, transparent);
+    --blai-chip-text: var(--SmartThemeBlurTintColor, #ffffff);
+    --blai-title-size: 23px;
+    --blai-title-weight: 650;
+    --blai-title-gap: 8px;
+    --blai-control-height: 40px;
+    --blai-control-gap: 8px;
+    --blai-top-section-gap: 6px;
+    --blai-control-radius: 10px;
+    --blai-header-hit-size: 26px;
+    --blai-header-icon-size: 16px;
+}
+
+#blai-purifier-popup[data-blai-theme="light"],
+.blai-modal-shell[data-blai-theme="light"],
+#blai-scope-tag-editor-modal[data-blai-theme="light"],
+#blai-rule-transfer-modal[data-blai-theme="light"],
+#blai-diff-modal[data-blai-theme="light"],
+.blai-toast[data-blai-theme="light"],
+#blai-loading-overlay[data-blai-theme="light"] {
+    --blai-bg-body: #ffffff; --blai-bg-container: #ffffff; --blai-text-main: #333333; --blai-text-sub: #555555;
+    --blai-text-mute: #888888; --blai-bg-button: #f0f1f3; --blai-border-color-base: #e9ecef; --blai-border-dash: #dee2e6;
+    --blai-bg-card: #ffffff; --blai-card-border: #e9ecef; --blai-tag-bg: #c15555; --blai-btn-danger: #d15656;
+    --blai-checkbox-bg: #ffffff; --blai-checkbox-border: #cccccc; --blai-checkbox-checked: #f19070;
+    --blai-batch-checkbox-checked: #c15555; --blai-divider-color: #bbbbbb; --blai-icon-color: #555555;
+    --blai-btn-secondary-color: #333333; --blai-batch-bar-bg: #e8eaed;
+    --blai-background-popup: #ffffff; --blai-background-secondary: #f4f6f8; --blai-background-tertiary: #e9ecef;
+    --blai-border-color: #dee2e6; --blai-text-primary: #212529; --blai-text-secondary: #495057;
+    --blai-input-bg: #ffffff; --blai-overlay-bg: rgba(0,0,0,0.5);
+}
+
+#blai-purifier-popup[data-blai-theme="dark"],
+.blai-modal-shell[data-blai-theme="dark"],
+#blai-scope-tag-editor-modal[data-blai-theme="dark"],
+#blai-rule-transfer-modal[data-blai-theme="dark"],
+#blai-diff-modal[data-blai-theme="dark"],
+.blai-toast[data-blai-theme="dark"],
+#blai-loading-overlay[data-blai-theme="dark"] {
+    --blai-bg-body: #121212; --blai-bg-container: #1e1e1e; --blai-text-main: #e0e0e0; --blai-text-sub: #b0b0b0;
+    --blai-text-mute: #777777; --blai-bg-button: #2d2d2d; --blai-border-color-base: #333333; --blai-border-dash: #444444;
+    --blai-bg-card: #252525; --blai-card-border: #333333; --blai-tag-bg: #a34847; --blai-btn-danger: #b34444;
+    --blai-checkbox-bg: #2d2d2d; --blai-checkbox-border: #555555; --blai-checkbox-checked: #d17556;
+    --blai-batch-checkbox-checked: #a34847; --blai-divider-color: #666666; --blai-icon-color: #b0b0b0;
+    --blai-btn-secondary-color: #e0e0e0; --blai-batch-bar-bg: #383838;
+    --blai-background-popup: #1e1e1e; --blai-background-secondary: #2d2d2d; --blai-background-tertiary: #383838;
+    --blai-border-color: #444444; --blai-text-primary: #e0e0e0; --blai-text-secondary: #b0b0b0;
+    --blai-input-bg: #252525; --blai-overlay-bg: rgba(0,0,0,0.7);
+}
+
+/* --- 2. 基础通用组件 --- */
+#blai-wand-btn { cursor: pointer !important; }
+.blai-extension-settings-entry .inline-drawer-content {
+    padding: 8px 0 12px !important;
+}
+.blai-extension-open-btn {
+    width: min(260px, 100%) !important;
+    min-height: 38px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+}
+
+/* === Responsive preview layout wired to the real plugin DOM === */
+#blai-purifier-popup {
+    --app-bg: var(--blai-bg-body);
+    --panel: var(--blai-bg-card);
+    --soft: var(--blai-background-secondary);
+    --soft-2: var(--blai-background-tertiary);
+    --text: var(--blai-text-primary);
+    --subtle: var(--blai-text-secondary);
+    --border: var(--blai-card-border);
+    --accent: var(--blai-accent-color);
+    --accent-2: #b95f45;
+    --accent-3: #d89b44;
+    --accent-ink: var(--blai-chip-text);
+    height: min(626px, calc(100dvh - 32px)) !important;
+    overflow: hidden !important;
+    grid-template-rows: 34px minmax(0, 1fr);
+}
+
+#blai-purifier-popup[data-blai-theme="dark"] {
+    --app-bg: #171918;
+    --panel: #20231f;
+    --soft: #262a23;
+    --soft-2: #2d3129;
+    --text: #f1eadb;
+    --subtle: #a6a897;
+    --border: rgba(241, 234, 219, 0.14);
+    --accent: #d89b44;
+    --accent-2: #72b8b2;
+    --accent-3: #b95f45;
+    --accent-ink: #201a10;
+    background:
+        linear-gradient(180deg, #1b1d1a 0%, #121412 100%),
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 28px) !important;
+}
+
+
+#blai-purifier-popup .windowbar {
+    min-height: 34px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    font-weight: 900;
+    background: rgba(255, 255, 255, 0.28);
+}
+
+#blai-purifier-popup[data-blai-theme="dark"] .windowbar {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+
+#blai-purifier-popup .dot {
+    width: 7px !important;
+    min-width: 7px !important;
+    height: 7px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    display: inline-block !important;
+    opacity: 0.82;
+    background: currentColor !important;
+    box-shadow: none !important;
+}
+
+
+
+
+#blai-purifier-popup .desktop-title,
+#blai-purifier-popup .phone-title {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    text-align: center;
+}
+
+#blai-purifier-popup .desktop-title strong,
+#blai-purifier-popup .phone-title strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    line-height: 1.1;
+}
+
+#blai-purifier-popup .desktop-title span,
+#blai-purifier-popup .phone-title span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--subtle);
+    font-size: 10px;
+    font-weight: 850;
+}
+
+
+#blai-purifier-popup svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: block;
+}
+
+
+#blai-purifier-popup .rail {
+    min-height: 0;
+    border-right: 1px solid var(--border);
+    padding: 12px 10px;
+    display: grid;
+    align-content: start;
+    gap: 8px;
+}
+
+#blai-purifier-popup .brand {
+    display: grid;
+    gap: 4px;
+    padding: 2px 4px 10px;
+}
+
+#blai-purifier-popup .brand strong {
+    font-size: 13px;
+    line-height: 1.2;
+}
+
+#blai-purifier-popup .brand span {
+    color: var(--subtle);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+#blai-purifier-popup .rail-btn {
+    min-height: 38px;
+    border-radius: 12px;
+    padding: 0 10px;
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    align-items: center;
+    gap: 8px;
+    color: var(--subtle);
+    background: transparent;
+    border: 0;
+    font-size: 12px;
+    font-weight: 900;
+    text-align: left;
+}
+
+#blai-purifier-popup .rail-btn.active {
+    color: var(--accent-ink);
+    background: var(--accent);
+}
+
+
+#blai-purifier-popup .page-panel {
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+    display: none;
+    gap: 10px;
+    align-content: start;
+    scrollbar-width: none;
+}
+
+#blai-purifier-popup .page-panel::-webkit-scrollbar,
+#blai-tags-container::-webkit-scrollbar,
+#blai-purifier-popup .managed-tag-list::-webkit-scrollbar,
+#blai-edit-subrules-container::-webkit-scrollbar,
+#blai-purifier-popup .blai-scope-tags-list::-webkit-scrollbar {
+    display: none;
+}
+
+#blai-edit-subrules-container,
+#blai-purifier-popup .blai-scope-tags-list {
+    scrollbar-width: none !important;
+}
+
+#blai-purifier-popup .page-panel.active {
+    display: grid;
+}
+
+
+#blai-purifier-popup[data-blai-theme="dark"] .panel {
+    box-shadow: none;
+}
+
+
+#blai-purifier-popup .panel-head {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+#blai-purifier-popup .panel-head strong {
+    min-width: 0;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#blai-purifier-popup .panel-head em,
+#blai-purifier-popup .pill {
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    display: inline-grid;
+    place-items: center;
+    color: var(--accent);
+    background: transparent;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+#blai-purifier-popup .panel-actions,
+#blai-purifier-popup .row-actions,
+#blai-purifier-popup .batch-actions {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+#blai-purifier-popup .row-actions.three {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#blai-purifier-popup .batch-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#blai-purifier-popup .batch-actions .text-btn {
+    min-width: 0;
+    width: 100%;
+}
+
+@media (max-width: 600px) {
+    #blai-purifier-popup .batch-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+
+#blai-purifier-popup .metric {
+    min-width: 0;
+    min-height: 58px;
+    border-radius: 12px;
+    border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    background: var(--soft);
+    padding: 8px;
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    color: var(--text);
+    text-align: left;
+}
+
+#blai-purifier-popup .metric b {
+    font-size: 17px;
+    line-height: 1;
+}
+
+#blai-purifier-popup .metric span {
+    color: var(--subtle);
+    font-size: 10px;
+    font-weight: 850;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#blai-purifier-popup .field-grid {
+    display: grid;
+    gap: 7px;
+}
+
+@media (min-width: 601px) {
+}
+
+#blai-purifier-popup .field,
+#blai-purifier-popup .tool-row,
+#blai-purifier-popup .clean-row {
+    min-height: 38px;
+    min-width: 0;
+    border-radius: 12px;
+    padding: 8px 10px;
+    background: var(--soft);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    color: var(--text);
+    text-align: left;
+}
+
+#blai-purifier-popup .tool-row,
+#blai-purifier-popup .clean-row {
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.38);
+}
+
+#blai-purifier-popup[data-blai-theme="dark"] .tool-row,
+#blai-purifier-popup[data-blai-theme="dark"] .clean-row {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+#blai-purifier-popup .field span,
+#blai-purifier-popup .row-main strong {
+    min-width: 0;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#blai-purifier-popup .field small {
+    min-width: 0;
+    color: var(--subtle);
+    font-size: 10px;
+    font-weight: 850;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#blai-purifier-popup .text-btn,
+#blai-purifier-popup .mini-btn,
+#blai-purifier-popup .round-btn {
+    min-height: 28px;
+    border-radius: 10px;
+    padding: 0 10px;
+    display: inline-grid;
+    place-items: center;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 900;
+    white-space: nowrap;
+    box-shadow: none !important;
+    transition:
+        background-color .16s ease,
+        border-color .16s ease,
+        color .16s ease,
+        opacity .16s ease,
+        transform .12s ease !important;
+}
+
+#blai-purifier-popup .round-btn {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    padding: 0;
+}
+
+#blai-purifier-popup .text-btn.accent,
+#blai-purifier-popup .mini-btn.accent {
+    color: var(--accent-ink);
+    background: var(--accent);
+    border-color: transparent;
+}
+
+#blai-purifier-popup button:not(:disabled),
+#blai-purifier-popup .blai-proxy-field:not(:disabled),
+.blai-modal-shell button:not(:disabled) {
+    cursor: pointer !important;
+}
+
+#blai-purifier-popup .text-btn:not(.accent):hover,
+#blai-purifier-popup .mini-btn:not(.accent):hover,
+#blai-purifier-popup .round-btn:hover,
+#blai-purifier-popup .field.blai-proxy-field:not(.is-disabled):hover {
+    background: var(--soft-2) !important;
+    border-color: color-mix(in srgb, var(--accent) 32%, var(--border) 68%) !important;
+}
+
+#blai-purifier-popup button:not(:disabled):active,
+#blai-purifier-popup .field.blai-proxy-field:not(.is-disabled):active,
+.blai-modal-shell button:not(:disabled):active {
+    transform: translateY(1px) scale(0.985) !important;
+}
+
+#blai-purifier-popup button:focus-visible,
+#blai-purifier-popup select:focus-visible,
+#blai-purifier-popup input:focus-visible,
+#blai-purifier-popup textarea:focus-visible,
+.blai-modal-shell button:focus-visible,
+.blai-modal-shell input:focus-visible,
+.blai-modal-shell textarea:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 62%, transparent) !important;
+    outline-offset: 2px !important;
+}
+
+#blai-purifier-popup button:disabled,
+#blai-purifier-popup .field.blai-proxy-field.is-disabled,
+.blai-modal-shell button:disabled {
+    opacity: .48 !important;
+    cursor: not-allowed !important;
+    filter: saturate(.72) !important;
+}
+
+#blai-purifier-popup .field.blai-proxy-field.is-active {
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--border) 58%) !important;
+    background: color-mix(in srgb, var(--accent) 14%, var(--soft) 86%) !important;
+}
+
+#blai-purifier-popup[data-blai-theme="dark"] .text-btn.accent,
+#blai-purifier-popup[data-blai-theme="dark"] .mini-btn.accent,
+#blai-purifier-popup[data-blai-theme="dark"] .rail-btn.active {
+    color: #19140c;
+}
+
+#blai-purifier-popup .blai-select-box,
+#blai-purifier-popup .blai-input,
+#blai-purifier-popup .blai-textarea,
+#blai-purifier-popup .text-box,
+#blai-purifier-popup .setting-input {
+    min-width: 0;
+    border-radius: 10px !important;
+    border: 1px solid var(--border) !important;
+    background: rgba(255, 255, 255, 0.45) !important;
+    color: var(--text) !important;
+    box-shadow: none !important;
+}
+
+#blai-purifier-popup[data-blai-theme="dark"] .blai-input,
+#blai-purifier-popup[data-blai-theme="dark"] .blai-textarea,
+#blai-purifier-popup[data-blai-theme="dark"] .text-box,
+#blai-purifier-popup[data-blai-theme="dark"] .setting-input {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+
+#blai-purifier-popup .setting-input {
+    width: 72px !important;
+    min-height: 24px !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+    line-height: 1 !important;
+    font-weight: 900 !important;
+    text-align: right;
+}
+
+#blai-purifier-popup .setting-unit {
+    color: var(--subtle);
+    font-size: 10px;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+
+#blai-purifier-popup .edit-field > span {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 900;
+}
+
+
+#blai-purifier-popup .list {
+    display: grid;
+    gap: 7px;
+    min-height: 0;
+}
+
+
+#blai-purifier-popup.blai-is-batch-mode #blai-batch-operations {
+    display: grid !important;
+}
+
+#blai-purifier-popup:not(.blai-is-batch-mode) #blai-batch-operations {
+    display: none !important;
+}
+
+#blai-purifier-popup .rule-manager {
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--soft);
+}
+
+#blai-purifier-popup .rule-manager-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+#blai-purifier-popup .selection-status strong,
+#blai-purifier-popup .selection-hint {
+    color: var(--subtle);
+    font-size: 10px;
+    font-weight: 900;
+}
+
+#blai-purifier-popup .segmented {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    padding: 5px;
+    border-radius: 13px;
+    background: var(--soft);
+}
+
+
+#blai-purifier-popup .segmented button.is-active,
+#blai-purifier-popup .segmented button.active {
+    color: var(--accent-ink);
+    background: var(--accent);
+}
+
+#blai-purifier-popup .cleanse-target-head,
+#blai-purifier-popup .row-main {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+}
+
+
+
+#blai-purifier-popup .blai-scope-tags-hint,
+#blai-purifier-popup .clean-row p,
+#blai-purifier-popup .tool-row p,
+#blai-purifier-popup .cleanse-target-item p {
+    margin: 0;
+    color: var(--subtle);
+    font-size: 10px;
+    line-height: 1.45;
+    font-weight: 700;
+}
+
+#blai-purifier-popup .managed-tag-list {
+    min-height: 38px;
+    max-height: 224px;
+    overflow: auto;
+    scrollbar-width: none;
+    border-radius: 12px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    display: grid;
+    align-content: start;
+    gap: 8px;
+}
+
+#blai-purifier-popup .blai-scope-tag-group {
+    min-width: 0;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.34);
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+}
+
+#blai-purifier-popup[data-blai-theme="dark"] .blai-scope-tag-group {
+    background: rgba(255, 255, 255, 0.035);
+}
+
+#blai-purifier-popup .blai-scope-tag-chip {
+    min-width: 0;
+    min-height: 40px;
+    border-radius: 10px;
+    background: var(--soft);
+    padding: 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+}
+
+
+
+
+#blai-purifier-popup .zh-compact-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+#blai-purifier-popup .zh-chip {
+    min-height: 27px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--subtle);
+    font-size: 10px;
+    font-weight: 650;
+    white-space: nowrap;
+    flex: 0 1 auto;
+}
+
+#blai-purifier-popup .zh-chip strong {
+    color: var(--text);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+#blai-purifier-popup .blai-hidden-real-button {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+#blai-purifier-popup .bottom-nav {
+    margin: 0 12px 12px;
+    min-height: 58px;
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.76);
+    display: none;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 5px;
+}
+
+#blai-purifier-popup[data-blai-theme="dark"] .bottom-nav {
+    background: rgba(255, 255, 255, 0.045);
+}
+
+#blai-purifier-popup .nav-item {
+    min-width: 0;
+    border-radius: 13px;
+    color: var(--subtle);
+    background: transparent;
+    border: 0;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+#blai-purifier-popup .nav-item.active {
+    color: var(--accent);
+    background: var(--soft);
+}
+
+@media (min-width: 601px) and (max-width: 1024px) {
+}
+
+@media (max-width: 600px) {
+
+    #blai-purifier-popup .text-btn {
+        min-height: 32px;
+        padding: 0 8px;
+    }
+
+
+}
+.blai-legacy-warning {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+    border: 1px solid color-mix(in srgb, var(--blai-danger-color) 42%, var(--blai-border-color)) !important;
+    border-radius: 8px !important;
+    background: color-mix(in srgb, var(--blai-danger-color) 13%, var(--blai-background-popup)) !important;
+    color: var(--blai-text-primary) !important;
+}
+.blai-legacy-warning[hidden] {
+    display: none !important;
+}
+.blai-legacy-warning-icon {
+    flex: 0 0 auto !important;
+    color: var(--blai-danger-color) !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+}
+.blai-legacy-warning-main {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+.blai-legacy-warning-title {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    line-height: 1.25 !important;
+}
+.blai-legacy-warning-text {
+    margin-top: 2px !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+    color: var(--blai-text-secondary) !important;
+}
+.blai-legacy-warning-action {
+    flex: 0 0 auto !important;
+    min-height: 32px !important;
+    padding: 0 12px !important;
+    border: none !important;
+    border-radius: 7px !important;
+    background: var(--blai-danger-color) !important;
+    color: var(--blai-chip-text) !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+}
+.blai-legacy-warning-action:hover {
+    filter: brightness(1.05) !important;
+}
+.blai-legacy-target-flash {
+    animation: blaiLegacyTargetFlash 1.8s ease-out;
+}
+@keyframes blaiLegacyTargetFlash {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--SmartThemeEmColor, #ff4757) 58%, transparent); }
+    35% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--SmartThemeEmColor, #ff4757) 38%, transparent); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+}
+@media (max-width: 600px) {
+    .blai-legacy-warning {
+        align-items: flex-start !important;
+        flex-wrap: wrap !important;
+    }
+    .blai-legacy-warning-action {
+        width: 100% !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+}
+.blai-input, .blai-textarea {
+    width: 100% !important; padding: 14px 16px !important; border-radius: 10px !important;
+    border: 1px solid var(--blai-border-color) !important; background: var(--blai-input-bg) !important;
+    color: var(--blai-text-primary) !important; font-size: 18px !important; box-sizing: border-box !important;
+    outline: none !important; font-family: inherit !important;
+}
+.blai-textarea { resize: vertical !important; }
+.blai-input:focus, .blai-textarea:focus { border-color: var(--blai-accent-color) !important; }
+.blai-input.blai-invalid, .blai-textarea.blai-invalid { box-shadow: inset 0 0 0 1px #e11d48 !important; }
+.blai-field-error {
+    display: none !important;
+    margin-top: 6px !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+    color: #e11d48 !important;
+}
+.blai-field-error.is-visible { display: block !important; }
+
+.blai-icon-btn {
+    padding: 0 10px !important; min-height: 30px !important; min-width: 30px !important;
+    font-size: 13px !important; line-height: 1 !important; border-radius: 8px !important;
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    cursor: pointer !important; color: var(--blai-text-primary) !important;
+}
+.blai-icon-btn:hover { background: transparent !important; transform: scale(1.15); color: var(--blai-accent-color) !important; }
+
+/* 徽章 */
+.blai-badge {
+    display: inline-flex !important; align-items: center !important; justify-content: center !important;
+    padding: 4px 10px !important; border-radius: 4px !important; font-size: 14px !important;
+    margin-right: 12px !important; font-weight: 800 !important; color: white !important;
+    min-width: 50px !important; line-height: 1 !important; margin-top: 3px !important; flex-shrink: 0 !important;
+}
+
+
+.blai-badge-compact { font-size: 10px !important; padding: 2px 5px !important; min-width: auto !important; margin-right: 6px !important; margin-top: 0 !important; }
+
