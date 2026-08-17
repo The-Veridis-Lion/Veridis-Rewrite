@@ -234,9 +234,7 @@ export function buildProcessors(options = {}) {
             if (!sub || typeof sub !== 'object' || sub.enabled === false) continue;
             const rewriteMode = sub.rewriteMode === 'ai' ? 'ai' : 'program';
             const includeInData = rewriteMode === 'program';
-            const includeInVisual = includeInData
-                || (rewriteMode === 'ai' && settings.aiRewrite?.streamingRoughPreview !== false);
-            if (!includeInData && !includeInVisual) continue;
+            const includeInVisual = true;
 
             const mode = sub.mode || 'text';
             const targets = Array.isArray(sub.targets) ? sub.targets : [];

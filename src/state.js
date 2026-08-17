@@ -67,7 +67,6 @@ export const defaultAiRewriteSettings = {
     maxItemsDefault20Applied: true,
     maxContextChars: 12000,
     maxRewriteCharsPerItem: 2000,
-    streamingRoughPreview: true,
     xmlScopeTag: "content",
     protectXmlComments: false,
     promptTemplate: defaultAiRewritePrompt,

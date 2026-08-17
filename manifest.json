@@ -7,6 +7,6 @@
     "js": "index.js",
     "css": "style.css",
     "author": "Assistant",
-    "version": "2.6.2",
+    "version": "2.6.3",
     "description": "在关键词净化基础上增加可选 OpenAI 兼容局部改写。"
 }

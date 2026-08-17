@@ -54,7 +54,7 @@ function normalizeAiRewriteSettings(settings) {
     }
     next.enabled = next.enabled === true;
     next.enabledDefaultApplied = next.enabledDefaultApplied === true;
-    next.streamingRoughPreview = next.streamingRoughPreview !== false;
+    delete next.streamingRoughPreview;
     next.baseUrl = String(next.baseUrl || '').trim();
     next.apiKey = String(next.apiKey || '');
     next.model = String(next.model || '').trim();

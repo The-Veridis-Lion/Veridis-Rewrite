@@ -326,7 +326,6 @@ function buildAiRewriteVersionToken(settings) {
             maxItemsPerRequest: aiSettings.maxItemsPerRequest,
             maxContextChars: aiSettings.maxContextChars,
             maxRewriteCharsPerItem: aiSettings.maxRewriteCharsPerItem,
-            streamingRoughPreview: aiSettings.streamingRoughPreview !== false,
             xmlScopeTag: normalizeOptionalXmlTagNameInput(aiSettings.xmlScopeTag, 'content'),
             protectXmlComments: aiSettings.protectXmlComments === true,
             promptTemplate: aiSettings.promptTemplate || '',
