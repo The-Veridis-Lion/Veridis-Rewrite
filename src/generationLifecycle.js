@@ -132,9 +132,13 @@ export class GenerationLifecycleRegistry {
             return { ok: false, messageIndex: -1, source: options.source || '', reason: 'message-reference-changed' };
         }
 
+        const wasAlreadyBound = session.messageId === messageId
+            && session.messageRef === message;
         session.messageId = messageId;
         session.messageRef = message;
-        this.log('message-bound', session, { source: options.source || '' });
+        if (!wasAlreadyBound) {
+            this.log('message-bound', session, { source: options.source || '' });
+        }
         return {
             ok: true,
             messageIndex: messageId,

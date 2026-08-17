@@ -1,31 +1,35 @@
 
-        <div id="blai-purifier-popup" class="blai-app-shell scheme-a" data-blai-theme="auto" style="display:none;">
-            <div class="windowbar">
-                <button id="blai-close-btn" type="button" class="blai-window-close" title="关闭" aria-label="关闭">×</button>
-                <button id="blai-theme-toggle" type="button" class="text-btn blai-toolbar-icon-btn blai-theme-action" title="切换主题" aria-label="切换主题"><i class="fas fa-sun" aria-hidden="true"></i></button>
-                <div class="desktop-title"><strong id="blai-responsive-title" data-title>首页</strong><span id="blai-responsive-preset-title">临时规则</span></div>
-                <div class="desktop-actions">
-                    <span id="blai-responsive-model-pill" class="pill">AI 改写</span>
-                    <button id="blai-preset-save" type="button" class="text-btn accent blai-toolbar-icon-btn" title="保存" aria-label="保存"><i class="fas fa-save" aria-hidden="true"></i></button>
+        <div id="blai-purifier-popup" class="blai-app-shell scheme-a" data-theme="auto" style="display:none;">
+            <header class="blai-global-header">
+                <button id="blai-theme-toggle" type="button" class="blai-global-icon-button blai-theme-button" title="切换主题" aria-label="切换主题">
+                    <i class="fas fa-circle-half-stroke" aria-hidden="true"></i>
+                </button>
+                <div class="blai-global-heading">
+                    <strong id="blai-responsive-title" data-title>首页</strong>
+                    <span id="blai-responsive-preset-title">临时规则</span>
                 </div>
-            </div>
-            <div class="phone-top">
-                <button type="button" class="round-btn" data-blai-click-proxy="#blai-theme-toggle" aria-label="切换主题"><i class="fas fa-sun" aria-hidden="true"></i></button>
-                <div class="phone-title"><strong data-title>首页</strong><span id="blai-responsive-mobile-preset-title">临时规则</span></div>
-                <div class="phone-actions">
-                    <button type="button" class="round-btn" data-blai-click-proxy="#blai-preset-save" aria-label="保存"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg></button>
-                    <button type="button" class="round-btn" data-blai-click-proxy="#blai-close-btn" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                <div class="blai-global-actions">
+                    <span id="blai-responsive-model-pill" class="blai-global-model-label">AI 改写</span>
+                    <button id="blai-preset-save" type="button" class="blai-global-icon-button" title="保存当前规则集" aria-label="保存当前规则集">
+                        <i class="fas fa-floppy-disk" aria-hidden="true"></i>
+                    </button>
+                    <button id="blai-close-btn" type="button" class="blai-global-icon-button" title="关闭" aria-label="关闭">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </button>
                 </div>
-            </div>
+                <p
+                    id="blai-responsive-description"
+                    class="blai-global-description"
+                >管理规则集、查看统计并编辑规则。</p>
+            </header>
             <div class="app-main">
                 <nav class="rail">
                     <div class="brand" aria-label="Veridis Rewrite"><strong>VR</strong></div>
                     <button type="button" class="rail-btn active" data-page-target="overview"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/></svg><span>首页</span></button><button type="button" class="rail-btn" data-page-target="ai"><svg viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M5 8h14"/></svg><span>AI</span></button><button type="button" class="rail-btn" data-page-target="clean"><svg viewBox="0 0 24 24"><path d="M4 14c4-9 12-9 16 0"/><path d="M8 14c2 4 6 4 8 0"/><path d="M12 4v3M5 7l2 2M19 7l-2 2"/></svg><span>净化</span></button><button type="button" class="rail-btn" data-page-target="tools"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4z"/></svg><span>工具</span></button>
                 </nav>
                 <div class="pages">
-                    <section class="page-panel active" data-page="overview">
-                        <div class="panel overview-preset-panel">
-                            <div class="panel-head"><strong>当前预设</strong></div>
+                    <section class="page-panel active blai-home-page" data-page="overview">
+                        <section class="blai-home-dataset" aria-label="数据集信息与操作">
                             <div id="blai-legacy-purifier-warning" class="blai-legacy-warning" role="status" aria-live="polite" hidden>
                                 <div class="blai-legacy-warning-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></div>
                                 <div class="blai-legacy-warning-main">
@@ -34,282 +38,426 @@
                                 </div>
                                 <button id="blai-close-legacy-plugin" type="button" class="blai-legacy-warning-action">关闭旧插件</button>
                             </div>
-                            <div class="field-grid">
-                                <label class="field blai-preset-field">
-                                    <span>净化预设</span>
-                                    <select id="blai-preset-select" class="blai-select-box"></select>
-                                </label>
-                                <div class="metric-grid">
-                                    <div class="metric"><b id="blai-rule-group-count">0</b><span>规则组</span></div>
-                                    <div class="metric"><b id="blai-ai-rule-count">0</b><span>AI 项</span></div>
-                                    <button id="blai-ai-api-check" class="metric api-metric" data-state="idle" type="button"><b id="blai-ai-api-status">拉取</b><span>模型列表</span></button>
+                            <div class="blai-home-dataset-row">
+                                <div class="blai-home-dataset-summary">
+                                    <label class="blai-home-preset-field">
+                                        <span class="blai-visually-hidden">当前规则集</span>
+                                        <select id="blai-preset-select" class="blai-home-preset-select" aria-label="当前规则集"></select>
+                                    </label>
+                                    <div class="blai-home-metrics" aria-label="规则集统计">
+                                        <span class="blai-home-metric"><b id="blai-rule-group-count">0</b> 规则组</span>
+                                        <span class="blai-home-metric"><b id="blai-ai-rule-count">0</b> AI 项</span>
+                                        <span class="blai-home-metric"><b id="blai-ai-enabled-status">AI 启用中</b></span>
+                                    </div>
+                                </div>
+                                <div class="blai-home-dataset-actions" aria-label="规则集操作">
+                                    <button type="button" data-blai-click-proxy="#blai-preset-new"><i class="fas fa-plus" aria-hidden="true"></i><span>新建</span></button>
+                                    <button type="button" data-blai-click-proxy="#blai-preset-rename"><i class="fas fa-pen-to-square" aria-hidden="true"></i><span>重命名</span></button>
+                                    <button type="button" data-blai-click-proxy="#blai-preset-import"><i class="fas fa-file-import" aria-hidden="true"></i><span>导入</span></button>
+                                    <button type="button" data-blai-click-proxy="#blai-preset-export"><i class="fas fa-file-export" aria-hidden="true"></i><span>导出</span></button>
+                                    <button type="button" class="blai-home-danger-action" data-blai-click-proxy="#blai-preset-delete"><i class="fas fa-trash" aria-hidden="true"></i><span>删除</span></button>
                                 </div>
                             </div>
-                            <div class="overview-preset-actions" aria-label="预设操作">
-                                <button type="button" data-blai-click-proxy="#blai-preset-new"><i class="fas fa-plus"></i><span>新建</span></button>
-                                <button type="button" data-blai-click-proxy="#blai-preset-rename"><i class="fas fa-pen-to-square"></i><span>重命名</span></button>
-                                <button type="button" data-blai-click-proxy="#blai-preset-import"><i class="fas fa-download"></i><span>导入</span></button>
-                                <button type="button" data-blai-click-proxy="#blai-preset-export"><i class="fas fa-upload"></i><span>导出</span></button>
-                                <span class="overview-action-divider" aria-hidden="true"></span>
-                                <button type="button" class="blai-danger" data-blai-click-proxy="#blai-preset-delete"><i class="fas fa-trash"></i><span>删除</span></button>
-                            </div>
+                        </section>
+
+                        <div class="blai-home-sticky-controls">
+                            <section class="blai-home-toolbar" aria-label="规则集工具栏">
+                                <h2>规则集</h2>
+                                <div class="blai-home-toolbar-actions">
+                                    <button id="blai-open-new-rule-btn" type="button" class="blai-home-toolbar-button blai-home-toolbar-button-primary"><i class="fas fa-plus" aria-hidden="true"></i><span>添加</span></button>
+                                    <button id="blai-preset-search" type="button" class="blai-home-toolbar-button"><i class="fas fa-magnifying-glass" aria-hidden="true"></i><span>搜索</span></button>
+                                    <button id="blai-batch-toggle" type="button" class="blai-home-toolbar-button" aria-expanded="false" aria-controls="blai-batch-operations"><i class="fas fa-list-check" aria-hidden="true"></i><span>编辑分组</span></button>
+                                    <button id="blai-rule-sort-toggle" type="button" class="blai-home-toolbar-button" title="反转当前分组顺序" aria-label="反转当前分组顺序"><i class="fas fa-arrows-up-down" aria-hidden="true"></i><span>反序排序</span></button>
+                                </div>
+                            </section>
+
+                            <section class="blai-home-batch-panel" id="blai-batch-operations" aria-label="批量编辑面板">
+                                <div class="blai-home-batch-heading">
+                                    <strong>批量编辑模式</strong>
+                                    <span>规则集</span>
+                                </div>
+                                <div class="blai-home-batch-actions">
+                                    <button type="button" id="blai-btn-select-all" aria-label="全选"><i class="far fa-square-check" aria-hidden="true"></i><span>全选</span></button>
+                                    <button type="button" id="blai-btn-select-invert" aria-label="反选"><i class="far fa-square-minus" aria-hidden="true"></i><span>反选</span></button>
+                                    <button type="button" id="blai-btn-batch-transfer" aria-label="复制或转移"><i class="far fa-copy" aria-hidden="true"></i><span>复制 / 转移</span></button>
+                                    <button type="button" class="blai-home-danger-action" id="blai-btn-batch-delete" aria-label="删除选中规则组"><i class="far fa-trash-can" aria-hidden="true"></i><span>删除</span></button>
+                                </div>
+                            </section>
                         </div>
-                        <div class="panel rules-panel">
-                            <div class="panel-head">
-                                <strong>规则合集</strong>
-                                <div class="panel-actions">
-                                    <button id="blai-open-new-rule-btn" type="button" class="text-btn accent"><i class="fas fa-folder-plus"></i><span>添加</span></button>
-                                    <button id="blai-preset-search" type="button" class="text-btn"><i class="fas fa-magnifying-glass"></i><span>搜索</span></button>
-                                    <button id="blai-batch-toggle" type="button" class="text-btn"><i class="fas fa-list-check"></i><span>编辑分组</span></button>
-                                    <button id="blai-rule-sort-toggle" type="button" class="text-btn" title="反转当前分组顺序" aria-label="反转当前分组顺序"><i class="fas fa-arrows-up-down"></i><span>反序排序</span></button>
-                                </div>
-                            </div>
-                            <div class="rule-manager" id="blai-batch-operations">
-                                <div class="rule-manager-row">
-                                    <div class="selection-status"><strong>批量编辑模式</strong></div>
-                                    <span class="selection-hint">规则合集</span>
-                                </div>
-                                <div class="batch-actions">
-                                    <button class="text-btn" id="blai-btn-select-all"><i class="far fa-check-square"></i> 全选</button>
-                                    <button class="text-btn" id="blai-btn-select-invert"><i class="fas fa-minus-square"></i> 反选</button>
-                                    <button class="text-btn" id="blai-btn-batch-transfer"><i class="fas fa-copy"></i> 复制 / 转移</button>
-                                    <button class="text-btn blai-danger" id="blai-btn-batch-delete"><i class="fas fa-trash"></i> 删除</button>
-                                </div>
-                            </div>
-                            <div id="blai-tags-container" class="list blai-card-list"></div>
-                        </div>
+
+                        <section class="blai-home-rules" aria-label="规则卡片列表">
+                            <div id="blai-home-rule-grid" class="blai-home-rule-grid"></div>
+                        </section>
                     </section>
                     <section class="page-panel" data-page="ai">
-                        <div id="blai-ai-settings" class="content-grid blai-ai-settings">
-                            <div class="panel">
-                                <div class="panel-head blai-ai-connection-head">
-                                    <strong>API连接配置</strong>
-                                    <label class="blai-checkbox-label">
-                                        <input type="checkbox" id="blai-ai-enabled">
-                                        <span class="blai-custom-checkbox blai-square"></span>
-                                        <span>启用改写</span>
-                                    </label>
-                                </div>
-                                <div class="field-grid">
-                                    <div class="blai-ai-comment-protection-row">
-                                        <label class="blai-checkbox-label" title="开启后，content 等 XML 标签中的 HTML/XML 注释会原样保留，不参与 AI 改写">
-                                            <input type="checkbox" id="blai-ai-protect-comments">
-                                            <span class="blai-custom-checkbox blai-square"></span>
-                                            <span>HTML/XML 注释保护</span>
-                                        </label>
-                                        <small>保留 &lt;!-- ... --&gt;</small>
-                                    </div>
-                                    <label class="field blai-ai-field blai-ai-api-preset-field">
-                                        <span>API 预设</span>
-                                        <span class="blai-ai-api-preset-row">
-                                            <select id="blai-ai-api-preset" class="blai-select-box" aria-label="API 预设"></select>
-                                            <span class="blai-ai-api-preset-actions">
-                                                <button type="button" id="blai-ai-api-preset-new" class="text-btn" title="将当前 API 配置另存为新预设"><i class="fas fa-plus"></i><span>新建</span></button>
-                                                <button type="button" id="blai-ai-api-preset-save" class="text-btn" title="保存当前 API 配置"><i class="fas fa-save"></i><span>保存</span></button>
-                                                <button type="button" id="blai-ai-api-preset-delete" class="text-btn" title="删除当前 API 预设"><i class="fas fa-trash"></i><span>删除</span></button>
-                                            </span>
-                                        </span>
-                                    </label>
-                                    <label class="field blai-ai-field"><span>API 地址</span><input type="text" id="blai-ai-base-url" class="blai-input" placeholder="https://api.openai.com/v1"></label>
-                                    <label class="field blai-ai-field blai-api-key-field">
-                                        <span>API 密钥</span>
-                                        <span class="blai-ai-key-row">
-                                            <input type="password" id="blai-ai-api-key" class="blai-input" autocomplete="off">
-                                            <button type="button" id="blai-ai-api-key-reveal" class="mini-btn" title="显示 / 隐藏 API Key"><i class="fas fa-eye"></i></button>
-                                            <button type="button" id="blai-ai-api-key-clear" class="mini-btn" title="清空 API Key"><i class="fas fa-eraser"></i></button>
-                                        </span>
-                                    </label>
-                                    <label class="field blai-ai-field blai-ai-model-field">
-                                        <span>模型选择</span>
-                                        <span class="blai-ai-model-row">
-                                            <select id="blai-ai-model" class="blai-select-box blai-ai-model-select"></select>
-                                            <button type="button" id="blai-ai-model-fetch" class="text-btn" title="通过酒馆助手拉取模型，不发送聊天消息">拉取模型</button>
-                                        </span>
-                                    </label>
-                                    <label class="field blai-ai-field"><span>XML 标签</span><input type="text" id="blai-ai-xml-scope" class="blai-input" placeholder="留空则在消息结束后处理整条回复"><small>填写标签可在闭合后提前请求；留空则等待整条回复生成完成。</small></label>
-                                </div>
-                                <div class="clean-row"><p>请求通过 TavernHelper.generateRaw 发送，但固定使用这里配置的 Base URL、API Key 和模型，不占用酒馆当前主模型。</p></div>
-                                <div id="blai-ai-http-warning" class="clean-row blai-ai-warning" hidden><p>非本地 HTTP 地址不安全，建议使用 HTTPS 或本地代理。</p></div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-head"><strong>生成设定</strong></div>
-                                <div class="field"><span>提示词组合</span><small>全局 + 单条改写要求</small></div>
-                                <div class="field-grid blai-ai-limit-grid">
-                                    <div class="field blai-temperature-field">
-                                        <span class="blai-temperature-label-row">
-                                            <label for="blai-ai-temperature">温度</label>
-                                            <details class="blai-temperature-guide">
-                                                <summary title="查看模型推荐温度" aria-label="查看模型推荐温度"><i class="fas fa-exclamation-circle" aria-hidden="true"></i></summary>
-                                                <div class="blai-temperature-guide-card">
-                                                    <div class="blai-temperature-guide-row"><b>dsv4f</b><strong>1.00 <em>推荐温度</em></strong><small>平均时间 92.13s · 质量 98.6</small></div>
-                                                    <div class="blai-temperature-guide-row"><b>gemini3f</b><strong>0.95 <em>推荐温度</em></strong><small>平均时间 76.33s · 质量 97.4</small></div>
-                                                    <div class="blai-temperature-guide-row"><b>gemini3.1p</b><strong>0.45 <em>推荐温度</em></strong><small>平均时间 29.05s · 质量 99.1</small></div>
-                                                    <div class="blai-temperature-guide-row"><b>gemini3.6f</b><strong>0.90 <em>推荐温度</em></strong><small>平均时间 22.04s · 质量 98.9</small></div>
-                                                    <p><strong>dsv4f 和 gemini3f 改写较慢，推荐使用 gemini3.1p 和 gemini3.6f。</strong>其他模型请自行测试合适温度。</p>
-                                                </div>
-                                            </details>
-                                        </span>
-                                        <span class="setting-value"><input type="number" id="blai-ai-temperature" class="setting-input blai-input" min="0" max="2" step="0.05"></span>
-                                    </div>
-                                    <label class="field" title="控制候选 token 的累计概率范围，越低越保守"><span>Top P</span><span class="setting-value"><input type="number" id="blai-ai-top-p" class="setting-input blai-input" min="0" max="1" step="0.01"></span></label>
-                                    <label class="field" title="只保留概率最高的前 K 个 token；0 表示不额外限制"><span>Top K</span><span class="setting-value"><input type="number" id="blai-ai-top-k" class="setting-input blai-input" min="0" max="500" step="1"></span></label>
-                                    <label class="field" title="降低模型重复已经出现过的词；标准范围为 -2 到 2"><span>频率惩罚</span><span class="setting-value"><input type="number" id="blai-ai-frequency-penalty" class="setting-input blai-input" min="-2" max="2" step="0.01"></span></label>
-                                    <label class="field" title="降低模型谈论已经出现过的主题；标准范围为 -2 到 2"><span>存在惩罚</span><span class="setting-value"><input type="number" id="blai-ai-presence-penalty" class="setting-input blai-input" min="-2" max="2" step="0.01"></span></label>
-                                    <label class="field" title="部分兼容接口支持；1 表示不额外启用"><span>重复惩罚</span><span class="setting-value"><input type="number" id="blai-ai-repetition-penalty" class="setting-input blai-input" min="1" max="2" step="0.01"></span></label>
-                                    <label class="field" title="发送给接口的最大输出 token；0 表示使用接口默认值"><span>最大输出 token</span><span class="setting-value"><input type="number" id="blai-ai-max-tokens" class="setting-input blai-input" min="0" max="65536" step="1"></span></label>
-                                    <label class="field"><span>超时</span><span class="setting-value"><input type="number" id="blai-ai-timeout" class="setting-input blai-input" min="1" max="120" step="1"><em class="setting-unit">s</em></span></label>
-                                    <label class="field"><span>失败重试</span><span class="setting-value"><input type="number" id="blai-ai-max-retries" class="setting-input blai-input" min="0" max="5" step="1"><em class="setting-unit">次</em></span></label>
-                                    <label class="field"><span>单次条目</span><span class="setting-value"><input type="number" id="blai-ai-max-items" class="setting-input blai-input" min="1" step="1"><em class="setting-unit">条</em></span></label>
-                                    <label class="field"><span>上下文</span><span class="setting-value"><input type="number" id="blai-ai-max-context" class="setting-input blai-input" min="1000" max="60000" step="500"><em class="setting-unit">字</em></span></label>
-                                    <label class="field"><span>输出上限</span><span class="setting-value"><input type="number" id="blai-ai-max-rewrite" class="setting-input blai-input" min="50" max="10000" step="50"><em class="setting-unit">字</em></span></label>
-                                </div>
-                                <div class="edit-field blai-ai-field blai-ai-prompt-card">
-                                    <div class="blai-ai-prompt-card-head">
-                                        <div class="blai-ai-prompt-copy">
-                                            <span>全局 Prompt template</span>
-                                            <small>用于所有 AI 改写项；单条规则可在编辑弹窗里追加专用要求。</small>
+                        <div id="blai-ai-settings" class="blai-ai-settings">
+                            <div class="blai-ai-columns">
+                                <main class="blai-ai-primary-column">
+                                    <section class="blai-ai-section" aria-labelledby="blai-ai-connection-title">
+                                        <header class="blai-ai-section-header">
+                                            <div>
+                                                <h2 id="blai-ai-connection-title">API 连接</h2>
+                                                <p>连接到兼容的模型后端。</p>
+                                            </div>
+                                            <label class="blai-ai-switch">
+                                                <input type="checkbox" id="blai-ai-enabled">
+                                                <span class="blai-ai-switch-track" aria-hidden="true"></span>
+                                                <span>启用改写</span>
+                                            </label>
+                                        </header>
+                                        <div class="blai-ai-connection-grid">
+                                            <label class="blai-ai-control blai-ai-api-preset-field">
+                                                <span class="blai-ai-control-label">API 预设</span>
+                                                <span class="blai-ai-compound-control">
+                                                    <select id="blai-ai-api-preset" class="blai-select-box" aria-label="API 预设"></select>
+                                                    <span class="blai-ai-api-preset-actions">
+                                                        <button type="button" id="blai-ai-api-preset-new" class="blai-ai-icon-button" title="将当前 API 配置另存为新预设" aria-label="将当前 API 配置另存为新预设"><i class="fas fa-plus" aria-hidden="true"></i></button>
+                                                        <button type="button" id="blai-ai-api-preset-save" class="blai-ai-icon-button" title="保存当前 API 配置" aria-label="保存当前 API 配置"><i class="fas fa-save" aria-hidden="true"></i></button>
+                                                        <button type="button" id="blai-ai-api-preset-edit" class="blai-ai-icon-button" title="重命名当前 API 预设" aria-label="重命名当前 API 预设"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                                                        <button type="button" id="blai-ai-api-preset-delete" class="blai-ai-icon-button" title="删除当前 API 预设" aria-label="删除当前 API 预设"><i class="fas fa-trash" aria-hidden="true"></i></button>
+                                                    </span>
+                                                </span>
+                                            </label>
+                                            <label class="blai-ai-control">
+                                                <span class="blai-ai-control-label">Base URL</span>
+                                                <input type="text" id="blai-ai-base-url" class="blai-input" placeholder="https://api.openai.com/v1">
+                                            </label>
+                                            <label class="blai-ai-control blai-api-key-field">
+                                                <span class="blai-ai-control-label">API Key</span>
+                                                <span class="blai-ai-key-control">
+                                                    <input type="password" id="blai-ai-api-key" class="blai-input" autocomplete="off">
+                                                    <span class="blai-ai-key-actions">
+                                                        <button type="button" id="blai-ai-api-key-reveal" class="blai-ai-embedded-button" title="显示 / 隐藏 API Key" aria-label="显示 / 隐藏 API Key"><i class="fas fa-eye" aria-hidden="true"></i></button>
+                                                        <button type="button" id="blai-ai-api-key-clear" class="blai-ai-embedded-button" title="清空 API Key" aria-label="清空 API Key"><i class="fas fa-eraser" aria-hidden="true"></i></button>
+                                                    </span>
+                                                </span>
+                                            </label>
+                                            <label class="blai-ai-control blai-ai-model-field">
+                                                <span class="blai-ai-control-heading">
+                                                    <span class="blai-ai-control-label">模型</span>
+                                                    <small id="blai-ai-connection-status" class="blai-ai-connection-status" data-state="idle">未检测</small>
+                                                </span>
+                                                <span class="blai-ai-compound-control blai-ai-model-row">
+                                                    <select id="blai-ai-model" class="blai-select-box blai-ai-model-select"></select>
+                                                    <button type="button" id="blai-ai-model-fetch" class="blai-ai-icon-button" title="刷新模型列表" aria-label="刷新模型列表"><i class="fas fa-rotate" aria-hidden="true"></i></button>
+                                                </span>
+                                            </label>
+                                            <label class="blai-ai-control blai-ai-xml-control">
+                                                <span class="blai-ai-control-label">XML 处理触发范围</span>
+                                                <input type="text" id="blai-ai-xml-scope" class="blai-input" placeholder="留空则在消息结束后处理整条回复">
+                                                <span class="blai-ai-helper-row">
+                                                <small>指定标签闭合后即刻触发改写，无需等待整段回复完成；留空则在消息结束后净化全文。</small>
+                                                </span>
+                                            </label>
+                                            <button id="blai-ai-generation-open" type="button" class="blai-ai-generation-open" aria-haspopup="dialog" aria-controls="blai-ai-generation-modal" aria-expanded="false">
+                                                <span><i class="fas fa-sliders" aria-hidden="true"></i>高级生成参数</span>
+                                                <small>默认参数可直接使用，熟悉采样设置后再调整。</small>
+                                            </button>
                                         </div>
-                                        <button id="blai-ai-prompt-expand" type="button" class="text-btn blai-ai-prompt-expand" title="展开编辑全局 Prompt template" aria-label="展开编辑全局 Prompt template">
-                                            <i class="fas fa-expand"></i>
-                                        </button>
-                                    </div>
-                                    <textarea id="blai-ai-prompt" class="blai-textarea text-box" rows="7" aria-label="全局 Prompt template"></textarea>
-                                </div>
-                                <div class="field blai-ai-debug-field">
-                                    <span>Debug 日志</span>
-                                    <button type="button" id="blai-ai-copy-log" class="text-btn" title="排查 AI 改写请求、重试和写回问题时使用；复制最近诊断日志">复制 Debug 日志</button>
-                                </div>
+                                        <p id="blai-ai-http-warning" class="blai-ai-warning" hidden>非本地 HTTP 地址不安全，建议使用 HTTPS 或本地代理。</p>
+                                    </section>
+
+                                    <section class="blai-ai-section" aria-labelledby="blai-ai-prompt-title">
+                                        <header class="blai-ai-section-header">
+                                            <div>
+                                                <h2 id="blai-ai-prompt-title">全局提示词</h2>
+                                                <p>应用于所有 AI 改写规则的全局提示，将与特定规则的提示词合并。</p>
+                                            </div>
+                                            <button id="blai-ai-prompt-expand" type="button" class="blai-ai-icon-button" title="展开编辑全局提示词" aria-label="展开编辑全局提示词"><i class="fas fa-expand" aria-hidden="true"></i></button>
+                                        </header>
+                                        <textarea id="blai-ai-prompt" class="blai-textarea blai-ai-prompt-input" rows="8" aria-label="全局提示词"></textarea>
+                                    </section>
+
+                                    <section class="blai-ai-section" aria-labelledby="blai-ai-debug-title">
+                                        <header class="blai-ai-section-header">
+                                            <div>
+                                                <h2 id="blai-ai-debug-title">调试日志</h2>
+                                                <p>按时间显示最近 60 条程序净化、AI 改写与 Shujuku 写回事件；复制完整结构化 JSON，不包含正文。</p>
+                                            </div>
+                                            <button type="button" id="blai-ai-copy-log" class="blai-ai-copy-button" title="复制最近的改写诊断日志" aria-label="复制最近的改写诊断日志"><i class="fas fa-copy" aria-hidden="true"></i><span>复制日志</span></button>
+                                        </header>
+                                        <pre id="blai-ai-debug-log" class="blai-ai-debug-log" aria-live="polite"></pre>
+                                    </section>
+                                </main>
+
+                                <aside class="blai-ai-secondary-column">
+                                    <section id="blai-ai-generation-section" class="blai-ai-section" aria-labelledby="blai-ai-generation-title">
+                                        <header class="blai-ai-section-header">
+                                            <div>
+                                                <h2 id="blai-ai-generation-title">生成参数</h2>
+                                                <p>调节模型输出的多样性与控制限制。</p>
+                                            </div>
+                                        </header>
+                                        <div class="blai-ai-parameter-grid">
+                                            <label class="blai-ai-control blai-temperature-field">
+                                                <span class="blai-ai-control-heading">
+                                                    <span class="blai-ai-control-label">温度</span>
+                                                    <details class="blai-temperature-guide">
+                                                        <summary title="查看模型推荐温度" aria-label="查看模型推荐温度"><i class="fas fa-circle-info" aria-hidden="true"></i></summary>
+                                                        <div class="blai-temperature-guide-card">
+                                                            <div class="blai-temperature-guide-row"><b>dsv4f</b><strong>1.00 <em>推荐温度</em></strong><small>平均时间 92.13s · 质量 98.6</small></div>
+                                                            <div class="blai-temperature-guide-row"><b>gemini3f</b><strong>0.95 <em>推荐温度</em></strong><small>平均时间 76.33s · 质量 97.4</small></div>
+                                                            <div class="blai-temperature-guide-row"><b>gemini3.1p</b><strong>0.45 <em>推荐温度</em></strong><small>平均时间 29.05s · 质量 99.1</small></div>
+                                                            <div class="blai-temperature-guide-row"><b>gemini3.6f</b><strong>0.90 <em>推荐温度</em></strong><small>平均时间 22.04s · 质量 98.9</small></div>
+                                                            <p><strong>dsv4f 和 gemini3f 改写较慢，推荐使用 gemini3.1p 和 gemini3.6f。</strong>其他模型请自行测试合适温度。</p>
+                                                        </div>
+                                                    </details>
+                                                </span>
+                                                <input type="number" id="blai-ai-temperature" class="blai-input" min="0" max="2" step="0.05">
+                                            </label>
+                                            <label class="blai-ai-control" title="控制候选 token 的累计概率范围，越低越保守"><span class="blai-ai-control-label">Top P</span><input type="number" id="blai-ai-top-p" class="blai-input" min="0" max="1" step="0.01"></label>
+                                            <label class="blai-ai-control" title="只保留概率最高的前 K 个 token；0 表示不额外限制"><span class="blai-ai-control-label">Top K</span><input type="number" id="blai-ai-top-k" class="blai-input" min="0" max="500" step="1"></label>
+                                            <label class="blai-ai-control" title="发送给接口的最大输出 token；0 表示使用接口默认值"><span class="blai-ai-control-label">Max Tokens</span><input type="number" id="blai-ai-max-tokens" class="blai-input" min="0" max="65536" step="1"></label>
+                                            <label class="blai-ai-control" title="降低模型重复已经出现过的词；标准范围为 -2 到 2"><span class="blai-ai-control-label">Freq Pen (频率惩罚)</span><input type="number" id="blai-ai-frequency-penalty" class="blai-input" min="-2" max="2" step="0.01"></label>
+                                            <label class="blai-ai-control" title="降低模型谈论已经出现过的主题；标准范围为 -2 到 2"><span class="blai-ai-control-label">Pres Pen (存在惩罚)</span><input type="number" id="blai-ai-presence-penalty" class="blai-input" min="-2" max="2" step="0.01"></label>
+                                            <label class="blai-ai-control" title="部分兼容接口支持；1 表示不额外启用"><span class="blai-ai-control-label">Rep Pen (重复惩罚)</span><input type="number" id="blai-ai-repetition-penalty" class="blai-input" min="1" max="2" step="0.01"></label>
+                                            <label class="blai-ai-control"><span class="blai-ai-control-label">失败重试 (次)</span><input type="number" id="blai-ai-max-retries" class="blai-input" min="0" max="5" step="1"></label>
+                                            <label class="blai-ai-control"><span class="blai-ai-control-label">超时时间 (s)</span><input type="number" id="blai-ai-timeout" class="blai-input" min="1" max="120" step="1"></label>
+                                            <label class="blai-ai-control"><span class="blai-ai-control-label">单次条目 (条)</span><input type="number" id="blai-ai-max-items" class="blai-input" min="1" step="1"></label>
+                                            <label class="blai-ai-control"><span class="blai-ai-control-label">Context (上下文上限)</span><input type="number" id="blai-ai-max-context" class="blai-input" min="1000" max="60000" step="500"></label>
+                                            <label class="blai-ai-control"><span class="blai-ai-control-label">Item Limit (输出上限)</span><input type="number" id="blai-ai-max-rewrite" class="blai-input" min="50" max="10000" step="50"></label>
+                                        </div>
+                                    </section>
+
+                                    <section id="blai-ai-backend-section" class="blai-ai-section" aria-labelledby="blai-ai-backend-title">
+                                        <header class="blai-ai-section-header">
+                                            <div>
+                                                <h2 id="blai-ai-backend-title">后台通信</h2>
+                                                <p>监控 Veridis Rewrite 提交给酒馆助手的请求参数与返回结果。</p>
+                                            </div>
+                                        </header>
+                                        <div class="blai-ai-monitor-card">
+                                            <strong>详细通信日志</strong>
+                                            <p>包含经凭据脱敏的插件侧请求 JSON、返回文本与耗时。当前接口不提供 Provider HTTP 状态或 Token 用量。</p>
+                                            <button id="blai-ai-monitor-open" type="button" class="blai-ai-monitor-button" aria-haspopup="dialog" aria-controls="blai-ai-monitor-modal" aria-expanded="false">打开后台监控</button>
+                                        </div>
+                                    </section>
+                                </aside>
                             </div>
                         </div>
                     </section>
                     <section class="page-panel" data-page="clean">
-                        <nav class="blai-clean-mobile-tabs" role="tablist" aria-label="净化分页">
-                            <button type="button" class="blai-clean-mobile-tab is-active" role="tab" data-clean-tab="settings" aria-controls="blai-clean-settings-pane" aria-selected="true">净化设置</button>
-                            <button type="button" class="blai-clean-mobile-tab" role="tab" data-clean-tab="tags" aria-controls="blai-clean-tags-pane" aria-selected="false">标签管理</button>
-                        </nav>
-                        <div class="content-grid clean-page-shell">
-                            <div id="blai-clean-tags-pane" class="panel tight scope-manager blai-scope-tags-card clean-scope-panel" data-clean-pane="tags">
-                                <div class="panel-head"><strong>标签管理</strong><em>范围标签</em></div>
-                                <div class="blai-clean-tag-toolbar">
-                                    <strong id="blai-scope-tag-total-count">共 0 个标签</strong>
-                                    <div class="blai-clean-tag-actions" aria-label="标签管理操作">
-                                        <button id="blai-scope-tag-add-open" type="button" class="blai-icon-btn" title="新增标签" aria-label="新增标签"><i class="fas fa-plus"></i></button>
-                                        <button id="blai-scope-group-add" type="button" class="blai-icon-btn" title="新增分组" aria-label="新增分组"><i class="fas fa-folder-plus"></i></button>
-                                        <button id="blai-scope-tags-expand-all" type="button" class="blai-icon-btn" title="展开全部分组" aria-label="展开全部分组"><i class="fas fa-expand"></i></button>
-                                        <button id="blai-scope-tags-collapse-all" type="button" class="blai-icon-btn" title="折叠全部分组" aria-label="折叠全部分组"><i class="fas fa-compress"></i></button>
-                                        <button id="blai-scope-group-manage-open" type="button" class="blai-icon-btn" title="管理分组" aria-label="管理分组" aria-pressed="false"><i class="fas fa-layer-group"></i></button>
-                                    </div>
-                                </div>
-                                <div class="scope-input-row">
-                                    <input id="blai-scope-quick-input" class="scope-input" value="" placeholder="输入标签或 <horae>//备注">
-                                    <button id="blai-scope-tag-add-quick" type="button" class="text-btn accent">添加</button>
-                                </div>
-                                <div id="blai-scope-tags-list" class="managed-tag-list scope-group-list blai-scope-tags-list"></div>
-                            </div>
-                            <div id="blai-clean-settings-pane" class="panel tight clean-control-panel is-active" data-clean-pane="settings">
-                                <section class="clean-mode-section">
-                                    <div class="panel-head"><strong>净化模式</strong></div>
-                                    <div class="segmented blai-scope-mode-segment" role="group" aria-label="范围标签净化模式">
-                                        <button id="blai-scope-mode-protect" type="button" class="blai-scope-mode-option" data-mode="protect">保护特定标签</button>
-                                        <button id="blai-scope-mode-cleanse" type="button" class="blai-scope-mode-option" data-mode="cleanse-inside">净化特定标签</button>
-                                    </div>
-                                    <div id="blai-scope-tags-hint" class="blai-scope-tags-hint"></div>
-                                </section>
-                                <div class="cleanse-target-card">
-                                    <div class="cleanse-target-head"><strong>净化对象</strong><small>保护范围</small></div>
-                                    <div class="cleanse-target-item">
-                                        <div class="row-main"><strong>跳过用户消息</strong><button id="blai-skip-user-toggle" type="button" class="text-btn" aria-pressed="false">关闭</button></div>
-                                        <p>用户消息、发送输入框和编辑输入区不进入净化。</p>
-                                    </div>
-                                    <div class="cleanse-target-item">
-                                        <div class="row-main"><strong>人设描述保护</strong><button type="button" class="blai-persona-description-protect-toggle text-btn" aria-pressed="false" title="点击保护用户设定描述"><span class="blai-persona-protect-text">关闭</span></button></div>
-                                        <p>保护 persona_description，深度清理时也避让。</p>
-                                    </div>
-                                </div>
-                                <div class="clean-deep-section">
-                                    <div class="panel-head"><strong>深度净化</strong></div>
-                                    <div class="clean-row"><p>提示：深度清理会永久性替换或删除多处八股内容，包括预设、用户人设、角色卡、世界书、当前聊天文件（包含已隐藏楼层）等，清理范围较大，请谨慎使用此功能。</p></div>
-                                </div>
-                                <div class="row-actions deep-action-row">
-                                    <button id="blai-deep-clean-btn" class="text-btn accent"><i class="fas fa-broom"></i> 深度清理</button>
-                                </div>
+                        <div class="blai-clean-page">
+                            <div class="blai-clean-columns">
+                                <main class="blai-clean-primary-column">
+                                    <section class="blai-clean-section" aria-labelledby="blai-clean-scope-title">
+                                        <header class="blai-clean-section-header">
+                                            <h2 id="blai-clean-scope-title">标签作用范围</h2>
+                                            <p>选择全局标签的处理逻辑，并配置将受影响的标签列表。</p>
+                                        </header>
+
+                                        <div class="blai-clean-mode-cards" role="radiogroup" aria-label="范围标签处理模式">
+                                            <button id="blai-scope-mode-protect" type="button" class="blai-clean-mode-card" data-mode="protect" role="radio" aria-checked="false">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4.5 6v5.2c0 4.6 3.1 8.6 7.5 9.8 4.4-1.2 7.5-5.2 7.5-9.8V6L12 3Z"/><path d="m9.2 12 1.8 1.8 4-4"/></svg>
+                                                <span class="blai-clean-mode-copy">
+                                                    <strong>保护特定标签</strong>
+                                                    <span>跳过列表内标签包裹的内容，只净化标签之外的文本。</span>
+                                                </span>
+                                            </button>
+                                            <button id="blai-scope-mode-cleanse" type="button" class="blai-clean-mode-card" data-mode="cleanse-inside" role="radio" aria-checked="false">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-5 7 5 7"/><path d="m16 5 5 7-5 7"/><path d="m14 3-4 18"/></svg>
+                                                <span class="blai-clean-mode-copy">
+                                                    <strong>净化特定标签</strong>
+                                                    <span>只处理列表内标签包裹的内容，标签之外的文本保持不变。</span>
+                                                </span>
+                                            </button>
+                                        </div>
+                                        <p id="blai-scope-tags-hint" class="blai-clean-mode-status" aria-live="polite"></p>
+
+                                        <div class="blai-clean-list-toolbar">
+                                            <div class="blai-clean-list-label">
+                                                <strong>应用标签列表</strong>
+                                                <span id="blai-scope-tag-total-count" class="blai-clean-count-badge">0</span>
+                                            </div>
+                                            <div class="blai-clean-list-actions">
+                                                <button id="blai-scope-group-add" type="button" class="blai-clean-toolbar-button" hidden>
+                                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                                                    <span>新建分组</span>
+                                                </button>
+                                                <button id="blai-scope-group-manage-open" type="button" class="blai-clean-toolbar-button" aria-pressed="false">
+                                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg>
+                                                    <span class="blai-clean-toolbar-button-label">分组管理</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="blai-clean-add-field">
+                                            <button id="blai-scope-tag-add-quick" type="button" aria-label="添加标签">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                                            </button>
+                                            <input id="blai-scope-quick-input" type="text" value="" placeholder="输入标签，例如 <content>//正文" aria-label="输入要添加的标签">
+                                        </div>
+
+                                        <div id="blai-scope-tags-list" class="blai-clean-group-list"></div>
+                                    </section>
+                                </main>
+
+                                <aside class="blai-clean-secondary-column">
+                                    <section class="blai-clean-section" aria-labelledby="blai-clean-protection-title">
+                                        <header class="blai-clean-section-header">
+                                            <h2 id="blai-clean-protection-title">内容保护设置</h2>
+                                            <p>配置净化过程中的例外规则。</p>
+                                        </header>
+                                        <div class="blai-clean-settings-list">
+                                            <div class="blai-clean-setting-row">
+                                                <div>
+                                                    <strong>跳过用户消息</strong>
+                                                    <p>用户消息、发送输入框和编辑输入区不进入净化。</p>
+                                                </div>
+                                                <button id="blai-skip-user-toggle" type="button" class="blai-clean-switch" aria-pressed="false" aria-label="跳过用户消息">
+                                                    <span class="blai-clean-switch-track" aria-hidden="true"><span></span></span>
+                                                    <span class="blai-switch-state">关闭</span>
+                                                </button>
+                                            </div>
+                                            <div class="blai-clean-setting-row">
+                                                <div>
+                                                    <strong>保护人设描述</strong>
+                                                    <p>保护 persona_description，深度净化时也不会改写。</p>
+                                                </div>
+                                                <button type="button" class="blai-clean-switch blai-persona-description-protect-toggle" aria-pressed="false" aria-label="保护人设描述" title="点击保护用户设定描述">
+                                                    <span class="blai-clean-switch-track" aria-hidden="true"><span></span></span>
+                                                    <span class="blai-switch-state blai-persona-protect-text">关闭</span>
+                                                </button>
+                                            </div>
+                                            <label class="blai-clean-setting-row" for="blai-ai-protect-comments">
+                                                <div>
+                                                    <strong>保护 HTML/XML 注释</strong>
+                                                    <p>保留标签内的注释文本，不让 AI 改写处理注释内容。</p>
+                                                </div>
+                                                <span class="blai-clean-checkbox-switch">
+                                                    <input type="checkbox" id="blai-ai-protect-comments" aria-label="保护 HTML/XML 注释">
+                                                    <span class="blai-clean-switch-track" aria-hidden="true"><span></span></span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    <section class="blai-clean-danger-zone" aria-labelledby="blai-clean-danger-title">
+                                        <header class="blai-clean-danger-header">
+                                            <h2 id="blai-clean-danger-title">危险操作</h2>
+                                        </header>
+                                        <div class="blai-clean-danger-content">
+                                            <h3>执行深度净化</h3>
+                                            <p>对当前酒馆内的角色卡片、世界书、当前对话等内容执行不可逆的破坏性深度清理。</p>
+                                            <div class="blai-clean-warning" role="note">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4.5M12 17h.01"/></svg>
+                                                <span>执行后无法撤销，请先确认当前预设及重要内容已经备份。</span>
+                                            </div>
+                                            <button id="blai-deep-clean-btn" type="button" class="blai-clean-danger-button">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 18 4-4 8 8H6a2 2 0 0 1-2-2v-2Z"/><path d="m9 13 6-9 5 3-5 9"/></svg>
+                                                <span>执行深度净化</span>
+                                            </button>
+                                        </div>
+                                    </section>
+                                </aside>
                             </div>
                         </div>
                     </section>
                     <section class="page-panel" data-page="tools">
-                        <div class="content-grid">
-                            <div class="panel preset-management-panel">
-                                <div class="panel-head"><strong>预设管理</strong><em>本地 JSON</em></div>
-                                <div class="row-actions three preset-actions">
-                                    <button id="blai-preset-rename" type="button" class="text-btn"><i class="fas fa-pen"></i> 重命名</button>
-                                    <button id="blai-preset-new" type="button" class="text-btn"><i class="fas fa-plus"></i> 新建</button>
-                                    <button id="blai-preset-delete" type="button" class="text-btn"><i class="fas fa-trash"></i> 删除</button>
-                                    <button id="blai-preset-import" type="button" class="text-btn"><i class="fas fa-file-import"></i> 导入</button>
-                                    <button id="blai-preset-export" type="button" class="text-btn"><i class="fas fa-file-export"></i> 导出</button>
-                                </div>
-                                <div class="field-grid preset-import-notes">
-                                    <div class="field"><span>只导入为新预设</span><small>不修改当前规则</small></div>
-                                    <div class="field"><span>导入并切换使用</span><small>先处理未保存改动</small></div>
-                                    <div class="field"><span>仅临时预览</span><small>不保存为预设</small></div>
-                                    <div class="field"><span>旧格式识别</span><small>导入时自动转换</small></div>
-                                </div>
-                            </div>
-                            <div class="panel binding-tools-panel">
-                                <div class="panel-head"><strong>预设与绑定</strong><em id="blai-bind-active-preset">临时规则</em></div>
-                                <div class="binding-summary">
-                                    <div><span>当前全局预设：</span><strong id="blai-tools-global-preset">无</strong></div>
-                                    <div><span>当前预设绑定：</span><strong id="blai-tools-chat-binding">无</strong></div>
-                                    <div><span>当前角色绑定：</span><strong id="blai-tools-character-binding">无</strong></div>
-                                    <p>预设覆盖性质：<strong>局部角色卡 &gt; 全局预设</strong></p>
-                                </div>
-                                <label class="field blai-tools-preset-field">
-                                    <span>预设列表</span>
-                                    <select id="blai-tools-preset-select" class="blai-select-box"></select>
-                                </label>
-                                <div class="field-grid binding-actions-grid">
-                                    <button type="button" class="field blai-proxy-field" data-blai-click-proxy="#blai-default-toggle"><i class="fas fa-check binding-action-state-icon" aria-hidden="true"></i><span class="binding-action-label">设为全局预设</span></button>
-                                    <button type="button" class="field blai-proxy-field" data-blai-click-proxy="#blai-bind-current-chat-preset" data-blai-toggle-binding="true"><i class="fas fa-check binding-action-state-icon" aria-hidden="true"></i><span class="binding-action-label">绑定到预设</span></button>
-                                    <button type="button" class="field blai-proxy-field" data-blai-click-proxy="#blai-bind-current-character" data-blai-toggle-binding="true"><i class="fas fa-check binding-action-state-icon" aria-hidden="true"></i><span class="binding-action-label">绑定到角色卡</span></button>
-                                </div>
-                                <button id="blai-default-toggle" type="button" class="blai-hidden-real-button" title="设为全局默认净化预设" aria-hidden="true" tabindex="-1"><i class="fas fa-star"></i></button>
-                            </div>
-                            <div class="panel tools-combined-panel">
-                                <section class="tools-subsection tools-composer-section">
-                                    <div class="panel-head"><strong>输入框快捷入口</strong><em>由 TavernHelper 提供</em></div>
-                                    <div class="list">
-                                        <div class="tool-row">
-                                            <div class="row-main"><strong>在输入框区域显示手动 AI 改写按钮</strong><button id="blai-composer-button-toggle" type="button" class="text-btn" aria-pressed="false">关闭</button></div>
-                                            <p>启用后，由酒馆助手在输入框区域显示“AI 改写”按钮；点击后对当前聊天中最新一条助手消息执行手动 AI 改写。</p>
-                                        </div>
-                                    </div>
-                                </section>
-                                <section class="tools-subsection tools-perspective-section">
-                                    <div class="panel-head"><strong>透视楼层</strong><em>对比范围</em></div>
-                                    <div class="list">
-                                            <div class="tool-row blai-diff-limit-row">
-                                                <div class="row-main">
-                                                    <div id="blai-diff-limit-control" class="blai-diff-limit-control">
-                                                        <span class="blai-diff-limit-affix">最近</span>
-                                                        <input type="number" id="blai-diff-limit-input" class="blai-diff-limit-input" inputmode="numeric" min="1" max="20" step="1" aria-label="透视楼层数量">
-                                                        <span class="blai-diff-limit-affix">层</span>
-                                                    </div>
+                        <div class="blai-tools-page">
+                            <div class="blai-tools-columns">
+                                <main class="blai-tools-primary-column">
+                                    <section class="blai-tools-section" aria-labelledby="blai-tools-binding-title">
+                                        <header class="blai-tools-section-header blai-tools-binding-header">
+                                            <div>
+                                                <h2 id="blai-tools-binding-title">预设绑定解析</h2>
+                                                <div class="blai-tools-header-description">
+                                                    <p>配置当前预设的生效层级。</p>
+                                                    <span class="blai-tools-warning-badge"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i>角色与补全互斥</span>
+                                                </div>
                                             </div>
-                                            <p>设置对比弹窗读取最近 N 层消息，确认后同步刷新消息旁按钮。</p>
+                                        </header>
+
+                                        <div class="blai-tools-binding-list" aria-label="预设绑定层级">
+                                            <button type="button" class="blai-tools-binding-item blai-proxy-field" data-blai-click-proxy="#blai-default-toggle">
+                                                <span class="blai-tools-binding-icon" aria-hidden="true"><i class="fas fa-globe"></i></span>
+                                                <span class="blai-tools-binding-copy">
+                                                    <span class="blai-tools-binding-title"><strong>全局预设</strong><span class="blai-tools-status-badge">当前</span></span>
+                                                    <span class="blai-tools-binding-value"><span class="blai-tools-binding-description">作为未命中角色或补全绑定时的默认预设。</span><span>当前设置：<strong id="blai-tools-global-preset">无</strong></span></span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="blai-tools-binding-item blai-proxy-field" data-blai-click-proxy="#blai-bind-current-character" data-blai-toggle-binding="true">
+                                                <span class="blai-tools-binding-icon" aria-hidden="true"><i class="fas fa-user"></i></span>
+                                                <span class="blai-tools-binding-copy">
+                                                    <span class="blai-tools-binding-title"><strong>当前角色</strong><span class="blai-tools-status-badge">已绑定</span></span>
+                                                    <span class="blai-tools-binding-value"><span>当前设置：<strong id="blai-tools-character-binding">无</strong></span><span>当前绑定：<strong id="blai-tools-character-context">无</strong></span></span>
+                                                </span>
+                                            </button>
+                                            <button type="button" class="blai-tools-binding-item blai-proxy-field" data-blai-click-proxy="#blai-bind-current-chat-preset" data-blai-toggle-binding="true">
+                                                <span class="blai-tools-binding-icon" aria-hidden="true"><i class="fas fa-comments"></i></span>
+                                                <span class="blai-tools-binding-copy">
+                                                    <span class="blai-tools-binding-title"><strong>对话补全预设</strong><span class="blai-tools-status-badge">已绑定</span></span>
+                                                    <span class="blai-tools-binding-value"><span>当前设置：<strong id="blai-tools-chat-binding">无</strong></span><span>当前绑定：<strong id="blai-tools-chat-context">无</strong></span></span>
+                                                </span>
+                                            </button>
                                         </div>
-                                    </div>
-                                </section>
-                                <section class="tools-subsection tools-zh-section">
-                                    <div class="panel-head"><strong>简繁兼容</strong><em>校验：本地缓存</em></div>
-                                    <div class="zh-compact-grid">
-                                        <span class="zh-chip"><strong>增强词典</strong><span id="blai-zh-dict-status-chip">未安装</span></span>
-                                        <span class="zh-chip"><strong>台湾</strong>可选</span>
-                                        <span class="zh-chip"><strong>香港</strong>可选</span>
-                                    </div>
-                                    <div class="row-actions zh-actions">
-                                        <button id="blai-zh-dict-install-open" class="text-btn accent" type="button">下载并启用</button>
-                                        <button id="blai-zh-compat-toggle" class="text-btn blai-zh-compat-toggle" type="button" title="简繁兼容已关闭：按当前规则精确匹配" aria-label="简繁兼容模式" aria-pressed="false">开启</button>
-                                    </div>
-                                </section>
+                                    </section>
+                                </main>
+
+                                <aside class="blai-tools-secondary-column">
+                                    <section class="blai-tools-section" aria-labelledby="blai-tools-integration-title">
+                                        <header class="blai-tools-section-header">
+                                            <h2 id="blai-tools-integration-title">界面集成</h2>
+                                            <p>调整当前配置在应用中的界面呈现方式。</p>
+                                        </header>
+                                        <div class="blai-tools-settings">
+                                            <div class="blai-tools-setting-row">
+                                                <div class="blai-tools-setting-copy">
+                                                    <strong>输入框 AI 改写快捷键</strong>
+                                                    <p>在输入框区域显示手动 AI 改写按钮，对当前聊天中最新一条助手消息执行手动 AI 改写。</p>
+                                                </div>
+                                                <button id="blai-composer-button-toggle" type="button" class="blai-tools-switch" aria-pressed="false" aria-label="输入框 AI 改写快捷键">
+                                                    <span class="blai-tools-switch-track" aria-hidden="true"><span></span></span>
+                                                    <span class="blai-tools-switch-state">关闭</span>
+                                                </button>
+                                            </div>
+
+                                            <label class="blai-tools-slider-setting" for="blai-diff-limit-input">
+                                                <span class="blai-tools-slider-header">
+                                                    <span class="blai-tools-setting-copy">
+                                                        <strong>Diff 面板保留范围</strong>
+                                                        <span>设置对比面板读取的最近消息数量。</span>
+                                                    </span>
+                                                    <output id="blai-diff-limit-value" for="blai-diff-limit-input">5 条</output>
+                                                </span>
+                                                <input type="range" id="blai-diff-limit-input" min="1" max="20" step="1" aria-label="Diff 面板保留范围">
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    <section class="blai-tools-section" aria-labelledby="blai-tools-compatibility-title">
+                                        <header class="blai-tools-section-header">
+                                            <h2 id="blai-tools-compatibility-title">扩展兼容</h2>
+                                            <p>控制 Veridis 与其他 SillyTavern 扩展的自动联动。</p>
+                                        </header>
+                                        <div class="blai-tools-settings">
+                                            <div class="blai-tools-setting-row">
+                                                <div class="blai-tools-setting-copy">
+                                                    <strong>Shujuku 数据库自动净化</strong>
+                                                    <p>在 Shujuku 自动写入数据库后，同步应用当前的程序净化规则。仅在使用 Shujuku 数据库时需要。</p>
+                                                </div>
+                                                <button id="blai-shujuku-auto-rewrite-toggle" type="button" class="blai-tools-switch" aria-pressed="false" aria-label="开启 Shujuku 数据库自动净化" title="开启 Shujuku 数据库自动净化">
+                                                    <span class="blai-tools-switch-track" aria-hidden="true"><span></span></span>
+                                                    <span class="blai-tools-switch-state">关闭</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section class="blai-tools-section blai-tools-opencc-section" aria-labelledby="blai-tools-opencc-title">
+                                        <header class="blai-tools-section-header blai-tools-opencc-header">
+                                            <div>
+                                                <h2 id="blai-tools-opencc-title">简繁转换 (OpenCC)</h2>
+                                                <p>控制文本的自动简繁转换输出。</p>
+                                            </div>
+                                            <span id="blai-zh-dict-status-chip" class="blai-tools-install-status">未安装</span>
+                                        </header>
+                                        <div class="blai-tools-opencc-content">
+                                            <p>安装增强词典后，可在本地处理标准简繁、台湾与香港常用字词变体。词典下载完成后会保存在本地缓存。</p>
+                                            <button id="blai-zh-dict-install-open" class="blai-tools-primary-button" type="button">下载并安装字典</button>
+                                        </div>
+                                    </section>
+                                </aside>
                             </div>
                         </div>
                     </section>
@@ -318,7 +466,13 @@
             <nav class="bottom-nav">
                 <button type="button" class="nav-item active" data-page-target="overview"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/></svg><span>首页</span></button><button type="button" class="nav-item" data-page-target="ai"><svg viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M5 8h14"/></svg><span>AI</span></button><button type="button" class="nav-item" data-page-target="clean"><svg viewBox="0 0 24 24"><path d="M4 14c4-9 12-9 16 0"/><path d="M8 14c2 4 6 4 8 0"/><path d="M12 4v3M5 7l2 2M19 7l-2 2"/></svg><span>净化</span></button><button type="button" class="nav-item" data-page-target="tools"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 0 5.4-5.4z"/></svg><span>工具</span></button>
             </nav>
-            <div class="blai-hidden-real-bind-menu">
+            <div class="blai-hidden-real-controls">
+                <button id="blai-preset-rename" type="button">重命名</button>
+                <button id="blai-preset-new" type="button">新建</button>
+                <button id="blai-preset-delete" type="button">删除</button>
+                <button id="blai-preset-import" type="button">导入</button>
+                <button id="blai-preset-export" type="button">导出</button>
+                <button id="blai-default-toggle" type="button" title="设为全局默认净化预设" aria-hidden="true" tabindex="-1"></button>
                 <button id="blai-character-bind-toggle" type="button" class="blai-hidden-real-button" title="绑定管理" aria-hidden="true" tabindex="-1"></button>
 
         <div id="blai-bind-menu" class="blai-bind-menu" role="menu" hidden>
@@ -346,21 +500,54 @@
         </div>
 
             </div>
+
+            <div id="blai-ai-generation-modal" class="blai-modal-shell" aria-hidden="true">
+                <div class="blai-modal-card blai-ai-generation-modal-card" role="dialog" aria-modal="true" aria-labelledby="blai-ai-generation-modal-title">
+                    <div class="blai-ai-generation-modal-head">
+                        <div>
+                            <h3 id="blai-ai-generation-modal-title"><i class="fas fa-sliders" aria-hidden="true"></i>高级生成参数</h3>
+                            <p>默认配置已可直接使用；仅在熟悉模型采样参数时调整。</p>
+                        </div>
+                        <button id="blai-ai-generation-modal-close" type="button" class="blai-icon-btn" title="关闭" aria-label="关闭高级生成参数">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div id="blai-ai-generation-modal-body" class="blai-ai-generation-modal-body"></div>
+                    <div class="blai-modal-actions blai-ai-generation-modal-actions">
+                        <button id="blai-ai-generation-modal-done" type="button" class="blai-primary-btn">完成</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="blai-ai-monitor-modal" class="blai-modal-shell" aria-hidden="true">
+                <div class="blai-ai-monitor-viewer" role="dialog" aria-modal="true" aria-labelledby="blai-ai-monitor-title" aria-describedby="blai-ai-monitor-notice">
+                    <header class="blai-ai-monitor-header">
+                        <h3 id="blai-ai-monitor-title">后台通信</h3>
+                        <div class="blai-ai-monitor-actions">
+                            <button id="blai-ai-monitor-clear" type="button" class="blai-secondary-btn">清空日志</button>
+                            <button id="blai-ai-monitor-close" type="button" class="blai-secondary-btn">关闭</button>
+                        </div>
+                    </header>
+                    <p id="blai-ai-monitor-notice" class="blai-ai-monitor-notice">仅记录 Veridis 与 TavernHelper.generateRaw 的插件边界；Provider HTTP 状态、完整响应 JSON 与 Token 用量不可用。</p>
+                    <pre id="blai-ai-monitor-output" class="blai-ai-monitor-output" tabindex="0" aria-label="Veridis AI 通信日志">暂无通信记录。</pre>
+                </div>
+            </div>
+
         </div>
 
         <div id="blai-rule-edit-modal" class="blai-modal-shell">
             <div class="blai-modal-card blai-edit-modal-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-shrink: 0;">
                     <h3 id="blai-edit-modal-title" class="blai-edit-modal-title" style="margin: 0; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-pen"></i> 编辑规则合集
+                        <i class="fas fa-pen"></i> 编辑规则集
                     </h3>
-                    <button id="blai-edit-cancel-x" class="blai-icon-btn" style="background: transparent !important; border: none !important; box-shadow: none !important; font-size: 20px !important; color: var(--blai-text-mute); padding: 0 !important; min-width: auto !important; height: auto !important; cursor: pointer;">
+                    <button id="blai-edit-cancel-x" class="blai-icon-btn" style="background: transparent !important; border: none !important; box-shadow: none !important; font-size: 20px !important; color: var(--text-secondary); padding: 0 !important; min-width: auto !important; height: auto !important; cursor: pointer;">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
                 <div class="blai-edit-field">
                     <label class="blai-field-label">规则组合集名称</label>
-                    <input type="text" id="blai-edit-name" class="blai-input" placeholder="例如：程度副词与认知失能净化" style="background: var(--blai-bg-button) !important; border: 1px solid var(--blai-border-color-base) !important; color: var(--blai-text-main) !important;">
+                    <input type="text" id="blai-edit-name" class="blai-input" placeholder="例如：程度副词与认知失能净化" style="background: var(--bg-surface) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important;">
                 </div>
                 <label class="blai-field-label" style="margin-bottom:6px; flex-shrink:0;">映射规则列表</label>
                 <div id="blai-edit-subrules-container"></div>
@@ -465,7 +652,7 @@
 
         <div id="blai-rule-transfer-modal" style="display:none;">
             <div class="blai-transfer-content">
-                <h3 class="blai-edit-modal-title blai-transfer-title"><i class="fas fa-copy"></i> 复制 / 转移规则合集</h3>
+                <h3 class="blai-edit-modal-title blai-transfer-title"><i class="fas fa-copy"></i> 复制 / 转移规则集</h3>
                 <select id="blai-transfer-target" class="blai-input blai-transfer-target"></select>
                 <div class="blai-transfer-actions">
                     <button id="blai-transfer-copy" class="blai-transfer-btn blai-transfer-copy">复制到该存档</button>
@@ -629,7 +816,7 @@
                 <div class="blai-subrule-modal-body">
                     <div class="blai-subrule-field" style="margin-bottom: 12px;">
                         <label class="blai-field-label" style="margin-bottom: 6px; font-weight: 600;">备注说明 (可选)</label>
-                        <input type="text" id="blai-modal-sub-remark" class="blai-input" placeholder="例如：处理特定角色的口头禅" style="background: var(--blai-bg-button) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;">
+                        <input type="text" id="blai-modal-sub-remark" class="blai-input" placeholder="例如：处理特定角色的口头禅" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;">
                     </div>
 
                     <div class="blai-subrule-field" style="margin-bottom: 12px;">
@@ -643,14 +830,14 @@
 
                     <div id="blai-modal-sub-ai-prompt-field" class="blai-subrule-field" style="margin-bottom: 12px;" hidden>
                         <label class="blai-field-label" style="margin-bottom: 6px; font-weight: 600;">单条改写要求 (可选)</label>
-                        <textarea id="blai-modal-sub-ai-prompt" class="blai-textarea" rows="4" placeholder="只写这条规则命中时的特殊处理。可分情况说明：命中 A 组时只弱化不删除；命中 B 组时保留语气词；留空则只使用 AI 设置里的全局提示词。" style="background: var(--blai-bg-button) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
+                        <textarea id="blai-modal-sub-ai-prompt" class="blai-textarea" rows="4" placeholder="只写这条规则命中时的特殊处理。可分情况说明：命中 A 组时只弱化不删除；命中 B 组时保留语气词；留空则只使用 AI 设置里的全局提示词。" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
                         <div id="blai-modal-sub-ai-prompt-hint" class="blai-subrule-mode-hint" aria-live="polite"></div>
                     </div>
 
                     <div class="blai-subrule-field" style="margin-bottom: 12px;">
                         <label class="blai-field-label" style="margin-bottom: 6px; font-weight: 600;">查找内容</label>
                         <div id="blai-modal-sub-target-error" class="blai-field-error" aria-live="polite"></div>
-                        <textarea id="blai-modal-sub-target" class="blai-textarea" rows="4" style="background: var(--blai-bg-button) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
+                        <textarea id="blai-modal-sub-target" class="blai-textarea" rows="4" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
                     </div>
 
                     <div class="blai-subrule-field" style="margin-bottom: 15px;">
@@ -660,7 +847,7 @@
                                 <button id="blai-modal-sub-regex-recognize" type="button" class="blai-subrule-mini-btn">按行识别</button>
                             </div>
                         </div>
-                        <textarea id="blai-modal-sub-rep" class="blai-textarea" rows="4" style="background: var(--blai-bg-button) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
+                        <textarea id="blai-modal-sub-rep" class="blai-textarea" rows="4" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
                         <div id="blai-modal-sub-regex-list" class="blai-regex-replacement-list" hidden></div>
                     </div>
                 </div>

@@ -18,6 +18,7 @@ import { generationLifecycle } from '../generationLifecycle.js';
 import { showToast } from '../ui.js';
 import { applyWithXmlCommentsProtected, collectXmlCommentRanges, maskXmlCommentRanges } from '../aiCommentProtection.js';
 import { buildAiRewriteGenerateRawConfig } from '../aiGeneration.js';
+import { recordAiCommunicationFailure, recordAiCommunicationSuccess, snapshotAiCommunicationRequest } from '../aiCommunicationMonitor.js';
 import { recordAiRewriteDebug } from './debug.js';
 import { collectScopeRanges, groupRewriteItemsByPrompt, normalizeLimit, renderPrompt } from './planning.js';
 import { AiRewriteResponseFormatError, countSentenceBoundaries, getItemRewriteLengthLimit, getRewrittenBoundaryIssue, hasCotThinkingMarker, isAiRewriteResponseFormatError, stripCotThinkingContent, stripSingleJsonFence } from './response.js';
@@ -212,7 +213,8 @@ function notifyAiRewriteStatus(type, title, message, options = {}) {
             escapeHtml: true,
         });
         const toastElement = getToastElement(toast);
-        if (sticky) toastElement?.classList?.add('blai-ai-rewrite-toast');
+        toastElement?.classList?.add('blai-ai-rewrite-toast');
+        if (sticky) toastElement?.classList?.add('blai-ai-rewrite-progress-toast');
         runtimeState.aiRewrite.statusToast = sticky ? toast : null;
         runtimeState.aiRewrite.statusTaskKey = taskKey;
         if (sticky) attachAiRewriteDismissAction(toast, taskKey);
@@ -1219,6 +1221,13 @@ function applyAiProgramFallback(taskLike, options = {}) {
     });
     if (!commitResult.committed) return { applied: false, reason: commitResult.reason };
 
+    recordAiRewriteDebug('program-commit', {
+        source: 'ai-fallback',
+        messageId: index,
+        beforeLength: currentText.length,
+        afterLength: nextText.length,
+    });
+
     recordAiRewriteDebug('fallback-applied', {
         index,
         branchKey,
@@ -1345,6 +1354,14 @@ function applyAcceptedRewrites(task, accepted) {
         recordAiRewriteDebug('apply-skip', { reason: commitResult.reason, task: hashString(task.dedupeKey) }, 'warn');
         return { appliedCount: 0, skippedCount: skippedIds.length, reason: commitResult.reason };
     }
+    if (programText !== currentText) {
+        recordAiRewriteDebug('program-commit', {
+            source: 'ai-finalization',
+            messageId: task.index,
+            beforeLength: currentText.length,
+            afterLength: programText.length,
+        });
+    }
     recordAiRewriteDebug('apply-success', {
         task: hashString(task.dedupeKey),
         index: task.index,
@@ -1355,6 +1372,11 @@ function applyAcceptedRewrites(task, accepted) {
         afterLength: nextText.length,
     });
     return { appliedCount: appliedReplacements.length, skippedCount: skippedIds.length, reason: '' };
+}
+
+function formatAiRewriteCompletionMessage(task, message) {
+    const elapsedSeconds = Math.max(0, Date.now() - task.startedAtMs) / 1000;
+    return `${message} · 用时 ${elapsedSeconds.toFixed(1)} 秒`;
 }
 
 function finishAiRewriteApply(task, accepted) {
@@ -1389,7 +1411,7 @@ function finishAiRewriteApply(task, accepted) {
             skippedCount: applyResult.skippedCount || 0,
         });
         const skippedText = applyResult.skippedCount ? `，跳过 ${applyResult.skippedCount} 段` : '';
-        notifyAiRewriteStatus('success', 'AI 改写成功', `已应用 ${appliedCount} 段改写${skippedText}`, { timeOut: 5000 });
+        notifyAiRewriteStatus('success', 'AI 改写成功', formatAiRewriteCompletionMessage(task, `已应用 ${appliedCount} 段改写${skippedText}`), { timeOut: 5000 });
         return { status: 'applied', applyResult };
     }
     if (accepted.size === 0) {
@@ -1400,7 +1422,7 @@ function finishAiRewriteApply(task, accepted) {
             message: 'AI 改写未返回可应用内容，本次已改用程序改写。',
         });
         if (fallbackResult.applied) return { status: 'fallback-applied', applyResult, fallbackResult };
-        notifyAiRewriteStatus('success', 'AI 改写成功', 'AI返回 0 段可应用改写', { timeOut: 5000 });
+        notifyAiRewriteStatus('success', 'AI 改写成功', formatAiRewriteCompletionMessage(task, 'AI返回 0 段可应用改写'), { timeOut: 5000 });
         return { status: 'empty', applyResult };
     }
     if (applyResult.reason === 'item-locate-failed') {
@@ -1442,7 +1464,7 @@ function finishAiRewriteApply(task, accepted) {
         message: 'AI 改写未返回可应用内容，本次已改用程序改写。',
     });
     if (fallbackResult.applied) return { status: 'fallback-applied', applyResult, fallbackResult };
-    notifyAiRewriteStatus('success', 'AI 改写成功', '没有新的文本变更需要写入', { timeOut: 5000 });
+    notifyAiRewriteStatus('success', 'AI 改写成功', formatAiRewriteCompletionMessage(task, '没有新的文本变更需要写入'), { timeOut: 5000 });
     return { status: 'no-change', applyResult };
 }
 
@@ -1626,7 +1648,7 @@ export function markAiRewriteFinalCleanseReady(payload, options = {}) {
     return scheduleAiRewriteForMessage(payload, { delayMs: 0 });
 }
 
-async function requestAiRewrite(prompt, aiSettings, signal, task = null) {
+export async function requestAiRewrite(prompt, aiSettings, signal, task = null) {
     const tavernHelper = getTavernHelperApi();
     if (!tavernHelper) throw new Error('TavernHelper.generateRaw 不可用');
     const generationId = `veridis-ai-rewrite-${hashString(`${Date.now()}:${task?.dedupeKey || prompt.length}`)}`;
@@ -1665,7 +1687,26 @@ async function requestAiRewrite(prompt, aiSettings, signal, task = null) {
     };
     signal?.addEventListener?.('abort', stopGeneration, { once: true });
     try {
-        const response = await tavernHelper.generateRaw(requestConfig);
+        const requestJson = snapshotAiCommunicationRequest(requestConfig);
+        const communicationStartedAt = Date.now();
+        let response;
+        try {
+            response = await tavernHelper.generateRaw(requestConfig);
+        } catch (error) {
+            recordAiCommunicationFailure({
+                startedAt: communicationStartedAt,
+                endedAt: Date.now(),
+                requestJson,
+                error,
+            });
+            throw error;
+        }
+        recordAiCommunicationSuccess({
+            startedAt: communicationStartedAt,
+            endedAt: Date.now(),
+            requestJson,
+            response,
+        });
         if (signal?.aborted) {
             const abortError = new Error('请求已取消');
             abortError.name = 'AbortError';
@@ -2268,6 +2309,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
 
     if (rewriteState.activeController && rewriteState.activeTaskKey !== dedupeKey) cancelAiRewriteTask('superseded');
 
+    const startedAtMs = Date.now();
     const branchKey = getMessageDiffBranchKey(msg);
     rewriteState.statusDismissedTaskKey = '';
     recordAiRewriteDebug('run-start', {
@@ -2294,6 +2336,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
         dedupeKey,
         items,
         ruleHitCount: readyTask.ruleHitCount,
+        startedAtMs,
         waitForFinalCleanse,
         finalCleanseSequence: options.finalCleanseSequence ?? (Number(rewriteState.finalCleanseSequence) || 0),
         automatic: readyTask.automatic === true,

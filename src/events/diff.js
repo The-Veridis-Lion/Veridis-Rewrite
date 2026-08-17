@@ -62,6 +62,7 @@ export function bindDiffEvents() {
             .attr('min', minTrackedDiffMessages)
             .attr('max', maxTrackedDiffMessages)
             .val(normalized);
+        $('#blai-diff-limit-value').text(`${normalized} 条`);
     };
 
     const applyDiffLimitDraft = () => {
@@ -421,6 +422,10 @@ export function bindDiffEvents() {
         runtimeState.diffRelatedRuleMode = runtimeState.diffRelatedRuleMode !== true;
         syncDiffRelatedModeState();
         closeDiffActionsMenu();
+    });
+
+    $(document).off('input', '#blai-diff-limit-input').on('input', '#blai-diff-limit-input', function() {
+        $('#blai-diff-limit-value').text(`${$(this).val()} 条`);
     });
 
     $(document).off('change', '#blai-diff-limit-input').on('change', '#blai-diff-limit-input', applyDiffLimitDraft);

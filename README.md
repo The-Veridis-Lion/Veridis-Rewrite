@@ -2,9 +2,23 @@
 
 Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展。它在传统屏蔽词替换的基础上，加入了规则预设、范围标签保护、净化前文透视，以及可选的 OpenAI 兼容 AI 局部改写能力，用来在聊天生成、历史记录和相关数据中稳定处理不想保留的词句、句式或表达。
 
-当前版本：`2.5`
+当前版本：`2.6`
 
 使用、修改或再发布前，请阅读[许可与版权](#许可与版权)。
+
+---
+
+## 2.6 版本更新
+
+- API 预设管理调整：提供新建、保存、重命名和删除操作；“新建”会将当前 API、模型、生成参数与 XML 范围配置保存为独立预设，“保存”则更新当前选中的预设，不再隐式产生重复预设。
+- 首页状态补全：首页显示规则组数量、AI 规则数量及 `AI 启用中 / AI 关闭中` 状态；移除首页原有的交互式模型列表拉取与状态控件，模型列表刷新统一保留在 AI 页面。
+- AI 后台通信监视器：AI 页面可查看最新 10 次实际 `TavernHelper.generateRaw` 调用，每次调用或重试各自成条并按新到旧排列；记录已隐藏 API Key 的请求 JSON 快照、耗时，以及成功时的返回数据或失败时可取得的错误信息。此 TavernHelper 路径不提供 Token 用量、Provider HTTP 响应或 Provider 状态码。
+- 改写诊断与状态显示：最新 60 条调试记录按新到旧展示，常用字段和阶段采用更紧凑、易读的中文标签，同时保留完整结构化 JSON 复制；可区分 Program Rewrite、AI Rewrite 与 Shujuku 事件。AI 改写成功通知会显示总耗时秒数，进度、成功和失败通知的布局更紧凑一致，进行中的通知仍可直接终止任务。
+- 流式视觉净化性能：减少流式视觉投影中的冗余 DOM 处理和重复文本节点写入，降低持续生成时不必要的页面更新。
+- 中文破折号视觉投影：对当前规则明确支持的中文 `——` 标点场景增加窄范围的实时显示处理；该处理只改变实时可见文本，不修改聊天数据、Swipe 数据、Diff 元数据或持久化内容，最终结果仍以 Program Rewrite 为准，并非无条件删除所有 `——`。
+- 可选 Shujuku 兼容：工具页新增可主动启用的 Shujuku 数据库自动净化开关；Shujuku 完成自身数据库操作后，Veridis 可通过其可用的公共 API，将当前 Program Rewrite 规则应用到符合条件的单元格。重复或已消费的回调不会造成重复写入，Deep Clean 在 Shujuku 可用时会等待其持久化完成；Shujuku 不是必需依赖。
+- Diff 生命周期修正：聊天与 DOM 的预备刷新保持为纯视觉操作，不再仅因刷新或预备 DOM 就持久化 Diff 元数据；Diff 持久化仍由正常生成与终稿收敛流程负责。
+- 工作台界面整理：首页、净化、AI 与工具页的职责更清晰，桌面、平板和手机端的布局及页头行为统一；AI 改写对话框与通知采用更紧凑、一致的格式。
 
 ---
 
@@ -18,7 +32,6 @@ Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展
 - Diff 历史修正：透视内容来自已提交的原文/终稿轨迹，不再由当前规则重算历史；每个 Swipe 分支独立保留，全文模式按真实段落边界展示，历史窗口淘汰只清理插件自己的 Diff 元数据。
 - 酒馆助手入口：新增由 TavernHelper 管理的输入框“AI 改写”按钮，点击后对当前聊天中最新一条助手消息执行手动 AI 改写；manifest 明确声明 `JS-Slash-Runner` 依赖。
 - 结构维护：AI 改写、宿主生命周期、Diff 事件、AI 设置、设置迁移、聊天持久化和规则引擎拆分为职责明确的模块；原有 CSS 按固定级联顺序拆分为七个 partial，构建后的视觉级联保持一致。
-- 发布验证：生成生命周期、AI 流式改写、消息元数据、Diff 保留、正则 flags、风险规则、流式视觉掩码、CSS 级联和源码契约均已通过自动化验证。
 
 ---
 
@@ -92,7 +105,7 @@ Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展
 ### 预设与绑定
 
 - 支持多个净化预设，每个预设可以拥有独立规则和 AI 改写配置。
-- 支持保存、切换和删除多套 AI API 预设；预设包含接口地址、密钥、模型、模型列表、温度与 XML 范围。
+- 支持新建、保存、切换、重命名和删除多套 AI API 预设；预设包含接口地址、密钥、模型、模型列表、生成参数与 XML 范围。
 - 支持设置全局默认预设。
 - 支持将当前净化预设绑定到角色，或绑定到 SillyTavern 当前对话补全预设。
 - 支持规则合集在不同预设之间复制或移动。
@@ -117,10 +130,10 @@ Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展
 
 工作台内主要页面包括：
 
-- “首页”：选择预设、查看规则数量和模型列表拉取状态。
-- “AI”：管理多套 OpenAI 兼容 API 预设，配置模型参数、请求限制和提示词模板；实际请求由酒馆助手链路发送。
-- “净化”：管理范围标签、用户消息保护、透视按钮等净化行为。
-- “工具”：执行深度清理、导入导出、诊断日志等维护操作。
+- “首页”：选择净化预设，查看规则组、AI 规则及 AI 启用状态，管理规则，并导入或导出预设。
+- “AI”：管理 OpenAI 兼容 API 预设与模型列表刷新，配置 AI 参数、请求限制和提示词，并查看改写诊断与后台通信记录；实际请求由酒馆助手链路发送。
+- “净化”：管理范围标签、内容保护与透视按钮等净化行为，并执行 Deep Clean。
+- “工具”：管理预设绑定解析、输入框 AI Rewrite 入口、Diff 保留范围、可选 Shujuku 兼容及 OpenCC 设置。
 
 工作台会根据屏幕宽度切换桌面、平板或手机布局；手机端使用底部导航，主要弹窗与编辑器采用全屏布局。
 
@@ -198,6 +211,7 @@ src/aiRewrite/debug.js           AI 改写诊断记录
 src/aiRewrite/planning.js        AI 提示、目标分组、上下文与请求构造
 src/aiRewrite/response.js        AI 响应信封清理与格式验证
 src/aiRewrite/runtime.js         AI 请求执行、应用、流式、MVU 与生命周期协调
+src/aiCommunicationMonitor.js    TavernHelper AI 调用记录与后台通信监视器
 src/replacementEngine.js         规则编译、范围替换与视觉遮罩
 src/chatPersistence.js           队列式增量聊天持久化
 src/cleanse.js                   深度清理流程
@@ -210,11 +224,30 @@ src/events/diff.js               Diff 控件绑定
 src/events/hostLifecycle.js      实时拦截与宿主生命周期绑定
 src/messageMeta.js               消息与 Swipe 分支的净化元数据
 src/platform.js                  宿主与扩展兼容层
+src/shujukuCompatibility.js      可选 Shujuku 数据库净化集成
 src/state.js                     默认设置和运行时状态
 src/ui.js                        工作台 UI 和弹窗交互
 src/utils.js                     规则、预设、标签等工具函数
 src/zhConversion.js              简繁兼容词典
 ```
+
+## AI 改写日志诊断
+
+日志即使带有终端的 `Exit code` / `Output` 包装，或末尾 JSON 被截断，也可以直接分析其中所有完整事件：
+
+```powershell
+node tools/analyze-ai-rewrite-log.mjs <日志文件> [更多日志文件...]
+```
+
+报告会分别统计自动与手动任务、`content-scope-changed` 取消、API 响应及最终写回结果。
+
+运行全部 Node 测试：
+
+```powershell
+node --test
+```
+
+保留的四个 `scripts/verify-*.mjs` 覆盖注释保护、终稿持久化、生成参数和共享设置等独特的跨文件契约。
 
 ## 发布打包
 
@@ -223,7 +256,7 @@ src/zhConversion.js              简繁兼容词典
 待当前快照由仓库所有者提交后，从该提交生成确定性发布包：
 
 ```powershell
-git archive --format=zip --prefix=Veridis-Rewrite/ -o Veridis-Rewrite-2.5.zip HEAD
+git archive --format=zip --prefix=Veridis-Rewrite/ -o Veridis-Rewrite-2.6.zip HEAD
 ```
 
 `git archive` 只归档已提交内容，不包含当前未提交改动。

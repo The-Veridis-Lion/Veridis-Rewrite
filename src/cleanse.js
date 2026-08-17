@@ -4,6 +4,7 @@ import { applyScopedReplacements, buildProcessors } from './replacementEngine.js
 import { showDeepCleanOverlay, updateDeepCleanOverlay } from './ui.js';
 import { isMessageAiFinal, isMessageAiFinalForBranch } from './messageMeta.js';
 import { markHostChatDirtyFromIndex, runPreferredSaveChat } from './platform.js';
+import { rewriteLatestMessageShujukuCells } from './shujukuCompatibility.js';
 
 function isRevertedMessageObject(value) {
     return !!(value && typeof value === 'object' && value.__blai_is_reverted === true);
@@ -244,6 +245,13 @@ export async function performDeepCleanse() {
 
         if (runtimeState.deepCleanCancelRequested === true) {
             throw createDeepCleanCancelledError(scrubbedItems, 0);
+        }
+        if (Array.isArray(chat)) {
+            for (let index = chat.length - 1; index >= 0; index--) {
+                if (chat[index]?.is_user === true) continue;
+                await rewriteLatestMessageShujukuCells(index);
+                break;
+            }
         }
         updateDeepCleanOverlay(0.97, '正在同步数据到磁盘，请稍候。');
 
