@@ -248,18 +248,18 @@
 }
 
 #blai-purifier-popup .blai-clean-add-field input {
-    width: 100%;
-    min-width: 0;
-    height: 38px;
-    min-height: 38px;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 38px !important;
+    min-height: 38px !important;
     padding: 0 6px !important;
-    border: 0;
-    border-radius: 0;
+    border: 0 !important;
+    border-radius: 0 !important;
     background: transparent !important;
-    color: var(--text-main);
-    font-family: inherit;
-    font-size: 12px;
-    box-shadow: none;
+    color: var(--text-main) !important;
+    font-family: inherit !important;
+    font-size: 12px !important;
+    box-shadow: none !important;
 }
 
 #blai-purifier-popup .blai-clean-add-field input::placeholder {
@@ -499,8 +499,7 @@
     box-shadow: none;
 }
 
-#blai-purifier-popup .blai-clean-tag-title,
-#blai-purifier-popup .blai-clean-tag-code {
+#blai-purifier-popup .blai-clean-tag-title {
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -514,10 +513,20 @@
 }
 
 #blai-purifier-popup .blai-clean-tag-code {
-    color: var(--text-secondary);
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 10px;
-    line-height: 1.35;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--text-secondary) !important;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 
 #blai-purifier-popup .blai-clean-tag-actions,

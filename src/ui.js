@@ -24,12 +24,6 @@ function getRewriteMode(sub) {
     return sub?.rewriteMode === 'ai' ? 'ai' : 'program';
 }
 
-function getRewriteModeBadgeHtml(sub) {
-    return getRewriteMode(sub) === 'ai'
-        ? '<span class="blai-tag blai-ai-rewrite-badge">AI 改写</span>'
-        : '';
-}
-
 function normalizeReplacementList(replacements) {
     return Array.isArray(replacements) ? replacements.map((value) => String(value ?? '')) : [];
 }
@@ -1236,7 +1230,7 @@ export function renderSubrulesToModal() {
     const container = $('#blai-edit-subrules-container');
     if (!container.length) return;
     if (runtimeState.currentEditingSubrules.length === 0) {
-        container.html('<div style="text-align:center; color:var(--text-secondary); font-size:12px; padding:20px;">当前合集没有映射规则，请点击下方按钮添加。</div>');
+        container.html('<div class="blai-subrule-empty">当前合集没有映射规则，请点击下方按钮添加。</div>');
         return;
     }
 
@@ -1248,20 +1242,19 @@ export function renderSubrulesToModal() {
         const moveUpDisabled = i === 0 ? 'disabled' : '';
         const moveDownDisabled = i === runtimeState.currentEditingSubrules.length - 1 ? 'disabled' : '';
 
-        const badgeBaseStyle = "display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; border-radius:6px; font-size:13px; font-weight:800; color:var(--bg-base); min-width:45px; margin:0; line-height:1; flex-shrink:0;";
-        let badgeHTML = '';
-        if (mode === 'regex') badgeHTML = `<span style="${badgeBaseStyle} background:var(--accent-color);">正则</span>`;
-        else if (mode === 'simple') badgeHTML = `<span style="${badgeBaseStyle} background:color-mix(in srgb, var(--accent-color) 72%, var(--accent-color) 28%);">简易</span>`;
-        else badgeHTML = `<span style="${badgeBaseStyle} background:var(--text-secondary); color:var(--bg-surface);">普通</span>`;
+        const badgeText = mode === 'regex' ? '正则' : mode === 'simple' ? '简易' : '普通';
+        const badgeHTML = `<span class="blai-mapping-badge">${badgeText}</span>`;
 
         const tPreview = getRuleSourcePreviewText(sub);
         const rPreview = formatReplacementPreview(sub.replacements || [], mode);
-        const rewriteBadge = getRewriteModeBadgeHtml(sub);
+        const rewriteBadge = getRewriteMode(sub) === 'ai'
+            ? '<span class="blai-mapping-badge">AI 改写</span>'
+            : '';
 
         let remarkHTML = '';
         if (remark) {
             remarkHTML = `
-                <div style="margin-top: 8px; padding-top: 10px; border-top: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent)); font-size: 11px; color: var(--text-secondary); font-style: italic;">
+                <div class="blai-subrule-remark" style="margin-top: 8px; padding-top: 10px; border-top: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent)); font-size: 11px; color: var(--text-secondary); font-style: italic;">
                     <i class="fas fa-info-circle" style="margin-right: 4px;"></i>${safeHtml(remark)}
                 </div>
             `;
@@ -1269,8 +1262,8 @@ export function renderSubrulesToModal() {
 
         return `
             <div class="blai-subrule-card ${subEnabled ? '' : 'blai-is-disabled'}" style="flex-shrink: 0 !important; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; box-shadow: 0 4px 10px color-mix(in srgb, var(--bg-base) 12%, transparent);">
-                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent));">
-                    <div style="display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; min-width: 0;">
+                <div class="blai-subrule-header">
+                    <div class="blai-subrule-badges">
                         <label class="blai-checkbox-label blai-subrule-enable-label" title="${subEnabled ? '停用此条规则' : '启用此条规则'}">
                             <input type="checkbox" class="blai-subrule-toggle" data-index="${i}" ${checkedAttr}>
                             <span class="blai-custom-checkbox"></span>
@@ -1278,18 +1271,18 @@ export function renderSubrulesToModal() {
                         ${badgeHTML}
                         ${rewriteBadge}
                     </div>
-                    <div class="blai-subrule-btn-group" style="display: flex; justify-content: space-between; align-items: center; flex: 0 0 35%; margin: 0; padding: 0;">
-                        <button class="blai-move-subrule-up-btn blai-icon-btn" data-index="${i}" title="上移" ${moveUpDisabled} style="margin:0;"><i class="fas fa-arrow-up"></i></button>
-                        <button class="blai-move-subrule-down-btn blai-icon-btn" data-index="${i}" title="下移" ${moveDownDisabled} style="margin:0;"><i class="fas fa-arrow-down"></i></button>
-                        <button class="blai-edit-subrule-btn blai-icon-btn" data-index="${i}" title="独立编辑" style="margin:0;"><i class="fas fa-pen"></i></button>
-                        <button class="blai-del-subrule-btn blai-icon-btn blai-danger-btn" data-index="${i}" title="删除" style="margin:0;"><i class="fas fa-trash"></i></button>
-                        <button class="blai-remark-subrule-btn blai-icon-btn" data-index="${i}" title="快捷修改备注" style="margin:0;"><i class="fas fa-comment-dots"></i></button>
+                    <div class="blai-subrule-btn-group">
+                        <button class="blai-move-subrule-up-btn blai-icon-btn" data-index="${i}" title="上移" ${moveUpDisabled}><i class="fas fa-arrow-up"></i></button>
+                        <button class="blai-move-subrule-down-btn blai-icon-btn" data-index="${i}" title="下移" ${moveDownDisabled}><i class="fas fa-arrow-down"></i></button>
+                        <button class="blai-edit-subrule-btn blai-icon-btn" data-index="${i}" title="独立编辑"><i class="fas fa-pen"></i></button>
+                        <button class="blai-del-subrule-btn blai-icon-btn blai-danger-btn" data-index="${i}" title="删除"><i class="fas fa-trash"></i></button>
+                        <button class="blai-remark-subrule-btn blai-icon-btn" data-index="${i}" title="快捷修改备注"><i class="fas fa-comment-dots"></i></button>
                     </div>
                 </div>
-                <div style="font-size: 13px !important; color: var(--text-main); line-height: 1.5; word-break: break-all;">
-                    <b style="font-size: 13px !important;">${tPreview}</b> 
+                <div class="blai-subrule-preview">
+                    <span class="blai-subrule-preview-source">${tPreview}</span>
                     <i class="fas fa-arrow-right" style="color: var(--text-secondary); font-size: 11px; margin: 0 6px;"></i>
-                    <span style="font-size: 13px !important;">${rPreview}</span>
+                    <span class="blai-subrule-preview-replacement">${rPreview}</span>
                 </div>
                 ${remarkHTML}
             </div>

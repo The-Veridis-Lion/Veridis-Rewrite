@@ -344,56 +344,62 @@
 }
 
 #blai-purifier-popup #blai-diff-limit-input {
-    width: 100%;
-    height: 20px;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    accent-color: var(--accent-color);
-    -webkit-appearance: none;
-    appearance: none;
-    cursor: pointer;
+    width: 100% !important;
+    height: 20px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    accent-color: var(--accent-color) !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    cursor: pointer !important;
+    filter: none !important;
 }
 
 #blai-purifier-popup #blai-diff-limit-input::-webkit-slider-runnable-track {
-    height: 4px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--accent-color) 28%, var(--border-color));
+    height: 4px !important;
+    border-radius: 999px !important;
+    background: color-mix(in srgb, var(--accent-color) 28%, var(--border-color)) !important;
 }
 
 #blai-purifier-popup #blai-diff-limit-input::-webkit-slider-thumb {
-    width: 15px;
-    height: 15px;
-    margin-top: -5.5px;
-    border: 2px solid var(--bg-base);
-    border-radius: 50%;
-    background: var(--accent-color);
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--text-main) 18%, transparent);
-    -webkit-appearance: none;
+    position: static !important;
+    width: 15px !important;
+    height: 15px !important;
+    margin-top: -5.5px !important;
+    border: 2px solid var(--bg-base) !important;
+    border-radius: 50% !important;
+    background: var(--accent-color) !important;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--text-main) 18%, transparent) !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
 }
 
 #blai-purifier-popup #blai-diff-limit-input::-moz-range-track {
-    height: 4px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--accent-color) 28%, var(--border-color));
+    height: 4px !important;
+    border-radius: 999px !important;
+    background: color-mix(in srgb, var(--accent-color) 28%, var(--border-color)) !important;
 }
 
 #blai-purifier-popup #blai-diff-limit-input::-moz-range-progress {
-    height: 4px;
-    border-radius: 999px;
-    background: var(--accent-color);
+    height: 4px !important;
+    border-radius: 999px !important;
+    background: var(--accent-color) !important;
 }
 
 #blai-purifier-popup #blai-diff-limit-input::-moz-range-thumb {
-    width: 15px;
-    height: 15px;
-    border: 2px solid var(--bg-base);
-    border-radius: 50%;
-    background: var(--accent-color);
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--text-main) 18%, transparent);
+    position: static !important;
+    width: 15px !important;
+    height: 15px !important;
+    margin: 0 !important;
+    border: 2px solid var(--bg-base) !important;
+    border-radius: 50% !important;
+    background: var(--accent-color) !important;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--text-main) 18%, transparent) !important;
+    appearance: none !important;
 }
 
 #blai-purifier-popup .blai-tools-opencc-header {

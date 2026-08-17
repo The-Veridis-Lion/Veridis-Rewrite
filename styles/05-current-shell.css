@@ -62,14 +62,22 @@
     border-color: var(--accent-color) !important;
     color: var(--bg-base) !important;
 }
-#blai-edit-subrules-container .blai-tag {
-    height: 24px !important;
-    padding: 0 8px !important;
-    border-radius: 999px !important;
+#blai-edit-subrules-container .blai-mapping-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 auto !important;
+    box-sizing: border-box !important;
+    min-width: 45px !important;
+    height: 21px !important;
+    margin: 0 !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
     background: var(--accent-color) !important;
     color: var(--bg-base) !important;
-    font-size: 12px !important;
-    font-weight: 850 !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
 }
 
 #blai-rule-edit-modal .blai-edit-modal-card,
@@ -133,16 +141,81 @@
     box-shadow: none !important;
 }
 
+#blai-edit-subrules-container .blai-subrule-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 10px !important;
+    border-bottom: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent)) !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-badges {
+    display: flex !important;
+    align-items: center !important;
+    flex: 1 1 auto !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
 #blai-edit-subrules-container .blai-subrule-btn-group {
+    display: flex !important;
+    align-items: center !important;
     flex: 0 0 auto !important;
-    gap: 5px !important;
+    gap: 2px !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 #blai-edit-subrules-container .blai-subrule-btn-group .blai-icon-btn {
-    min-width: 30px !important;
-    width: 30px !important;
-    height: 30px !important;
-    border-radius: 10px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 22px !important;
+    min-width: 22px !important;
+    width: 22px !important;
+    min-height: 22px !important;
+    height: 22px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-btn-group .blai-icon-btn:disabled {
+    opacity: .35 !important;
+    cursor: not-allowed !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-preview {
+    color: var(--text-main) !important;
+    font-size: 13px !important;
+    font-weight: 400 !important;
+    line-height: 1.5 !important;
+    word-break: break-all !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-preview-source {
+    font-weight: 700 !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-preview-replacement,
+#blai-edit-subrules-container .blai-subrule-remark,
+#blai-edit-subrules-container .blai-subrule-empty {
+    font-weight: 400 !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-empty {
+    padding: 20px !important;
+    color: var(--text-secondary) !important;
+    font-size: 12px !important;
+    text-align: center !important;
 }
 
 #blai-rule-edit-modal .blai-modal-actions,

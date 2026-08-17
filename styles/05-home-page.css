@@ -875,6 +875,13 @@
         grid-template-columns: minmax(0, 1.35fr) 14px minmax(0, 1fr);
         gap: 5px;
     }
+
+    #blai-purifier-popup .blai-home-source-text,
+    #blai-purifier-popup .blai-home-target-text,
+    #blai-purifier-popup .blai-home-preview-label,
+    #blai-purifier-popup .blai-home-more-text {
+        font-weight: 400;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

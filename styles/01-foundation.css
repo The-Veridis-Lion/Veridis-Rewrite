@@ -71,6 +71,11 @@
     --border-color: #383A35;
 }
 
+#blai-purifier-popup,
+#blai-purifier-popup * {
+    text-shadow: none !important;
+}
+
 #blai-wand-btn { cursor: pointer !important; }
 .blai-extension-settings-entry .inline-drawer-content {
     padding: 8px 0 12px !important;

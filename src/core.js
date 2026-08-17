@@ -570,7 +570,25 @@ export function performIncrementalCleanse(payload, options = {}) {
     logger.debug(`[performIncrementalCleanse] payload=${JSON.stringify(payload)}, options=${JSON.stringify(options)}`);
     const { chat } = getAppContext();
     if (!options.skipPurifyDom) buildProcessors();
-    if (!options.skipPurifyDom && runtimeState.activeProcessors.length === 0) return;
+    if (!options.skipPurifyDom && runtimeState.activeProcessors.length === 0) {
+        const index = getMessageIndexFromEvent(payload);
+        const msg = Number.isInteger(index) && index >= 0 && Array.isArray(chat) ? chat[index] : null;
+        if (isAssistantMessage(msg) && msg?.__blai_is_reverted !== true) {
+            const signature = computeMessageSignature(msg);
+            const diffState = runtimeState.diffMessageStates.get(index);
+            if (diffState?.status === 'pending' && diffState.signature === signature) {
+                writeReadyDiffCache(index, signature, {
+                    snippets: [],
+                    fullDiff: '',
+                    signature,
+                }, {
+                    preserveExistingRealDiff: true,
+                    persist: true,
+                });
+            }
+        }
+        return;
+    }
 
     const index = getMessageIndexFromEvent(payload);
     if (index < 0) return;

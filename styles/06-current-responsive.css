@@ -393,6 +393,26 @@
         font-weight: 800 !important;
     }
 
+    #blai-rule-edit-modal .blai-subrule-preview,
+    #blai-rule-edit-modal .blai-subrule-preview-source,
+    #blai-rule-edit-modal .blai-subrule-preview-replacement,
+    #blai-rule-edit-modal .blai-subrule-remark,
+    #blai-rule-edit-modal .blai-subrule-empty {
+        font-weight: 400 !important;
+    }
+
+    #blai-rule-edit-modal .blai-edit-modal-title {
+        font-weight: 800 !important;
+    }
+
+    #blai-rule-edit-modal .blai-field-label {
+        font-weight: 600 !important;
+    }
+
+    #blai-edit-subrules-container .blai-mapping-badge {
+        font-weight: 800 !important;
+    }
+
     #blai-rule-edit-modal > .blai-edit-modal-card,
     #blai-risk-confirm-modal > .blai-risk-confirm-card,
     #blai-risk-info-modal > .blai-risk-info-card,
