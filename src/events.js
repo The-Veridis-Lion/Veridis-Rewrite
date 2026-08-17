@@ -1,4 +1,5 @@
 import { defaultAiRewriteSettings, extensionName, getAppContext, runtimeState, markRulesDataDirty, markPresetsUiDirty } from './state.js';
+import { clearPendingShujukuRewrite } from './shujukuCompatibility.js';
 import { logger } from './log.js';
 import { DEFAULT_SCOPE_TAG_GROUP_ID, buildPresetEntry, buildRuleActivationConfirmMessage, createScopeTagGroupId, createScopeTagId, deepClone, formatScopeTagInput, getBuiltinScopeTagKeyForStartTag, getCotScopeTagBuiltinKeys, getCurrentChatCompletionPresetName, getCurrentCharacterContext, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetBindingUsage, getPresetRules, getRuleActivationWarning, isCotScopeTagEntry, isRuleActivationWarningEnabled, mergeScopeTagsWithBuiltins, normalizeImportedRulesPayload, normalizePresetAiRewriteSettings, normalizeRuleActivationSafety, normalizeScopeTagBuiltinDismissedList, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList, normalizeScopeTagList, parseInputToWords, parseScopeTagInput, validateRegexTargetInput } from './utils.js';
 import {
@@ -154,7 +155,7 @@ function hasPresetContentChanges(currentRules, savedPresetEntry, currentAiRewrit
 function renderTagsPreserveBatchSelection() {
     const shell = document.getElementById('blai-purifier-popup');
     const activeElement = document.activeElement;
-    if (activeElement instanceof HTMLElement && activeElement.closest('#blai-tags-container')) {
+    if (activeElement instanceof HTMLElement && activeElement.closest('#blai-home-rule-grid')) {
         activeElement.blur();
     }
     if (shell) shell.scrollTop = 0;
@@ -647,7 +648,7 @@ export function bindEvents() {
                 const escapedGroupId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
                     ? CSS.escape(options.focusGroupId)
                     : String(options.focusGroupId).replace(/["\\]/g, '\\$&');
-                $(`#blai-scope-tags-list .blai-scope-group-name-input[data-group-id="${escapedGroupId}"]`).trigger('focus').trigger('select');
+                $(`#blai-scope-tags-list .blai-clean-group-name-input[data-group-id="${escapedGroupId}"]`).trigger('focus').trigger('select');
             }, 20);
         }
     };
@@ -732,19 +733,6 @@ export function bindEvents() {
         if (pageId === 'clean') renderScopeTagsModal();
     });
 
-    $(document).off('click', '#blai-purifier-popup [data-clean-tab]').on('click', '#blai-purifier-popup [data-clean-tab]', function(e) {
-        e.preventDefault();
-        const tabId = String($(this).attr('data-clean-tab') || 'settings');
-        const $cleanPage = $('#blai-purifier-popup .page-panel[data-page="clean"]');
-        $cleanPage.find('[data-clean-tab]')
-            .removeClass('is-active')
-            .attr('aria-selected', 'false');
-        $(this).addClass('is-active').attr('aria-selected', 'true');
-        $cleanPage.find('[data-clean-pane]').removeClass('is-active');
-        $cleanPage.find(`[data-clean-pane="${tabId}"]`).addClass('is-active');
-        if (tabId === 'tags') renderScopeTagsModal();
-    });
-
     $(document).off('click', '#blai-purifier-popup [data-blai-click-proxy]').on('click', '#blai-purifier-popup [data-blai-click-proxy]', function(e) {
         e.preventDefault();
         const selector = String($(this).attr('data-blai-click-proxy') || '');
@@ -755,9 +743,11 @@ export function bindEvents() {
             return;
         }
         if (target && target.disabled) {
-            const $target = $(target);
-            const message = String($target.find('.blai-bind-menu-note').text() || $target.attr('title') || '当前操作不可用').trim();
-            showToast(message);
+            if (!$(this).hasClass('blai-tools-binding-item')) {
+                const $target = $(target);
+                const message = String($target.find('.blai-bind-menu-note').text() || $target.attr('title') || '当前操作不可用').trim();
+                showToast(message);
+            }
             refreshCharacterBindingUI();
             return;
         }
@@ -772,11 +762,6 @@ export function bindEvents() {
         saveSettingsDebounced();
         renderTagsPreserveBatchSelection();
         showToast('分组顺序已反转');
-    });
-
-    $(document).off('click', '#blai-ai-api-check').on('click', '#blai-ai-api-check', function(e) {
-        e.preventDefault();
-        void runAiModelsHealthCheck({ silent: false });
     });
 
     $(document).off('click', '#blai-close-legacy-plugin').on('click', '#blai-close-legacy-plugin', function(e) {
@@ -880,8 +865,9 @@ export function bindEvents() {
     const syncSkipUserToggle = () => {
         const enabled = settings.skipUserMessages === true;
         $('#blai-skip-user-toggle')
-            .toggleClass('accent', enabled)
             .attr('aria-pressed', String(enabled))
+            .attr('title', enabled ? '关闭跳过用户消息' : '开启跳过用户消息')
+            .find('.blai-switch-state')
             .text(enabled ? '开启' : '关闭');
     };
     syncSkipUserToggle();
@@ -889,11 +875,34 @@ export function bindEvents() {
     const syncComposerButtonToggle = () => {
         const enabled = settings.showComposerAiRewriteButton === true;
         $('#blai-composer-button-toggle')
-            .toggleClass('accent', enabled)
             .attr('aria-pressed', String(enabled))
+            .attr('title', enabled ? '关闭输入框 AI 改写快捷键' : '开启输入框 AI 改写快捷键')
+            .find('.blai-tools-switch-state')
             .text(enabled ? '开启' : '关闭');
     };
     syncComposerButtonToggle();
+
+    const syncShujukuAutoRewriteToggle = () => {
+        const enabled = settings.shujukuAutoProgramRewriteEnabled === true;
+        $('#blai-shujuku-auto-rewrite-toggle')
+            .attr('aria-pressed', String(enabled))
+            .attr('title', enabled ? '关闭 Shujuku 数据库自动净化' : '开启 Shujuku 数据库自动净化')
+            .attr('aria-label', enabled ? '关闭 Shujuku 数据库自动净化' : '开启 Shujuku 数据库自动净化')
+            .find('.blai-tools-switch-state')
+            .text(enabled ? '开启' : '关闭');
+    };
+    syncShujukuAutoRewriteToggle();
+
+    $(document).off('click', '#blai-shujuku-auto-rewrite-toggle').on('click', '#blai-shujuku-auto-rewrite-toggle', function(e) {
+        e.preventDefault();
+        settings.shujukuAutoProgramRewriteEnabled = settings.shujukuAutoProgramRewriteEnabled !== true;
+        if (!settings.shujukuAutoProgramRewriteEnabled) clearPendingShujukuRewrite();
+        saveSettingsDebounced();
+        syncShujukuAutoRewriteToggle();
+        showToast(settings.shujukuAutoProgramRewriteEnabled
+            ? '已开启 Shujuku 数据库自动净化'
+            : '已关闭 Shujuku 数据库自动净化');
+    });
 
     $(document).off('click', '#blai-composer-button-toggle').on('click', '#blai-composer-button-toggle', function(e) {
         e.preventDefault();
@@ -972,11 +981,6 @@ export function bindEvents() {
         $(this).attr('aria-expanded', String(!nextHidden));
     });
 
-    $(document).off('click', '#blai-scope-tag-add-open').on('click', '#blai-scope-tag-add-open', () => {
-        closeScopeTagActionMenu();
-        openScopeTagEditor();
-    });
-
     $(document).off('click', '#blai-scope-group-add').on('click', '#blai-scope-group-add', () => {
         closeScopeTagActionMenu();
         const group = { id: createScopeTagGroupId(), name: '未命名分组' };
@@ -1017,23 +1021,11 @@ export function bindEvents() {
         renderScopeTagsModal();
     });
 
-    $(document).off('click', '#blai-scope-tags-expand-all').on('click', '#blai-scope-tags-expand-all', () => {
-        settings.scopeTagCollapsedGroups = [];
-        saveSettingsDebounced();
-        renderScopeTagsModal();
-    });
-
-    $(document).off('click', '#blai-scope-tags-collapse-all').on('click', '#blai-scope-tags-collapse-all', () => {
-        settings.scopeTagCollapsedGroups = getScopeTagGroups().map((group) => group.id);
-        saveSettingsDebounced();
-        renderScopeTagsModal();
-    });
-
-    $(document).off('click', '.blai-scope-tag-group-head').on('click', '.blai-scope-tag-group-head', function(e) {
-        if ($(this).hasClass('blai-is-managing')) return;
+    $(document).off('click', '.blai-clean-tag-group-header').on('click', '.blai-clean-tag-group-header', function(e) {
+        if ($(this).hasClass('is-managing')) return;
         e.preventDefault();
-        if ($(e.target).closest('.blai-scope-tag-group-toggle').length > 0) return;
-        const groupId = String($(this).closest('.blai-scope-tag-group').attr('data-group-id') || '');
+        if ($(e.target).closest('.blai-clean-group-switch').length > 0) return;
+        const groupId = String($(this).closest('.blai-clean-tag-group').attr('data-group-id') || '');
         if (!groupId) return;
         const groups = getScopeTagGroups();
         const collapsed = new Set(normalizeScopeTagCollapsedGroupList(settings.scopeTagCollapsedGroups, groups));
@@ -1044,7 +1036,7 @@ export function bindEvents() {
         renderScopeTagsModal();
     });
 
-    $(document).off('click', '.blai-scope-tag-group-toggle').on('click', '.blai-scope-tag-group-toggle', function(e) {
+    $(document).off('click', '.blai-clean-group-switch').on('click', '.blai-clean-group-switch', function(e) {
         e.preventDefault();
         e.stopPropagation();
         const groupId = String($(this).attr('data-group-id') || '');
@@ -1063,7 +1055,7 @@ export function bindEvents() {
         showToast(nextEnabled ? '已启用该分组' : '已关闭该分组');
     });
 
-    $(document).off('input', '.blai-scope-group-name-input').on('input', '.blai-scope-group-name-input', function() {
+    $(document).off('input', '.blai-clean-group-name-input').on('input', '.blai-clean-group-name-input', function() {
         const groupId = String($(this).attr('data-group-id') || '');
         const nextName = String($(this).val() || '').trim();
         if (!groupId || !nextName) return;
@@ -1074,14 +1066,14 @@ export function bindEvents() {
         renderScopeTagGroupOptions($('#blai-scope-tag-group-select').val() || DEFAULT_SCOPE_TAG_GROUP_ID);
     });
 
-    $(document).off('blur', '.blai-scope-group-name-input').on('blur', '.blai-scope-group-name-input', function() {
+    $(document).off('blur', '.blai-clean-group-name-input').on('blur', '.blai-clean-group-name-input', function() {
         if (String($(this).val() || '').trim()) return;
         const groupId = String($(this).attr('data-group-id') || '');
         const group = getScopeTagGroups().find((item) => item.id === groupId);
         if (group) $(this).val(group.name);
     });
 
-    $(document).off('keydown', '.blai-scope-group-name-input').on('keydown', '.blai-scope-group-name-input', function(e) {
+    $(document).off('keydown', '.blai-clean-group-name-input').on('keydown', '.blai-clean-group-name-input', function(e) {
         if (e.key !== 'Enter') return;
         e.preventDefault();
         $(this).trigger('blur');
@@ -1096,15 +1088,15 @@ export function bindEvents() {
         persistScopeTagGroups(groups);
     };
 
-    $(document).off('click', '.blai-scope-group-move-up').on('click', '.blai-scope-group-move-up', function() {
+    $(document).off('click', '.blai-clean-group-move-up').on('click', '.blai-clean-group-move-up', function() {
         moveScopeGroup(String($(this).attr('data-group-id') || ''), 'up');
     });
 
-    $(document).off('click', '.blai-scope-group-move-down').on('click', '.blai-scope-group-move-down', function() {
+    $(document).off('click', '.blai-clean-group-move-down').on('click', '.blai-clean-group-move-down', function() {
         moveScopeGroup(String($(this).attr('data-group-id') || ''), 'down');
     });
 
-    $(document).off('click', '.blai-scope-group-delete').on('click', '.blai-scope-group-delete', function() {
+    $(document).off('click', '.blai-clean-group-delete').on('click', '.blai-clean-group-delete', function() {
         const groupId = String($(this).attr('data-group-id') || '');
         if (!groupId || groupId === DEFAULT_SCOPE_TAG_GROUP_ID) return;
         const group = getScopeTagGroups().find((item) => item.id === groupId);
@@ -1201,7 +1193,7 @@ export function bindEvents() {
         if (e.target && e.target.id === 'blai-scope-tag-editor-modal') resetScopeTagEditor();
     });
 
-    $(document).off('click', '.blai-scope-tag-chip-main, .blai-scope-tag-edit').on('click', '.blai-scope-tag-chip-main, .blai-scope-tag-edit', function(e) {
+    $(document).off('click', '.blai-clean-tag-copy, .blai-clean-tag-edit').on('click', '.blai-clean-tag-copy, .blai-clean-tag-edit', function(e) {
         e.preventDefault();
         const tagId = String($(this).attr('data-id') || '');
         const scopeTag = mergeScopeTagsWithBuiltins(settings.scopeTags, settings.scopeTagBuiltinDismissed).find((tag) => tag.id === tagId);
@@ -1209,7 +1201,7 @@ export function bindEvents() {
         openScopeTagEditor(scopeTag);
     });
 
-    $(document).off('change', '.blai-scope-tag-toggle').on('change', '.blai-scope-tag-toggle', function() {
+    $(document).off('change', '.blai-clean-tag-toggle-input').on('change', '.blai-clean-tag-toggle-input', function() {
         const tagId = String($(this).attr('data-id') || '');
         const checked = $(this).prop('checked');
         const currentScopeTags = mergeScopeTagsWithBuiltins(settings.scopeTags, settings.scopeTagBuiltinDismissed);
@@ -1222,7 +1214,7 @@ export function bindEvents() {
         persistScopeTags(scopeTags);
     });
 
-    $(document).off('click', '.blai-scope-tag-del').on('click', '.blai-scope-tag-del', function(e) {
+    $(document).off('click', '.blai-clean-tag-delete').on('click', '.blai-clean-tag-delete', function(e) {
         e.preventDefault();
         const tagId = String($(this).attr('data-id') || '');
         const scopeTags = mergeScopeTagsWithBuiltins(settings.scopeTags, settings.scopeTagBuiltinDismissed);
@@ -1246,9 +1238,9 @@ export function bindEvents() {
         const $popup = $('#blai-purifier-popup');
         const isBatchMode = !$popup.hasClass('blai-is-batch-mode');
         $popup.toggleClass('blai-is-batch-mode', isBatchMode);
-        $('#blai-batch-operations').toggle(isBatchMode);
-        $popup.find('.blai-batch-checkbox-label').toggle(isBatchMode);
-        $(this).toggleClass('blai-active', isBatchMode);
+        $(this)
+            .toggleClass('blai-active', isBatchMode)
+            .attr('aria-expanded', String(isBatchMode));
         if (!isBatchMode) {
             $('.batch-item-checkbox').prop('checked', false);
             runtimeState.batchSelectedRuleIds = [];
@@ -1594,12 +1586,11 @@ export function bindEvents() {
     $(document).off('click', '#blai-default-toggle').on('click', '#blai-default-toggle', function() {
         const settings = extension_settings[extensionName];
         const activePreset = String(settings.activePreset || '');
-        if (!activePreset) { showRiskInfoModal('请先在下拉框中选择一个净化预设。'); return; }
+        if (!activePreset) { refreshCharacterBindingUI(); return; }
         const isDefaultActive = settings.defaultPreset === activePreset;
         settings.defaultPreset = isDefaultActive ? "" : activePreset;
         saveSettingsDebounced();
         refreshCharacterBindingUI();
-        showToast(isDefaultActive ? '已取消全局默认' : `已设为全局默认：${activePreset}`);
     });
 
     $(document).off('click', '#blai-character-bind-toggle').on('click', '#blai-character-bind-toggle', function(e) {
@@ -1624,8 +1615,7 @@ export function bindEvents() {
         const activeUsage = getPresetBindingUsage(activePreset);
 
         if (action === 'character') {
-            if (!activePreset) { showRiskInfoModal('请先在下拉框中选择一个净化预设。'); return; }
-            if (!context.key) { showRiskInfoModal('当前页面未识别到可绑定角色。'); refreshCharacterBindingUI(); return; }
+            if (!activePreset || !context.key) { refreshCharacterBindingUI(); return; }
             if (activeUsage.hasChatCompletionPresetBindings && settings.characterBindings?.[context.key] !== activePreset) {
                 const shouldSwitch = await showRiskConfirmModal(`净化预设「${activePreset}」当前已绑定到预设，不能同时绑定到角色卡。是否取消原绑定并切换？`);
                 if (!shouldSwitch) {
@@ -1643,13 +1633,11 @@ export function bindEvents() {
             refreshCharacterBindingUI();
             $('#blai-bind-menu').prop('hidden', true);
             $('#blai-character-bind-toggle').attr('aria-expanded', 'false');
-            showToast(`已绑定：${context.name} → ${activePreset}`);
             return;
         }
 
         if (action === 'chat-preset') {
-            if (!activePreset) { showRiskInfoModal('请先在下拉框中选择一个净化预设。'); return; }
-            if (!chatCompletionPresetName) { showRiskInfoModal('当前没有识别到 ST 对话补全预设。'); refreshCharacterBindingUI(); return; }
+            if (!activePreset || !chatCompletionPresetName) { refreshCharacterBindingUI(); return; }
             if (activeUsage.hasCharacterBindings && settings.chatCompletionPresetBindings?.[chatCompletionPresetName] !== activePreset) {
                 const shouldSwitch = await showRiskConfirmModal(`净化预设「${activePreset}」当前已绑定到角色卡，不能同时绑定到预设。是否取消原绑定并切换？`);
                 if (!shouldSwitch) {
@@ -1666,7 +1654,6 @@ export function bindEvents() {
             refreshCharacterBindingUI();
             $('#blai-bind-menu').prop('hidden', true);
             $('#blai-character-bind-toggle').attr('aria-expanded', 'false');
-            showToast(`已绑定：对话补全预设 ${chatCompletionPresetName} → ${activePreset}`);
             return;
         }
 
@@ -1688,7 +1675,6 @@ export function bindEvents() {
             refreshCharacterBindingUI();
             $('#blai-bind-menu').prop('hidden', true);
             $('#blai-character-bind-toggle').attr('aria-expanded', 'false');
-            showToast(removedRolePreset ? '已取消当前角色绑定，改为跟随全局默认' : '已取消当前对话补全预设绑定，改为跟随全局默认');
             return;
         }
 

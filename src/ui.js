@@ -80,17 +80,32 @@ export function updateLegacyPurifierWarning() {
     return detected;
 }
 
-const responsivePageTitles = {
-    overview: '首页',
-    ai: 'AI',
-    clean: '净化',
-    bind: '绑定',
-    tools: '工具',
+const responsivePageMetadata = {
+    overview: {
+        title: '首页',
+        description: '管理规则集、查看统计并编辑规则。',
+    },
+    ai: {
+        title: 'AI',
+        description: '配置 AI 改写引擎、连接参数和全局提示词。',
+    },
+    clean: {
+        title: '净化',
+        description: '管理需要被改写或保护的 XML 标签范围及深度净化设置。',
+    },
+    bind: {
+        title: '绑定',
+        description: '',
+    },
+    tools: {
+        title: '工具',
+        description: '管理预设绑定、简繁转换及其他扩展功能。',
+    },
 };
 
 export function showResponsivePage(pageId = 'overview') {
-    const normalizedPage = responsivePageTitles[pageId] ? pageId : 'overview';
-    const title = responsivePageTitles[normalizedPage];
+    const normalizedPage = responsivePageMetadata[pageId] ? pageId : 'overview';
+    const { title, description } = responsivePageMetadata[normalizedPage];
     const $popup = $('#blai-purifier-popup');
     if (!$popup.length) return;
 
@@ -101,6 +116,7 @@ export function showResponsivePage(pageId = 'overview') {
         $(this).toggleClass('active', String($(this).attr('data-page-target') || '') === normalizedPage);
     });
     $popup.find('[data-title], #blai-responsive-title').text(title);
+    $popup.find('#blai-responsive-description').text(description);
     $popup.find('#blai-character-bind-toggle').attr('aria-expanded', 'false');
 }
 
@@ -220,9 +236,9 @@ function syncRegexReplacementInputState() {
 
 export function showToast(message) {
     $('.blai-toast').remove();
-    const themeMode = String($('#blai-purifier-popup').attr('data-blai-theme') || 'auto');
+    const themeMode = String($('#blai-purifier-popup').attr('data-theme') || 'auto');
     // 替换为 100% 兼容的 fas fa-exclamation-circle 图标
-    const $toast = $(`<div class="blai-toast" data-blai-theme="${themeMode}" data-tt-mobile-surface="free-window" role="status" aria-live="polite"><i class="fas fa-exclamation-circle" style="margin-right: 6px; font-size: 15px;"></i><span class="blai-toast-text"></span></div>`);
+    const $toast = $(`<div class="blai-toast" data-theme="${themeMode}" data-tt-mobile-surface="free-window" role="status" aria-live="polite"><i class="fas fa-exclamation-circle"></i><span class="blai-toast-text"></span></div>`);
     $toast.find('.blai-toast-text').text(String(message || ''));
     $('body').append($toast);
     setTimeout(() => $toast.addClass('blai-show'), 10);
@@ -415,7 +431,7 @@ function buildScopeTagChipHtml(scopeTag, editId) {
     const isEnabled = scopeTag.enabled !== false;
     const checkedAttr = isEnabled ? 'checked' : '';
     const activeClass = scopeTag.id === editId ? 'is-active' : '';
-    const disabledClass = isEnabled ? '' : 'blai-is-disabled';
+    const disabledClass = isEnabled ? '' : 'is-disabled';
     const labelText = String(scopeTag.label || '').trim();
     const rangeText = isCotScopeTagEntry(scopeTag)
         ? COT_SCOPE_TAG_DISPLAY_TEXT
@@ -423,21 +439,18 @@ function buildScopeTagChipHtml(scopeTag, editId) {
     const primaryText = labelText || '标签范围';
     const chipTitle = `${primaryText} · ${rangeText}`;
     return `
-        <div class="blai-scope-tag-chip ${activeClass} ${disabledClass}" data-id="${safeHtml(scopeTag.id)}">
-            <label class="blai-checkbox-label blai-scope-tag-toggle-wrap" title="启用或停用该标签">
-                <input type="checkbox" class="blai-scope-tag-toggle" data-id="${safeHtml(scopeTag.id)}" ${checkedAttr}>
-                <span class="blai-custom-checkbox blai-square"></span>
+        <div class="blai-clean-tag-item ${activeClass} ${disabledClass}" data-id="${safeHtml(scopeTag.id)}">
+            <label class="blai-clean-tag-switch" title="启用或停用该标签">
+                <input type="checkbox" class="blai-clean-tag-toggle-input" data-id="${safeHtml(scopeTag.id)}" ${checkedAttr}>
+                <span class="blai-clean-switch-track" aria-hidden="true"><span></span></span>
             </label>
-            <button type="button" class="blai-scope-tag-chip-main" data-id="${safeHtml(scopeTag.id)}" title="${safeHtml(chipTitle)}">
-                <span class="blai-scope-tag-chip-title">${safeHtml(primaryText)}</span>
-                <span class="blai-scope-tag-chip-text">${safeHtml(rangeText)}</span>
+            <button type="button" class="blai-clean-tag-copy" data-id="${safeHtml(scopeTag.id)}" title="${safeHtml(chipTitle)}">
+                <span class="blai-clean-tag-title">${safeHtml(primaryText)}</span>
+                <code class="blai-clean-tag-code">${safeHtml(rangeText)}</code>
             </button>
-            <span class="blai-scope-tag-row-divider" aria-hidden="true"></span>
-            <div class="blai-scope-tag-actions">
-                <button type="button" class="blai-icon-btn blai-scope-tag-move" title="保持当前顺序" aria-label="保持当前顺序" disabled><i class="fas fa-arrow-up"></i></button>
-                <button type="button" class="blai-icon-btn blai-scope-tag-move" title="保持当前顺序" aria-label="保持当前顺序" disabled><i class="fas fa-arrow-down"></i></button>
-                <button type="button" class="blai-icon-btn blai-scope-tag-edit" data-id="${safeHtml(scopeTag.id)}" title="编辑标签" aria-label="编辑标签"><i class="fas fa-pen"></i></button>
-                <button type="button" class="blai-icon-btn blai-scope-tag-del blai-danger-btn" data-id="${safeHtml(scopeTag.id)}" title="删除标签" aria-label="删除标签"><i class="fas fa-trash"></i></button>
+            <div class="blai-clean-tag-actions">
+                <button type="button" class="blai-clean-tag-action blai-clean-tag-edit" data-id="${safeHtml(scopeTag.id)}" title="编辑标签" aria-label="编辑标签"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16-.8 4.8L8 20l10.5-10.5-4-4L4 16Z"/><path d="m12.8 7.2 4 4"/></svg></button>
+                <button type="button" class="blai-clean-tag-action blai-clean-tag-delete" data-id="${safeHtml(scopeTag.id)}" title="删除标签" aria-label="删除标签"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button>
             </div>
         </div>
     `;
@@ -483,24 +496,27 @@ export function renderScopeTagsModal() {
         if (scopeTag.id === editId) cotDisplayTag.id = scopeTag.id;
     });
 
-    $('#blai-scope-tag-total-count').text(`共 ${displayScopeTags.length} 个标签`);
+    $('#blai-scope-tag-total-count').text(String(displayScopeTags.length));
     $('#blai-scope-group-manage-open')
         .toggleClass('is-active', isGroupManageMode)
         .attr('aria-pressed', String(isGroupManageMode))
         .attr('title', isGroupManageMode ? '完成分组管理' : '管理分组')
         .attr('aria-label', isGroupManageMode ? '完成分组管理' : '管理分组')
-        .find('i')
-        .attr('class', isGroupManageMode ? 'fas fa-check' : 'fas fa-layer-group');
+        .find('.blai-clean-toolbar-button-label')
+        .text(isGroupManageMode ? '完成管理' : '分组管理');
+    $('#blai-scope-group-add').prop('hidden', !isGroupManageMode);
 
     $('#blai-scope-tag-editor-title').text(isEditing ? '编辑标签' : '新增标签');
     $('#blai-scope-tag-save').text('确认');
     $('#blai-scope-tag-reset').text('取消');
     $('#blai-scope-mode-protect')
         .toggleClass('is-active', !isCleanseInsideMode)
-        .attr('aria-pressed', String(!isCleanseInsideMode));
+        .attr('aria-pressed', String(!isCleanseInsideMode))
+        .attr('aria-checked', String(!isCleanseInsideMode));
     $('#blai-scope-mode-cleanse')
         .toggleClass('is-active', isCleanseInsideMode)
-        .attr('aria-pressed', String(isCleanseInsideMode));
+        .attr('aria-pressed', String(isCleanseInsideMode))
+        .attr('aria-checked', String(isCleanseInsideMode));
     $('#blai-scope-tags-hint').text(isCleanseInsideMode
         ? '当前模式下，只会删除或替换列表内标签的内容，标签外内容会被保留。'
         : '当前模式下，列表内标签的内容将被跳过，只对标签外的内容进行净化。');
@@ -522,7 +538,7 @@ export function renderScopeTagsModal() {
         const isGroupEnabled = activeCount > 0;
         const isGroupPartial = activeCount > 0 && activeCount < group.tags.length;
         const groupToggleClass = [
-            'blai-scope-tag-group-toggle',
+            'blai-clean-group-switch',
             isGroupEnabled ? 'is-on' : '',
             isGroupPartial ? 'is-partial' : '',
         ].filter(Boolean).join(' ');
@@ -532,42 +548,40 @@ export function renderScopeTagsModal() {
         const groupToggleDisabled = hasTags ? '' : 'disabled';
         const tagsHtml = group.tags.length > 0
             ? group.tags.map((scopeTag) => buildScopeTagChipHtml(scopeTag, editId)).join('')
-            : `<div class="blai-scope-tag-group-empty">${isCleanseInsideMode ? '此分组暂无标签。' : '此分组暂无标签。'}</div>`;
+            : '<div class="blai-clean-group-empty">此分组暂无标签。</div>';
         const groupHeadHtml = isGroupManageMode
             ? `
-                <input type="text" class="blai-scope-group-name-input" data-group-id="${safeHtml(group.id)}" value="${groupTitle}" aria-label="分组名称">
-                <span class="blai-scope-tag-group-count">${group.tags.length} 个标签</span>
-                <div class="blai-scope-group-manager-item-actions" aria-label="${groupTitle}分组操作">
-                    <button type="button" class="blai-icon-btn blai-scope-group-move-up" data-group-id="${safeHtml(group.id)}" title="上移分组" aria-label="上移分组" ${groupIndex === 0 ? 'disabled' : ''}><i class="fas fa-arrow-up"></i></button>
-                    <button type="button" class="blai-icon-btn blai-scope-group-move-down" data-group-id="${safeHtml(group.id)}" title="下移分组" aria-label="下移分组" ${groupIndex === grouped.length - 1 ? 'disabled' : ''}><i class="fas fa-arrow-down"></i></button>
-                    <button type="button" class="blai-icon-btn blai-scope-group-delete blai-danger-btn" data-group-id="${safeHtml(group.id)}" title="${isDefaultGroup ? '默认分组不可删除' : '删除分组'}" aria-label="${isDefaultGroup ? '默认分组不可删除' : '删除分组'}" ${isDefaultGroup ? 'disabled' : ''}><i class="fas fa-trash"></i></button>
+                <input type="text" class="blai-clean-group-name-input" data-group-id="${safeHtml(group.id)}" value="${groupTitle}" aria-label="分组名称">
+                <span class="blai-clean-group-count">${group.tags.length}</span>
+                <div class="blai-clean-group-manager-actions" aria-label="${groupTitle}分组操作">
+                    <button type="button" class="blai-clean-tag-action blai-clean-group-move-up" data-group-id="${safeHtml(group.id)}" title="上移分组" aria-label="上移分组" ${groupIndex === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg></button>
+                    <button type="button" class="blai-clean-tag-action blai-clean-group-move-down" data-group-id="${safeHtml(group.id)}" title="下移分组" aria-label="下移分组" ${groupIndex === grouped.length - 1 ? 'disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 10 6 6 6-6"/></svg></button>
+                    <button type="button" class="blai-clean-tag-action blai-clean-group-delete" data-group-id="${safeHtml(group.id)}" title="${isDefaultGroup ? '默认分组不可删除' : '删除分组'}" aria-label="${isDefaultGroup ? '默认分组不可删除' : '删除分组'}" ${isDefaultGroup ? 'disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
                 </div>
             `
             : `
-                <button type="button" class="blai-scope-tag-group-collapse" data-group-id="${safeHtml(group.id)}" aria-expanded="${String(!isCollapsed)}">
-                    <svg class="blai-scope-tag-group-caret" viewBox="0 0 24 24" aria-hidden="true">
+                <button type="button" class="blai-clean-group-disclosure" data-group-id="${safeHtml(group.id)}" aria-expanded="${String(!isCollapsed)}">
+                    <svg class="blai-clean-group-caret" viewBox="0 0 24 24" aria-hidden="true">
                         <polyline points="6 9 12 15 18 9"></polyline>
                     </svg>
-                    <span class="blai-scope-tag-group-title">${groupTitle}</span>
+                    <span class="blai-clean-group-title">${groupTitle}</span>
+                    <span class="blai-clean-group-count">${group.tags.length}</span>
                 </button>
-                <span class="blai-scope-tag-group-count">${group.tags.length} 个标签</span>
                 <button type="button" class="${groupToggleClass}" data-group-id="${safeHtml(group.id)}" aria-pressed="${String(isGroupEnabled)}" title="${safeHtml(groupToggleTitle)}" ${groupToggleDisabled}>
-                    <span class="blai-scope-tag-group-toggle-track" aria-hidden="true">
-                        <span class="blai-scope-tag-group-toggle-knob"></span>
-                    </span>
+                    <span class="blai-clean-switch-track" aria-hidden="true"><span></span></span>
                 </button>
             `;
         return `
-            <div class="blai-scope-tag-group ${isCollapsed ? 'is-collapsed' : ''}" data-group-id="${safeHtml(group.id)}">
-                <div class="blai-scope-tag-group-head ${isGroupManageMode ? 'blai-is-managing' : ''}">
+            <section class="blai-clean-tag-group ${isCollapsed ? 'is-collapsed' : ''}" data-group-id="${safeHtml(group.id)}">
+                <header class="blai-clean-tag-group-header ${isGroupManageMode ? 'is-managing' : ''}">
                     ${groupHeadHtml}
-                </div>
-                <div class="blai-scope-tag-group-body">
-                    <div class="blai-scope-tag-group-inner">
+                </header>
+                <div class="blai-clean-tag-group-body">
+                    <div class="blai-clean-tag-group-items">
                         ${tagsHtml}
                     </div>
                 </div>
-            </div>
+            </section>
         `;
     }).join('');
 
@@ -577,15 +591,6 @@ export function renderScopeTagsModal() {
 export function openScopeTagsModal() {
     renderScopeTagsModal();
     showResponsivePage('clean');
-    const $cleanPage = $('#blai-purifier-popup .page-panel[data-page="clean"]');
-    $cleanPage.find('[data-clean-tab]')
-        .removeClass('is-active')
-        .attr('aria-selected', 'false');
-    $cleanPage.find('[data-clean-tab="tags"]')
-        .addClass('is-active')
-        .attr('aria-selected', 'true');
-    $cleanPage.find('[data-clean-pane]').removeClass('is-active');
-    $cleanPage.find('[data-clean-pane="tags"]').addClass('is-active');
 }
 
 export function closeScopeTagsModal(options = {}) {
@@ -607,10 +612,10 @@ export function closeScopeTagsModal(options = {}) {
 }
 
 export function focusLatestRuleCard() {
-    const container = document.getElementById('blai-tags-container');
+    const container = document.getElementById('blai-home-rule-grid');
     if (!container) return;
 
-    const cards = container.querySelectorAll('.blai-card');
+    const cards = container.querySelectorAll('.blai-home-card');
     const latestCard = cards[cards.length - 1];
     if (!latestCard) return;
 
@@ -632,10 +637,10 @@ export function focusLatestRuleCard() {
 }
 
 function showProgressOverlay({ title, statusText, cancelText = '停止', onCancel = null }) {
-    const themeMode = String($('#blai-purifier-popup').attr('data-blai-theme') || 'auto');
+    const themeMode = String($('#blai-purifier-popup').attr('data-theme') || 'auto');
     $('#blai-loading-overlay').remove();
     $('body').append(`
-        <div id="blai-loading-overlay" class="blai-loading-overlay" data-blai-theme="${themeMode}" data-tt-mobile-surface="backdrop">
+        <div id="blai-loading-overlay" class="blai-loading-overlay" data-theme="${themeMode}" data-tt-mobile-surface="backdrop">
             <div class="blai-loading-panel" data-tt-mobile-surface="fullscreen-window" role="dialog" aria-modal="true" aria-labelledby="blai-loading-title">
                 <div class="blai-loading-head">
                     <h2 id="blai-loading-title" class="blai-loading-title"><i class="fas fa-spinner fa-spin"></i> ${title}</h2>
@@ -697,12 +702,12 @@ export function updateZhDictionaryInstallOverlay(progressRatio, statusText) {
 }
 
 export function openZhDictionaryModal(stats = {}, options = {}) {
-    const themeMode = String($('#blai-purifier-popup').attr('data-blai-theme') || 'auto');
+    const themeMode = String($('#blai-purifier-popup').attr('data-theme') || 'auto');
     const bytes = Number(stats.bytes) || 0;
     const mb = bytes > 0 ? (bytes / 1024 / 1024).toFixed(2) : '1.20';
     const entries = Number(stats.entries) || 0;
     $('#blai-zh-dictionary-modal')
-        .attr('data-blai-theme', themeMode)
+        .attr('data-theme', themeMode)
         .css('display', 'flex');
     $('#blai-zh-dict-stats').text(`词典包约 ${mb} MB，包含 ${entries.toLocaleString('zh-CN')} 条字词与异体映射。`);
     $('#blai-zh-dict-tw').prop('checked', options.tw !== false);
@@ -912,7 +917,9 @@ export function refreshCharacterBindingUI() {
         const chatPresetBindingWillSwitchFromRole = !!(activePreset && activeUsage.hasCharacterBindings && !isChatPresetBound);
         $('#blai-tools-global-preset').text(settings.defaultPreset || '无');
         $('#blai-tools-chat-binding').text(currentChatBound || '无');
+        $('#blai-tools-chat-context').text(currentChatBound ? chatCompletionPresetName : '无');
         $('#blai-tools-character-binding').text(currentBound || '无');
+        $('#blai-tools-character-context').text(currentBound ? context.name : '无');
         $bindBtn.toggleClass('blai-bind-active', hasCurrentBinding);
         $bindBtn.prop('disabled', false);
         $bindBtn.attr('aria-pressed', String(hasCurrentBinding));
@@ -1134,7 +1141,7 @@ export function getSingleRuleReplacementValues(mode) {
 }
 
 export function renderTags() {
-    const container = $('#blai-tags-container');
+    const container = $('#blai-home-rule-grid');
     if (!container.length) return;
     if (!runtimeState.rulesUiDirty && container.children().length > 0) return;
 
@@ -1153,34 +1160,36 @@ export function renderTags() {
                 ? 'AI 运行时生成'
                 : formatReplacementPreview(sub.replacements || [], mode);
             const subEnabled = sub.enabled !== false;
-            const rewriteBadge = getRewriteModeBadgeHtml(sub);
+            const rewriteBadge = getRewriteMode(sub) === 'ai'
+                ? '<span class="blai-home-rule-badge">AI 改写</span>'
+                : '';
             return `
-                <div class="blai-rule-item ${subEnabled ? '' : 'blai-is-disabled'}">
-                    <div class="blai-rule-source">
-                        <div class="blai-rule-labels">
-                            <span class="blai-tag">${tagText}</span>
+                <div class="blai-home-rule-item ${subEnabled ? '' : 'blai-is-disabled'}">
+                    <div class="blai-home-rule-source">
+                        <div class="blai-home-rule-labels">
+                            <span class="blai-home-rule-badge">${tagText}</span>
                             ${rewriteBadge}
                         </div>
-                        <span class="blai-source">${tPreview}</span>
+                        <span class="blai-home-source-text">${tPreview}</span>
                     </div>
-                    <i class="fas fa-arrow-right blai-arrow"></i>
-                    <div class="blai-rule-target">
-                        <span class="blai-preview-label">改写预览</span>
-                        <span class="blai-target">${rPreview}</span>
+                    <i class="fas fa-arrow-right blai-home-rule-arrow" aria-hidden="true"></i>
+                    <div class="blai-home-rule-target">
+                        <span class="blai-home-preview-label">改写预览</span>
+                        <span class="blai-home-target-text">${rPreview}</span>
                     </div>
                 </div>`;
         }).join('');
 
         const moreHtml = subRules.length > maxPreview
-            ? `<div class="blai-more-text">... 以及其他 ${subRules.length - maxPreview} 组映射</div>`
+            ? `<div class="blai-home-more-text">... 以及其他 ${subRules.length - maxPreview} 组映射</div>`
             : '';
         const bodyHtml = subRules.length > 0
-            ? `<div class="blai-card-body">${subRulesHtml}${moreHtml}</div>`
-            : '';
+            ? `<div class="blai-home-card-body">${subRulesHtml}${moreHtml}</div>`
+            : '<div class="blai-home-card-empty">此合集暂无规则</div>';
 
         const isEnabled = r.enabled !== false;
         const riskIndicatorHtml = isRuleActivationWarningEnabled(r)
-            ? `<i class="fas fa-circle-exclamation blai-rule-risk-indicator"
+            ? `<i class="fas fa-circle-exclamation blai-rule-risk-indicator blai-home-card-risk"
                   data-index="${i}"
                   title="查看启用风险提示"
                   aria-label="查看高风险规则组提示"
@@ -1188,37 +1197,33 @@ export function renderTags() {
                   tabindex="0"></i>`
             : '';
         const checkedAttr = isEnabled ? 'checked' : '';
-        const moveUpDisabled = i === 0 ? 'disabled' : '';
-        const moveDownDisabled = i === rules.length - 1 ? 'disabled' : '';
-        const headerClass = subRules.length > 0 ? 'blai-card-header blai-has-border' : 'blai-card-header';
 
         return `
-            <div class="blai-card ${!isEnabled ? 'blai-is-disabled' : ''}" data-index="${i}">
-                <div class="${headerClass}">
-                    <div class="blai-header-left">
-                        <label class="blai-batch-checkbox-label">
+            <article class="blai-home-card ${!isEnabled ? 'blai-is-disabled' : ''}" data-index="${i}">
+                <header class="blai-home-card-header">
+                    <div class="blai-home-card-heading">
+                        <label class="blai-batch-checkbox-label blai-home-selection-control" title="选择此规则合集">
                             <input type="checkbox" class="batch-item-checkbox" data-index="${i}">
-                            <span class="blai-custom-checkbox blai-square-2px"></span>
+                            <span class="blai-home-selection-indicator" aria-hidden="true"></span>
+                            <span class="blai-visually-hidden">选择 ${name}</span>
                         </label>
-                        <label class="blai-checkbox-label" title="启用或停用此规则组">
+                        <label class="blai-home-enabled-control" title="启用或停用此规则组">
                             <input type="checkbox" class="blai-rule-toggle" data-index="${i}" ${checkedAttr}>
-                            <span class="blai-custom-checkbox"></span>
-                            <span class="blai-group-title">${name}</span>
-                            <span class="blai-rule-count">${subRules.length} 条</span>
+                            <span class="blai-home-enabled-indicator" aria-hidden="true"></span>
+                            <span class="blai-home-card-title">${name}</span>
+                            <span class="blai-home-card-count">${subRules.length} 条</span>
                         </label>
                     </div>
-                    <div class="blai-icon-group blai-compact">
-                        <button class="blai-rule-move-up" data-index="${i}" title="上移合集" ${moveUpDisabled}><i class="fas fa-arrow-up"></i></button>
-                        <button class="blai-rule-move-down" data-index="${i}" title="下移合集" ${moveDownDisabled}><i class="fas fa-arrow-down"></i></button>
+                    <div class="blai-home-card-actions">
                         ${riskIndicatorHtml}
-                        <button class="blai-rule-edit" type="button" data-index="${i}" title="打开合集" aria-label="打开合集"><i class="fas fa-ellipsis-vertical"></i></button>
+                        <button class="blai-rule-edit blai-home-card-menu" type="button" data-index="${i}" title="打开合集" aria-label="打开合集"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></button>
                     </div>
-                </div>
+                </header>
                 ${bodyHtml}
-            </div>`;
+            </article>`;
     }).join('');
 
-    container.html(html || '<div class="blai-empty-state">当前无规则，请点击上方按钮新增</div>');
+    container.html(html || '<div class="blai-home-empty-state"><i class="fas fa-folder-open" aria-hidden="true"></i><strong>当前没有规则合集</strong><span>点击“添加”创建第一个合集</span></div>');
     const aiRuleCount = rules.reduce((count, rule) => count + (Array.isArray(rule?.subRules)
         ? rule.subRules.filter((sub) => sub?.rewriteMode === 'ai').length
         : 0), 0);
@@ -1231,7 +1236,7 @@ export function renderSubrulesToModal() {
     const container = $('#blai-edit-subrules-container');
     if (!container.length) return;
     if (runtimeState.currentEditingSubrules.length === 0) {
-        container.html('<div style="text-align:center; color:var(--blai-text-secondary); font-size:12px; padding:20px;">当前合集没有映射规则，请点击下方按钮添加。</div>');
+        container.html('<div style="text-align:center; color:var(--text-secondary); font-size:12px; padding:20px;">当前合集没有映射规则，请点击下方按钮添加。</div>');
         return;
     }
 
@@ -1243,11 +1248,11 @@ export function renderSubrulesToModal() {
         const moveUpDisabled = i === 0 ? 'disabled' : '';
         const moveDownDisabled = i === runtimeState.currentEditingSubrules.length - 1 ? 'disabled' : '';
 
-        const badgeBaseStyle = "display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; border-radius:6px; font-size:13px; font-weight:800; color:#fff; min-width:45px; margin:0; line-height:1; flex-shrink:0;";
+        const badgeBaseStyle = "display:inline-flex; align-items:center; justify-content:center; padding:4px 10px; border-radius:6px; font-size:13px; font-weight:800; color:var(--bg-base); min-width:45px; margin:0; line-height:1; flex-shrink:0;";
         let badgeHTML = '';
-        if (mode === 'regex') badgeHTML = `<span style="${badgeBaseStyle} background:var(--blai-accent-color);">正则</span>`;
-        else if (mode === 'simple') badgeHTML = `<span style="${badgeBaseStyle} background:color-mix(in srgb, var(--blai-accent-color) 72%, #3b82f6 28%);">简易</span>`;
-        else badgeHTML = `<span style="${badgeBaseStyle} background:var(--blai-text-secondary); color:var(--blai-background-popup);">普通</span>`;
+        if (mode === 'regex') badgeHTML = `<span style="${badgeBaseStyle} background:var(--accent-color);">正则</span>`;
+        else if (mode === 'simple') badgeHTML = `<span style="${badgeBaseStyle} background:color-mix(in srgb, var(--accent-color) 72%, var(--accent-color) 28%);">简易</span>`;
+        else badgeHTML = `<span style="${badgeBaseStyle} background:var(--text-secondary); color:var(--bg-surface);">普通</span>`;
 
         const tPreview = getRuleSourcePreviewText(sub);
         const rPreview = formatReplacementPreview(sub.replacements || [], mode);
@@ -1256,15 +1261,15 @@ export function renderSubrulesToModal() {
         let remarkHTML = '';
         if (remark) {
             remarkHTML = `
-                <div style="margin-top: 8px; padding-top: 10px; border-top: 1px dotted color-mix(in srgb, var(--blai-text-primary) 35%, rgba(128,128,128,0.5)); font-size: 11px; color: var(--blai-text-mute); font-style: italic;">
+                <div style="margin-top: 8px; padding-top: 10px; border-top: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent)); font-size: 11px; color: var(--text-secondary); font-style: italic;">
                     <i class="fas fa-info-circle" style="margin-right: 4px;"></i>${safeHtml(remark)}
                 </div>
             `;
         }
 
         return `
-            <div class="blai-subrule-card ${subEnabled ? '' : 'blai-is-disabled'}" style="flex-shrink: 0 !important; background: var(--blai-background-secondary); border: 1px solid var(--blai-border-color); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; box-shadow: 0 4px 10px rgba(0,0,0,0.04);">
-                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dotted color-mix(in srgb, var(--blai-text-primary) 35%, rgba(128,128,128,0.5));">
+            <div class="blai-subrule-card ${subEnabled ? '' : 'blai-is-disabled'}" style="flex-shrink: 0 !important; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; flex-direction: column; box-shadow: 0 4px 10px color-mix(in srgb, var(--bg-base) 12%, transparent);">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent));">
                     <div style="display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; min-width: 0;">
                         <label class="blai-checkbox-label blai-subrule-enable-label" title="${subEnabled ? '停用此条规则' : '启用此条规则'}">
                             <input type="checkbox" class="blai-subrule-toggle" data-index="${i}" ${checkedAttr}>
@@ -1281,9 +1286,9 @@ export function renderSubrulesToModal() {
                         <button class="blai-remark-subrule-btn blai-icon-btn" data-index="${i}" title="快捷修改备注" style="margin:0;"><i class="fas fa-comment-dots"></i></button>
                     </div>
                 </div>
-                <div style="font-size: 13px !important; color: var(--blai-text-primary); line-height: 1.5; word-break: break-all;">
+                <div style="font-size: 13px !important; color: var(--text-main); line-height: 1.5; word-break: break-all;">
                     <b style="font-size: 13px !important;">${tPreview}</b> 
-                    <i class="fas fa-arrow-right" style="color: var(--blai-text-mute); font-size: 11px; margin: 0 6px;"></i> 
+                    <i class="fas fa-arrow-right" style="color: var(--text-secondary); font-size: 11px; margin: 0 6px;"></i>
                     <span style="font-size: 13px !important;">${rPreview}</span>
                 </div>
                 ${remarkHTML}

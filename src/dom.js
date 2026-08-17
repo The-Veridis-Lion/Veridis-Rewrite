@@ -51,6 +51,9 @@ const knownPluginContainerSelector = [
     loreFrameDomSelector,
 ].join(', ');
 
+const trailingDashBetweenChineseSource = '(?<=[\\u4e00-\\u9fff])—+(?=[\\u4e00-\\u9fff])';
+const crossParagraphDashBetweenChineseSource = '(?<=[\\u4e00-\\u9fff])—+\\n+(?:—+)?(?=[\\u4e00-\\u9fff])';
+
 function isPersonaDescriptionProtectionEnabled() {
     return getAppContext().extension_settings?.[extensionName]?.protectPersonaDescription === true;
 }
@@ -254,6 +257,8 @@ export function purifyDOM(rootNode) {
 
     const messageBodies = collectMessageBodyRoots(rootNode);
     for (const messageBody of messageBodies) {
+        const runs = collectStreamingTextRuns(messageBody);
+        const initialRunTexts = runs.map((run) => collectStreamingRunText(run));
         const walker = document.createTreeWalker(messageBody, NodeFilter.SHOW_TEXT, null, false);
         let node;
         while (node = walker.nextNode()) {
@@ -264,6 +269,12 @@ export function purifyDOM(rootNode) {
 
             const nextValue = applyScopedReplacements(original, { deterministic: true, domSafeOnly: true });
             if (original !== nextValue) node.nodeValue = nextValue;
+        }
+
+        const messageIndex = resolveMessageIndexFromDomNode(messageBody);
+        const message = getAppContext().chat?.[messageIndex];
+        if (typeof message?.mes === 'string') {
+            applyDashPunctuationProjection(messageBody, runs, initialRunTexts, message.mes, processors);
         }
     }
 }
@@ -364,6 +375,181 @@ function collectStreamingSurfaceText(surface) {
     return text;
 }
 
+function collectStreamingRunText(run) {
+    return run.reduce((text, node) => text + String(node?.nodeValue || ''), '');
+}
+
+function getDashProjectionAuthorization(processors) {
+    let trailing = false;
+    let crossParagraph = false;
+
+    for (const processor of processors) {
+        if (processor?.kind !== 'regex'
+            || !Array.isArray(processor.replacements)
+            || processor.replacements.length !== 1
+            || String(processor.replacements[0]) !== '，') continue;
+
+        if (processor.regex?.source === trailingDashBetweenChineseSource) trailing = true;
+        if (processor.regex?.source === crossParagraphDashBetweenChineseSource) {
+            trailing = true;
+            crossParagraph = true;
+        }
+    }
+
+    return { trailing, crossParagraph };
+}
+
+function splitDashProjectionSourceLines(rawText) {
+    const lines = [];
+    const newlinePattern = /\n+/g;
+    let start = 0;
+    let match;
+
+    while (match = newlinePattern.exec(rawText)) {
+        lines.push({ text: rawText.slice(start, match.index), start });
+        start = match.index + match[0].length;
+    }
+    lines.push({ text: rawText.slice(start), start });
+    return lines;
+}
+
+function getStreamingRunBoundaryContainer(run, surface) {
+    let element = run[0]?.parentElement || run[0]?.parentNode;
+    while (element && element !== surface) {
+        if (isStreamingRunBoundaryElement(element)) return element;
+        element = element.parentElement || element.parentNode;
+    }
+    return surface;
+}
+
+function canProjectAcrossStreamingRuns(leftRun, rightRun, surface) {
+    const leftContainer = getStreamingRunBoundaryContainer(leftRun, surface);
+    const rightContainer = getStreamingRunBoundaryContainer(rightRun, surface);
+    if (!leftContainer || !rightContainer || leftContainer === rightContainer || leftContainer === surface || rightContainer === surface) {
+        return false;
+    }
+    if (leftContainer.parentNode !== rightContainer.parentNode) return false;
+
+    const siblings = Array.from(leftContainer.parentNode?.childNodes || []);
+    const leftIndex = siblings.indexOf(leftContainer);
+    const rightIndex = siblings.indexOf(rightContainer);
+    if (leftIndex < 0 || rightIndex <= leftIndex) return false;
+
+    return siblings.slice(leftIndex + 1, rightIndex).every((node) => (
+        node?.nodeType === Node.TEXT_NODE && String(node.nodeValue || '').trim() === ''
+    ));
+}
+
+function isDashProjectionRangeAllowed(range, scopedRanges) {
+    if (scopedRanges === null) return true;
+    return scopedRanges.some((allowed) => allowed.start <= range.start && allowed.end >= range.end);
+}
+
+function applyStreamingSymbolEdits(run, edits) {
+    if (edits.length === 0) return false;
+    const snapshot = buildNodeRangeSnapshot(run);
+    const segment = {
+        nodes: run,
+        startNode: run[0],
+        startOffset: 0,
+        endNode: run[run.length - 1],
+        endOffset: run[run.length - 1]?.nodeValue?.length || 0,
+    };
+    const nodeValues = run.map((node) => node?.nodeValue || '');
+    edits.slice().sort((left, right) => right.start - left.start).forEach((edit) => {
+        replaceStreamingRange(segment, snapshot, nodeValues, edit);
+    });
+
+    let changed = false;
+    run.forEach((node, index) => {
+        if (node.nodeValue === nodeValues[index]) return;
+        node.nodeValue = nodeValues[index];
+        changed = true;
+    });
+    return changed;
+}
+
+function projectSingleNodeTrailingDash(rawSource, currentValue, processors) {
+    if (!getDashProjectionAuthorization(processors).trailing) return currentValue;
+    const visibleRawText = stripStreamingWrapperTags(rawSource);
+    if (visibleRawText.includes('\n')) return currentValue;
+    const rawMatch = visibleRawText.match(/(?<=[\u4e00-\u9fff])—+$/u);
+    const currentMatch = currentValue.match(/(?<=[\u4e00-\u9fff])—+$/u);
+    if (!rawMatch || !currentMatch) return currentValue;
+
+    const scopedRanges = hasEnabledScopeTags() ? projectStreamingScopeRanges(rawSource) : null;
+    const rawRange = { start: rawMatch.index, end: rawMatch.index + rawMatch[0].length };
+    if (!isDashProjectionRangeAllowed(rawRange, scopedRanges)) return currentValue;
+    return currentValue.slice(0, currentMatch.index) + '，';
+}
+
+function applyDashPunctuationProjection(surface, runs, initialRunTexts, rawSource, processors) {
+    const authorization = getDashProjectionAuthorization(processors);
+    if (!authorization.trailing || runs.length === 0) return false;
+
+    const visibleRawText = stripStreamingWrapperTags(rawSource);
+    const sourceLines = splitDashProjectionSourceLines(visibleRawText);
+    if (sourceLines.length !== runs.length) return false;
+
+    const plans = sourceLines.map(() => ({ trailing: null, leading: null }));
+    for (let index = 0; index < sourceLines.length; index++) {
+        const sourceLine = sourceLines[index];
+        const trailingMatch = sourceLine.text.match(/(?<=[\u4e00-\u9fff])—+$/u);
+        if (trailingMatch && (index === sourceLines.length - 1
+            || canProjectAcrossStreamingRuns(runs[index], runs[index + 1], surface))) {
+            plans[index].trailing = {
+                start: trailingMatch.index,
+                end: trailingMatch.index + trailingMatch[0].length,
+                sourceStart: sourceLine.start + trailingMatch.index,
+                sourceEnd: sourceLine.start + trailingMatch.index + trailingMatch[0].length,
+            };
+        }
+
+        if (!authorization.crossParagraph || index === 0) continue;
+        const previousLine = sourceLines[index - 1];
+        const leadingMatch = sourceLine.text.match(/^—+(?=[\u4e00-\u9fff])/u);
+        if (!leadingMatch
+            || !/(?<=[\u4e00-\u9fff])—+$/u.test(previousLine.text)
+            || !canProjectAcrossStreamingRuns(runs[index - 1], runs[index], surface)) continue;
+        plans[index].leading = {
+            start: 0,
+            end: leadingMatch[0].length,
+            sourceStart: sourceLine.start,
+            sourceEnd: sourceLine.start + leadingMatch[0].length,
+        };
+    }
+
+    const projectedSourceLines = sourceLines.map((line, index) => {
+        let value = line.text;
+        if (plans[index].trailing) value = value.slice(0, plans[index].trailing.start) + '，';
+        if (plans[index].leading) value = value.slice(plans[index].leading.end);
+        return value;
+    });
+    const hasExactCorrespondence = initialRunTexts.every((value, index) => (
+        value === sourceLines[index].text || value === projectedSourceLines[index]
+    ));
+    if (!hasExactCorrespondence) return false;
+
+    const scopedRanges = hasEnabledScopeTags() ? projectStreamingScopeRanges(rawSource) : null;
+    let changed = false;
+    for (let index = 0; index < runs.length; index++) {
+        const currentText = collectStreamingRunText(runs[index]);
+        const edits = [];
+        const trailing = plans[index].trailing;
+        if (trailing && isDashProjectionRangeAllowed({ start: trailing.sourceStart, end: trailing.sourceEnd }, scopedRanges)) {
+            const match = currentText.match(/(?<=[\u4e00-\u9fff])—+$/u);
+            if (match) edits.push({ start: match.index, end: match.index + match[0].length, replacement: '，' });
+        }
+        const leading = plans[index].leading;
+        if (leading && isDashProjectionRangeAllowed({ start: leading.sourceStart, end: leading.sourceEnd }, scopedRanges)) {
+            const match = currentText.match(/^—+(?=[\u4e00-\u9fff])/u);
+            if (match) edits.push({ start: 0, end: match[0].length, replacement: '' });
+        }
+        changed = applyStreamingSymbolEdits(runs[index], edits) || changed;
+    }
+    return changed;
+}
+
 function buildNodeRangeSnapshot(nodes, startNode = null, startOffset = 0, endNode = null, endOffset = 0) {
     const firstIndex = startNode ? nodes.indexOf(startNode) : 0;
     const lastIndex = endNode ? nodes.indexOf(endNode) : nodes.length - 1;
@@ -442,19 +628,19 @@ function collectProcessorMatches(text, processor, processorIndex) {
     return matches;
 }
 
-function insertAtStreamingOffset(segment, snapshot, offset, replacement) {
+function insertAtStreamingOffset(segment, snapshot, nodeValues, offset, replacement) {
     const location = locateRangeStart(snapshot.ranges, offset);
     if (!location) return;
-    const value = location.node.nodeValue || '';
-    location.node.nodeValue = value.slice(0, location.offset) + replacement + value.slice(location.offset);
+    const value = nodeValues[location.nodeIndex];
+    nodeValues[location.nodeIndex] = value.slice(0, location.offset) + replacement + value.slice(location.offset);
     if (location.node === segment.endNode && location.offset <= segment.endOffset) {
         segment.endOffset += replacement.length;
     }
 }
 
-function replaceStreamingRange(segment, snapshot, match) {
+function replaceStreamingRange(segment, snapshot, nodeValues, match) {
     if (match.start === match.end) {
-        insertAtStreamingOffset(segment, snapshot, match.start, match.replacement);
+        insertAtStreamingOffset(segment, snapshot, nodeValues, match.start, match.replacement);
         return;
     }
 
@@ -463,25 +649,44 @@ function replaceStreamingRange(segment, snapshot, match) {
     if (!start || !end) return;
 
     if (start.node === end.node) {
-        const value = start.node.nodeValue || '';
-        start.node.nodeValue = value.slice(0, start.offset) + match.replacement + value.slice(end.offset);
+        const value = nodeValues[start.nodeIndex];
+        nodeValues[start.nodeIndex] = value.slice(0, start.offset) + match.replacement + value.slice(end.offset);
         if (start.node === segment.endNode && start.offset < segment.endOffset) {
             segment.endOffset += match.replacement.length - (end.offset - start.offset);
         }
         return;
     }
 
-    const startValue = start.node.nodeValue || '';
-    const endValue = end.node.nodeValue || '';
-    start.node.nodeValue = startValue.slice(0, start.offset) + match.replacement;
+    const startValue = nodeValues[start.nodeIndex];
+    const endValue = nodeValues[end.nodeIndex];
+    nodeValues[start.nodeIndex] = startValue.slice(0, start.offset) + match.replacement;
     for (let index = start.nodeIndex + 1; index < end.nodeIndex; index++) {
-        snapshot.ranges[index].node.nodeValue = '';
+        nodeValues[index] = '';
     }
-    end.node.nodeValue = endValue.slice(end.offset);
+    nodeValues[end.nodeIndex] = endValue.slice(end.offset);
     if (end.node === segment.endNode) segment.endOffset -= end.offset;
 }
 
 function applyStreamingMaskToRun(nodes, processors, scopedRanges = null) {
+    if (scopedRanges === null && nodes.length === 1) {
+        const node = nodes[0];
+        let changed = false;
+
+        processors.forEach((processor, processorIndex) => {
+            const currentValue = node.nodeValue || '';
+            let processorChanged = false;
+            const nextValue = currentValue.replace(processor.regex, (match, ...args) => {
+                const replacement = String(resolveProcessorReplacement(processor, processorIndex, match, args, true) ?? '');
+                if (replacement !== match) processorChanged = true;
+                return replacement;
+            });
+            if (nextValue !== currentValue) node.nodeValue = nextValue;
+            changed = processorChanged || changed;
+        });
+
+        return changed;
+    }
+
     const runSnapshot = buildNodeRangeSnapshot(nodes);
     const ranges = scopedRanges || [{ start: 0, end: runSnapshot.text.length }];
     const segments = ranges
@@ -500,10 +705,15 @@ function applyStreamingMaskToRun(nodes, processors, scopedRanges = null) {
                 segment.endOffset,
             );
             const matches = collectProcessorMatches(snapshot.text, processor, processorIndex);
+            if (matches.length === 0) return;
+            const nodeValues = segment.nodes.map((node) => node?.nodeValue || '');
             for (let index = matches.length - 1; index >= 0; index--) {
-                replaceStreamingRange(segment, snapshot, matches[index]);
-                changed = true;
+                replaceStreamingRange(segment, snapshot, nodeValues, matches[index]);
             }
+            segment.nodes.forEach((node, index) => {
+                if (node.nodeValue !== nodeValues[index]) node.nodeValue = nodeValues[index];
+            });
+            changed = true;
         });
     }
     return changed;
@@ -541,18 +751,22 @@ function applyScopedStreamingRuns(runs, processors, scopedRanges) {
 
 export function applyStreamingVisualMask(surface, rawSource, cleanSource, options = {}) {
     if (!surface) return false;
-    const runs = collectStreamingTextRuns(surface);
-    const eligibleTextNodes = runs.flat();
     const rawText = String(rawSource || '');
     const cleanText = String(cleanSource || '');
+    if (!runtimeState.isRegexDirty
+        && runtimeState.activeVisualProcessors.length === 0
+        && rawText === cleanText) return false;
+    const runs = collectStreamingTextRuns(surface);
+    const initialRunTexts = runs.map((run) => collectStreamingRunText(run));
+    const eligibleTextNodes = runs.flat();
     const currentVisibleText = eligibleTextNodes.map((node) => node.nodeValue || '').join('');
     const currentSurfaceText = collectStreamingSurfaceText(surface);
     const visibleRawText = stripStreamingWrapperTags(rawText);
     const visibleCleanText = stripStreamingWrapperTags(cleanText);
-    if (visibleCleanText !== visibleRawText && currentSurfaceText === visibleCleanText) return false;
-    if (options.requireSourceCorrespondence === true
-        && currentSurfaceText !== visibleRawText
-        && currentSurfaceText !== visibleCleanText) return false;
+    const ordinaryProjectionComplete = visibleCleanText !== visibleRawText && currentSurfaceText === visibleCleanText;
+    const ordinarySourceCorrespondence = options.requireSourceCorrespondence !== true
+        || currentSurfaceText === visibleRawText
+        || currentSurfaceText === visibleCleanText;
 
     const processors = buildProcessors({ includeAiRewrite: true });
     const streamingProcessors = processors.filter((processor) => (
@@ -561,21 +775,37 @@ export function applyStreamingVisualMask(surface, rawSource, cleanSource, option
         })
     ));
 
-    if (eligibleTextNodes.length === 1 && streamingProcessors.length === processors.length) {
+    let ordinaryChanged = false;
+    let singleNodeProjectionComplete = ordinaryProjectionComplete;
+    if (!singleNodeProjectionComplete
+        && ordinarySourceCorrespondence
+        && eligibleTextNodes.length === 1
+        && streamingProcessors.length === processors.length) {
         const textNode = eligibleTextNodes[0];
         const currentText = textNode.nodeValue || '';
         const projectedText = resolveSingleNodeStreamingProjection(rawText, cleanText, currentText);
         if (projectedText !== null && projectedText !== currentText) {
-            textNode.nodeValue = projectedText;
-            return true;
+            textNode.nodeValue = projectSingleNodeTrailingDash(rawText, projectedText, processors);
+            ordinaryChanged = true;
+            singleNodeProjectionComplete = true;
         }
     }
 
     if (hasEnabledScopeTags()) {
         if (currentVisibleText !== visibleRawText) return false;
-        return applyScopedStreamingRuns(runs, streamingProcessors, projectStreamingScopeRanges(rawText));
+        const changed = singleNodeProjectionComplete
+            ? ordinaryChanged
+            : ordinarySourceCorrespondence
+            ? applyScopedStreamingRuns(runs, streamingProcessors, projectStreamingScopeRanges(rawText))
+            : false;
+        return applyDashPunctuationProjection(surface, runs, initialRunTexts, rawText, processors) || changed;
     }
-    return runs.reduce((changed, run) => applyStreamingMaskToRun(run, streamingProcessors) || changed, false);
+    const changed = singleNodeProjectionComplete
+        ? ordinaryChanged
+        : ordinarySourceCorrespondence
+        ? runs.reduce((runChanged, run) => applyStreamingMaskToRun(run, streamingProcessors) || runChanged, false)
+        : false;
+    return applyDashPunctuationProjection(surface, runs, initialRunTexts, rawText, processors) || changed;
 }
 
 export function renderStreamingVisualMask(messageId, committedRawText, options = {}) {

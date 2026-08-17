@@ -66,7 +66,9 @@ jQuery(() => {
     };
 
     if (typeof eventSource !== 'undefined' && event_types.APP_READY) {
-        eventSource.on(event_types.APP_READY, boot);
+        eventSource.on(event_types.APP_READY, () => {
+            return boot();
+        });
         if (document.getElementById('send_textarea')) boot();
     }
 });

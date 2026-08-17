@@ -6,6 +6,8 @@ import { clearAllMessageDiffMeta, clearMessageDiffMeta, commitCurrentMessageText
 import { getSillyTavernContextSnapshot, isBaiBaiToolkitInstalled, isLoreFrameInstalled, isTauriTavernHost, markHostChatDirtyFromIndex } from './platform.js';
 import { buildProcessors, mergeProtectedScopeUpdatesIntoSource } from './replacementEngine.js';
 import { queueIncrementalChatSave } from './chatPersistence.js';
+import { markLatestMessageShujukuRewritePending } from './shujukuCompatibility.js';
+import { recordAiRewriteDebug } from './aiRewrite/debug.js';
 
 const chatChangedSyncMessageLimit = 80;
 const chatChangedBackgroundChunkSize = 25;
@@ -395,6 +397,9 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     const sourceMes = resolveMessageDiffSource(msg, options.diffSourceMes);
 
     let changed = false;
+    let changedTargets = 0;
+    let changedSwipeCount = 0;
+    let activeTextChanged = false;
 
     const diffResult = options.explicitRecleanse === true && typeof options.recleanseText === 'string'
         ? buildDiffResultFromPair(sourceMes, options.recleanseText)
@@ -409,9 +414,22 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     const hasMainDiff = mainCache.snippets.length > 0 || mainCache.fullDiff.includes('blai-diff-full-modified');
 
     if (typeof msg.mes === 'string' && cleanedText !== currentMes) {
+        const currentSwipeIndex = Array.isArray(msg.swipes) ? Number(msg.swipe_id) : -1;
+        const currentSwipe = Array.isArray(msg.swipes) && Number.isInteger(currentSwipeIndex) && currentSwipeIndex >= 0
+            ? msg.swipes[currentSwipeIndex]
+            : null;
+        const currentSwipeText = typeof currentSwipe === 'string' ? currentSwipe : currentSwipe?.mes;
         const textCommit = commitCurrentMessageText(msg, cleanedText, getMessageDiffBranchKey(msg));
         if (!textCommit.ok) return false;
         changed = textCommit.changed;
+        if (textCommit.changed) {
+            changedTargets++;
+            activeTextChanged = true;
+            if (textCommit.swipeIndex >= 0 && currentSwipeText !== cleanedText) {
+                changedTargets++;
+                changedSwipeCount++;
+            }
+        }
     }
 
     if (options.cleanAllSwipes === true && Array.isArray(msg.swipes)) {
@@ -421,12 +439,16 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
                 if (cleanedText !== msg.swipes[i]) {
                     msg.swipes[i] = cleanedText;
                     changed = true;
+                    changedTargets++;
+                    changedSwipeCount++;
                 }
             } else if (msg.swipes[i] && typeof msg.swipes[i] === 'object' && typeof msg.swipes[i].mes === 'string') {
                 const { cleanedText } = buildDiffSnippetsFromText(msg.swipes[i].mes);
                 if (cleanedText !== msg.swipes[i].mes) {
                     msg.swipes[i].mes = cleanedText;
                     changed = true;
+                    changedTargets++;
+                    changedSwipeCount++;
                 }
             }
         }
@@ -451,6 +473,20 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     }
 
     if (changed) markHostChatDirtyFromIndex(index);
+    markLatestMessageShujukuRewritePending(index);
+    if (changedTargets > 0) {
+        const details = {
+            source: options.explicitRecleanse === true ? 'manual-recleanse' : 'message-cleanse',
+            messageId: index,
+            changedTargets,
+            changedSwipeCount,
+        };
+        if (activeTextChanged) {
+            details.beforeLength = currentMes.length;
+            details.afterLength = typeof msg.mes === 'string' ? msg.mes.length : 0;
+        }
+        recordAiRewriteDebug('program-commit', details);
+    }
     return changed;
 }
 

@@ -17,6 +17,7 @@ import { getCurrentChatIdentity, getMvuExtraModelTransaction, isBaiBaiToolkitIns
 import { adoptMvuMessageContentForAiRewrite, getActiveAiRewriteBranchKeyForMessage, handleAiRewriteGenerationStarted, hasInvalidAiRewriteTarget, isLiveAiRewriteTargetMessage, markAiRewriteFinalCleanseReady, maybeNotifyAiRewriteReadyFromStreamingText, recordAiRewriteRuntimeDebug, resetAiRewriteRuntimeState, validateAiRewriteMessageTarget, waitForAutomaticAiRewrite } from '../aiRewrite.js';
 import { generationLifecycle } from '../generationLifecycle.js';
 import { classifyHostGenerationStart } from '../hostGenerationEvent.js';
+import { markLatestMessageShujukuRewritePending } from '../shujukuCompatibility.js';
 
 let streamingDiffInjectTimer = null;
 let streamingPendingDiffIndices = [];
@@ -213,7 +214,7 @@ export function initRealtimeInterceptor() {
                         collectMessageNodes(node, messageNodes);
                         purifyDOM(node);
                         messageNodes.forEach((mesNode) => {
-                            const index = primePendingComparisonForNode(mesNode);
+                            const index = primePendingComparisonForNode(mesNode, { skipPersist: true });
                             if (index >= 0) touchedMessageIndices.add(index);
                         });
                     }
@@ -545,6 +546,7 @@ export function bindHostLifecycleEvents() {
             return;
         }
 
+        markLatestMessageShujukuRewritePending(resolution.messageIndex, 'ai-finalization');
         runtimeState.streamingCommittedMessageCache.delete(resolution.messageIndex);
         recordAiRewriteRuntimeDebug('final-cleanse-deferred-to-ai', {
             generationId: resolution.generationId,

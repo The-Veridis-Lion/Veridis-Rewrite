@@ -3,5 +3,8 @@
 @import url('./styles/03-dialogs-and-diff.css');
 @import url('./styles/04-legacy-responsive.css');
 @import url('./styles/05-current-shell.css');
+@import url('./styles/05-home-page.css');
 @import url('./styles/06-current-responsive.css');
+@import url('./styles/06-clean-page.css');
+@import url('./styles/06-tools-page.css');
 @import url('./styles/07-cascade-seal.css');

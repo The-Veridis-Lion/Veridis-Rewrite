@@ -20,6 +20,7 @@ export {
 
 export {
     clearAiRewriteDebugLog,
+    getAiRewriteDebugDisplayText,
     getAiRewriteDebugLogText,
     recordAiRewriteRuntimeDebug,
 } from './aiRewrite/debug.js';
