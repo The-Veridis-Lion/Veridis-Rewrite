@@ -14,7 +14,8 @@ import {
 } from '../ui.js';
 import { performGlobalCleanse } from '../core.js';
 import { injectDiffButtons } from '../diff.js';
-import { getAiRewriteDebugLogText } from '../aiRewrite.js';
+import { getAiRewriteDebugDisplayText, getAiRewriteDebugLogText } from '../aiRewrite.js';
+import { clearAiCommunicationRecords, closeAiCommunicationMonitor, isAiCommunicationMonitorOpen, openAiCommunicationMonitor } from '../aiCommunicationMonitor.js';
 import {
     downloadZhDictionaryPackage,
     getZhDictionaryPackageStats,
@@ -27,6 +28,38 @@ import {
 
 let zhDictionaryInstallAbortController = null;
 let aiApiCheckSequence = 0;
+
+export function bindAiCommunicationMonitorEvents(jquery = $) {
+    const $document = jquery(document);
+    const focusMonitorControl = (id) => document.getElementById(id)?.focus?.();
+    const closeMonitor = () => {
+        closeAiCommunicationMonitor();
+        focusMonitorControl('blai-ai-monitor-open');
+    };
+
+    $document.off('click', '#blai-ai-monitor-open').on('click', '#blai-ai-monitor-open', function(e) {
+        e.preventDefault();
+        openAiCommunicationMonitor();
+        focusMonitorControl('blai-ai-monitor-close');
+    });
+    $document.off('click', '#blai-ai-monitor-clear').on('click', '#blai-ai-monitor-clear', function(e) {
+        e.preventDefault();
+        clearAiCommunicationRecords();
+    });
+    $document.off('click', '#blai-ai-monitor-close').on('click', '#blai-ai-monitor-close', function(e) {
+        e.preventDefault();
+        closeMonitor();
+    });
+    $document.off('click', '#blai-ai-monitor-modal').on('click', '#blai-ai-monitor-modal', function(e) {
+        if (e.target === this) closeMonitor();
+    });
+    $document.off('keydown.blaiAiCommunicationMonitor').on('keydown.blaiAiCommunicationMonitor', function(e) {
+        if (e.key === 'Escape' && isAiCommunicationMonitorOpen()) {
+            e.preventDefault();
+            closeMonitor();
+        }
+    });
+}
 
 export function bindAiSettingsEvents() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
@@ -44,7 +77,7 @@ export function bindAiSettingsEvents() {
             dark: 'fa-moon',
         };
         settings.themeMode = normalized;
-        $('#blai-purifier-popup, .blai-modal-shell, #blai-rule-transfer-modal, #blai-diff-modal, #blai-rule-search-modal, #blai-preset-import-choice-modal, .blai-toast, #blai-loading-overlay, #blai-scope-tag-editor-modal').attr('data-blai-theme', normalized);
+        $('#blai-purifier-popup, .blai-modal-shell, #blai-rule-transfer-modal, #blai-diff-modal, #blai-rule-search-modal, #blai-preset-import-choice-modal, .blai-toast, #blai-loading-overlay, #blai-scope-tag-editor-modal').attr('data-theme', normalized);
         $('#blai-theme-toggle, #blai-purifier-popup [data-blai-click-proxy="#blai-theme-toggle"]')
             .attr('title', `当前主题：${labels[normalized]}，点击切换`)
             .attr('aria-label', `当前主题：${labels[normalized]}，点击切换`);
@@ -66,13 +99,8 @@ export function bindAiSettingsEvents() {
         ].filter(Boolean).join('、') || '标准简繁';
         $('#blai-zh-dict-status-chip').text(enabled ? '已启用' : packageStatus.ready ? '已安装' : '未安装');
         $('#blai-zh-dict-install-open')
-            .toggleClass('accent', !enabled)
-            .attr('title', enabled ? '增强简繁词典已启用' : packageStatus.ready ? '增强简繁词典已安装，点击启用' : '下载并启用增强简繁词典');
-        $('#blai-zh-compat-toggle')
-            .toggleClass('blai-bind-active', enabled)
-            .toggleClass('accent', enabled)
-            .text(enabled ? '关闭' : '开启')
             .attr('aria-pressed', String(enabled))
+            .text(enabled ? '停用简繁转换' : packageStatus.ready ? '启用简繁转换' : '下载并安装字典')
             .attr('title', enabled
                 ? `简繁兼容已开启：${regionText} 变体参与匹配（点击关闭）`
                 : packageStatus.ready
@@ -121,26 +149,33 @@ export function bindAiSettingsEvents() {
         const normalizedMs = Number.isFinite(parsed) ? parsed : fallback;
         return Math.min(Math.max(Math.round(normalizedMs / 1000), 1), 120);
     };
-    const setAiApiCheckState = (state, label, title = '') => {
+    const setAiApiCheckState = (state, title = '') => {
         const normalizedState = state || 'idle';
-        $('#blai-ai-api-check')
+        const connectionLabels = {
+            idle: '未检测',
+            checking: '检测中',
+            ok: '连接正常',
+            failed: '连接失败',
+            missing: '未配置',
+            disabled: '未启用',
+        };
+        $('#blai-ai-connection-status')
             .attr('data-state', normalizedState)
-            .attr('title', title || '通过酒馆助手拉取模型列表，不发送聊天消息。')
-            .attr('aria-label', `模型列表：${label}`);
-        $('#blai-ai-api-status').text(label);
+            .text(connectionLabels[normalizedState]);
         $('#blai-ai-model-fetch')
             .toggleClass('accent', normalizedState === 'ok')
             .prop('disabled', normalizedState === 'checking')
-            .text(normalizedState === 'checking' ? '拉取中' : '拉取模型')
-            .attr('title', title || '通过酒馆助手拉取模型列表，不发送聊天消息');
+            .attr('title', title || '通过酒馆助手拉取模型列表，不发送聊天消息')
+            .attr('aria-label', normalizedState === 'checking' ? '正在刷新模型列表' : '刷新模型列表');
+        $('#blai-ai-model-fetch i').toggleClass('fa-spin', normalizedState === 'checking');
     };
     const resetAiApiCheckState = () => {
         aiApiCheckSequence += 1;
         if (ensureAiRewriteSettings().enabled !== true) {
-            setAiApiCheckState('disabled', '未启用', 'AI 改写未启用，开启后再拉取模型列表。');
+            setAiApiCheckState('disabled', 'AI 改写未启用，开启后再拉取模型列表。');
             return;
         }
-        setAiApiCheckState('idle', '拉取');
+        setAiApiCheckState('idle');
     };
     const normalizeAiModelOptions = (options) => {
         if (!Array.isArray(options)) return [];
@@ -192,11 +227,10 @@ export function bindAiSettingsEvents() {
             fragment.appendChild(new Option(label, name));
         });
         $select.empty().append(fragment).val(activeName || '');
-        $('#blai-ai-api-preset-delete').prop('disabled', !activeName);
+        $('#blai-ai-api-preset-edit, #blai-ai-api-preset-delete').prop('disabled', !activeName);
     };
-    const saveCurrentAiApiPreset = (options = {}) => {
+    const saveCurrentAiApiPreset = ({ forceNew = false } = {}) => {
         const aiSettings = ensureAiRewriteSettings();
-        const forceNew = options.forceNew === true;
         let name = forceNew ? '' : String(aiSettings.activeApiPreset || '');
         if (!name) {
             const enteredName = prompt('输入 API 预设名称：');
@@ -216,6 +250,30 @@ export function bindAiSettingsEvents() {
         showToast(`API 预设已保存：${name}`);
         return true;
     };
+    const renameActiveAiApiPreset = () => {
+        const aiSettings = ensureAiRewriteSettings();
+        const activeName = String(aiSettings.activeApiPreset || '');
+        if (!activeName) return false;
+        const enteredName = prompt('输入新的 API 预设名称：', activeName);
+        if (enteredName === null) return false;
+        const nextName = String(enteredName || '').trim();
+        if (!nextName) {
+            showToast('API 预设名称不能为空');
+            return false;
+        }
+        if (nextName === activeName) return false;
+        if (Object.prototype.hasOwnProperty.call(aiSettings.apiPresets, nextName)) {
+            showToast(`API 预设“${nextName}”已存在`);
+            return false;
+        }
+        aiSettings.apiPresets[nextName] = aiSettings.apiPresets[activeName];
+        delete aiSettings.apiPresets[activeName];
+        aiSettings.activeApiPreset = nextName;
+        saveSettingsDebounced();
+        syncAiRewriteSettingsUI();
+        showToast(`API 预设已重命名：${nextName}`);
+        return true;
+    };
     const applyAiApiPreset = (name) => {
         const aiSettings = ensureAiRewriteSettings();
         const preset = aiSettings.apiPresets?.[name];
@@ -231,23 +289,23 @@ export function bindAiSettingsEvents() {
         const { silent = false } = options;
         const aiSettings = ensureAiRewriteSettings();
         if (aiSettings.enabled !== true) {
-            setAiApiCheckState('disabled', '未启用', 'AI 改写未启用，开启后再拉取模型列表。');
+            setAiApiCheckState('disabled', 'AI 改写未启用，开启后再拉取模型列表。');
             return false;
         }
         const apiurl = resolveAiModelListBaseUrl(aiSettings.baseUrl);
         const key = String(aiSettings.apiKey || '');
         if (!apiurl || !key) {
-            setAiApiCheckState('missing', '未配置', '需要先填写 API 地址和 API Key。');
+            setAiApiCheckState('missing', '需要先填写 API 地址和 API Key。');
             return false;
         }
         const tavernHelper = getTavernHelperApi();
         if (typeof tavernHelper?.getModelList !== 'function') {
-            setAiApiCheckState('failed', '不可用', 'TavernHelper.getModelList 不可用，请更新或启用酒馆助手。');
+            setAiApiCheckState('failed', 'TavernHelper.getModelList 不可用，请更新或启用酒馆助手。');
             if (!silent) showToast('酒馆助手模型列表接口不可用');
             return false;
         }
         const requestId = ++aiApiCheckSequence;
-        setAiApiCheckState('checking', '检测中', `正在通过酒馆助手从 ${apiurl} 拉取模型列表；不会发送聊天消息。`);
+        setAiApiCheckState('checking', `正在通过酒馆助手从 ${apiurl} 拉取模型列表；不会发送聊天消息。`);
         try {
             const modelIds = normalizeAiModelOptions(await tavernHelper.getModelList({ apiurl, key }));
             if (requestId !== aiApiCheckSequence) return false;
@@ -261,13 +319,13 @@ export function bindAiSettingsEvents() {
             const title = hasSelectedModel
                 ? `已拉取 ${modelIds.length} 个模型。`
                 : `模型列表已拉取，但其中没有当前模型 ${selectedModel}。`;
-            setAiApiCheckState('ok', '正常', title);
+            setAiApiCheckState('ok', title);
             if (!silent) showToast(`已拉取 ${modelIds.length} 个模型`);
             return true;
         } catch (error) {
             if (requestId !== aiApiCheckSequence) return false;
             const reason = error?.message || '请求失败';
-            setAiApiCheckState('failed', '失败', `模型列表拉取失败：${reason}`);
+            setAiApiCheckState('failed', `模型列表拉取失败：${reason}`);
             if (!silent) showToast(`模型列表拉取失败：${reason}`);
             logger.warn('酒馆助手模型列表拉取失败', reason);
             return false;
@@ -301,7 +359,9 @@ export function bindAiSettingsEvents() {
         setValueIfNotFocused('#blai-ai-max-rewrite', aiSettings.maxRewriteCharsPerItem);
         setValueIfNotFocused('#blai-ai-prompt', aiSettings.promptTemplate || defaultAiRewriteSettings.promptTemplate);
         setValueIfNotFocused('#blai-ai-prompt-expanded', aiSettings.promptTemplate || defaultAiRewriteSettings.promptTemplate);
-        if (aiSettings.enabled !== true) setAiApiCheckState('disabled', '未启用', 'AI 改写未启用，开启后再拉取模型列表。');
+        $('#blai-ai-debug-log').text(getAiRewriteDebugDisplayText());
+        $('#blai-ai-enabled-status').text(aiSettings.enabled === true ? 'AI 启用中' : 'AI 关闭中');
+        if (aiSettings.enabled !== true) setAiApiCheckState('disabled', 'AI 改写未启用，开启后再拉取模型列表。');
         $('#blai-ai-http-warning').prop('hidden', isLocalHttpUrl(aiSettings.baseUrl));
     };
     const updateAiRewriteSetting = (key, value, options = {}) => {
@@ -335,6 +395,37 @@ export function bindAiSettingsEvents() {
     };
     const closeAiPromptEditor = () => {
         $('#blai-ai-prompt-modal').removeClass('blai-is-open');
+    };
+    const aiMobileLayoutMedia = window.matchMedia('(max-width: 600px)');
+    const closeAiGenerationEditor = () => {
+        $('#blai-ai-generation-modal')
+            .removeClass('blai-is-open')
+            .attr('aria-hidden', 'true');
+        $('#blai-ai-generation-open').attr('aria-expanded', 'false');
+    };
+    const syncAiResponsiveLayout = () => {
+        const $generationSection = $('#blai-ai-generation-section');
+        const $backendSection = $('#blai-ai-backend-section');
+        const $temperatureField = $('.blai-temperature-field');
+        const $secondaryColumn = $('.blai-ai-secondary-column');
+        if (aiMobileLayoutMedia.matches) {
+            $temperatureField.insertAfter('.blai-ai-xml-control');
+            $generationSection.appendTo('#blai-ai-generation-modal-body');
+            $backendSection.insertAfter($('#blai-ai-debug-log').closest('.blai-ai-section'));
+            return;
+        }
+        closeAiGenerationEditor();
+        $generationSection.appendTo($secondaryColumn);
+        $temperatureField.prependTo($generationSection.find('.blai-ai-parameter-grid'));
+        $backendSection.appendTo($secondaryColumn);
+    };
+    const openAiGenerationEditor = () => {
+        if (!aiMobileLayoutMedia.matches) return;
+        $('#blai-ai-generation-modal')
+            .addClass('blai-is-open')
+            .attr('aria-hidden', 'false');
+        $('#blai-ai-generation-open').attr('aria-expanded', 'true');
+        $('#blai-ai-generation-modal-close').trigger('focus');
     };
     const applyAiPromptEditor = () => {
         const value = String($('#blai-ai-prompt-expanded').val() || defaultAiRewriteSettings.promptTemplate);
@@ -384,6 +475,9 @@ export function bindAiSettingsEvents() {
     applyThemeMode(settings.themeMode || 'auto');
     syncZhCompatToggle();
     syncAiRewriteSettingsUI();
+    syncAiResponsiveLayout();
+    aiMobileLayoutMedia.addEventListener('change', syncAiResponsiveLayout);
+    bindAiCommunicationMonitorEvents();
 
     $(document).off('click', '#blai-theme-toggle').on('click', '#blai-theme-toggle', function(e) {
         e.preventDefault();
@@ -399,7 +493,12 @@ export function bindAiSettingsEvents() {
     $(document).off('click', '#blai-zh-dict-install-open').on('click', '#blai-zh-dict-install-open', function(e) {
         e.preventDefault();
         if (settings.zhVariantCompatEnabled === true && isZhDictionaryReady(settings)) {
-            showToast('增强简繁词典已启用');
+            settings.zhVariantCompatEnabled = false;
+            markRulesDataDirty({ rulesUi: false });
+            saveSettingsDebounced();
+            syncZhCompatToggle();
+            performGlobalCleanse();
+            showToast('简繁兼容已关闭');
             return;
         }
         if (enableVerifiedZhCompat()) return;
@@ -410,22 +509,6 @@ export function bindAiSettingsEvents() {
         if ($(e.target).closest('.blai-bind-menu-wrap').length > 0) return;
         $('#blai-bind-menu').prop('hidden', true);
         $('#blai-character-bind-toggle').attr('aria-expanded', 'false');
-    });
-
-    $(document).off('click', '#blai-zh-compat-toggle').on('click', '#blai-zh-compat-toggle', function(e) {
-        e.preventDefault();
-        if (settings.zhVariantCompatEnabled === true && isZhDictionaryReady(settings)) {
-            settings.zhVariantCompatEnabled = false;
-            markRulesDataDirty({ rulesUi: false });
-            saveSettingsDebounced();
-            syncZhCompatToggle();
-            performGlobalCleanse();
-            showToast('简繁兼容已关闭');
-            return;
-        }
-
-        if (enableVerifiedZhCompat()) return;
-        openZhDictionaryInstallPrompt();
     });
 
     $(document).off('click', '#blai-zh-dict-close, #blai-zh-dict-cancel').on('click', '#blai-zh-dict-close, #blai-zh-dict-cancel', function(e) {
@@ -450,7 +533,7 @@ export function bindAiSettingsEvents() {
         e.preventDefault();
         const logText = getAiRewriteDebugLogText();
         if (!logText || logText === '[]') {
-            showToast('暂无 AI 改写日志');
+            showToast('暂无改写诊断日志');
             return;
         }
         try {
@@ -459,10 +542,10 @@ export function bindAiSettingsEvents() {
                 throw new Error('TavernHelper.builtin.copyText 不可用');
             }
             await tavernHelper.builtin.copyText(logText);
-            showToast('AI Debug 日志已复制');
+            showToast('改写诊断日志已复制');
         } catch (error) {
-            logger.warn('复制 AI 改写日志失败', error);
-            showToast('复制 Debug 日志失败，请更新或启用酒馆助手');
+            logger.warn('复制改写诊断日志失败', error);
+            showToast('复制改写诊断日志失败，请更新或启用酒馆助手');
         }
     });
 
@@ -479,6 +562,11 @@ export function bindAiSettingsEvents() {
             return;
         }
         applyAiApiPreset(nextName);
+    });
+
+    $(document).off('click', '#blai-ai-api-preset-edit').on('click', '#blai-ai-api-preset-edit', function(e) {
+        e.preventDefault();
+        renameActiveAiApiPreset();
     });
 
     $(document).off('click', '#blai-ai-api-preset-new').on('click', '#blai-ai-api-preset-new', function(e) {
@@ -569,6 +657,29 @@ export function bindAiSettingsEvents() {
     $(document).off('click', '#blai-ai-prompt-expand').on('click', '#blai-ai-prompt-expand', function(e) {
         e.preventDefault();
         openAiPromptEditor();
+    });
+
+    $(document).off('click', '#blai-ai-generation-open').on('click', '#blai-ai-generation-open', function(e) {
+        e.preventDefault();
+        openAiGenerationEditor();
+    });
+
+    $(document).off('click', '#blai-ai-generation-modal-close, #blai-ai-generation-modal-done').on('click', '#blai-ai-generation-modal-close, #blai-ai-generation-modal-done', function(e) {
+        e.preventDefault();
+        closeAiGenerationEditor();
+        $('#blai-ai-generation-open').trigger('focus');
+    });
+
+    $(document).off('click', '#blai-ai-generation-modal').on('click', '#blai-ai-generation-modal', function(e) {
+        if (e.target === this) closeAiGenerationEditor();
+    });
+
+    $(document).off('keydown.blaiAiGenerationModal').on('keydown.blaiAiGenerationModal', function(e) {
+        if (e.key === 'Escape' && $('#blai-ai-generation-modal').hasClass('blai-is-open')) {
+            e.preventDefault();
+            closeAiGenerationEditor();
+            $('#blai-ai-generation-open').trigger('focus');
+        }
     });
 
     $(document).off('click', '#blai-ai-prompt-modal-close, #blai-ai-prompt-modal-cancel').on('click', '#blai-ai-prompt-modal-close, #blai-ai-prompt-modal-cancel', function(e) {

@@ -2,30 +2,17 @@
 #blai-purifier-popup {
     position: fixed !important; top: 8% !important; left: 50% !important; transform: translateX(-50%) !important;
     max-width: 580px !important;
-    background-color: var(--blai-bg-container) !important; box-sizing: border-box !important;
+    background-color: var(--bg-surface) !important; box-sizing: border-box !important;
     display: none; flex-direction: column;
     z-index: 999999 !important; backdrop-filter: blur(20px) !important; -webkit-backdrop-filter: blur(20px) !important;
 }
 
-.blai-header {
-    display: flex; justify-content: space-between; align-items: center;
-    padding-bottom: 8px; border-bottom: 1px solid rgba(80, 72, 64, 0.12); margin-bottom: 0; width: 100%;
-}
-
 .blai-icon-group button {
-    background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 6px; color: var(--blai-icon-color);
+    background: transparent !important; border: none !important; box-shadow: none !important; border-radius: 6px; color: var(--text-secondary);
     min-width: 24px; min-height: 24px; padding: 3px; display: flex; align-items: center; justify-content: center;
     cursor: pointer; font-size: 14px; box-sizing: border-box;
 }
-#blai-purifier-popup .blai-header .blai-icon-group button {
-    min-width: var(--blai-header-hit-size) !important; width: var(--blai-header-hit-size) !important;
-    min-height: var(--blai-header-hit-size) !important; height: var(--blai-header-hit-size) !important;
-    padding: 0 !important; border-radius: 6px !important; font-size: var(--blai-header-icon-size) !important;
-    background: transparent !important; border: none !important; box-shadow: none !important;
-}
-#blai-purifier-popup .blai-header .blai-icon-group { gap: var(--blai-control-gap) !important; }
-.blai-icon-group button:hover,
-#blai-purifier-popup .blai-header .blai-icon-group button:hover { background: transparent !important; transform: scale(1.15); color: var(--blai-accent-color) !important; }
+.blai-icon-group button:hover { background: transparent !important; transform: scale(1.15); color: var(--accent-color) !important; }
 
 .blai-bind-menu-wrap {
     position: relative !important;
@@ -34,22 +21,13 @@
     justify-content: center !important;
 }
 
-.blai-ai-settings {
-    border: 1px solid var(--blai-border-color) !important;
-    border-radius: 8px !important;
-    background: var(--blai-background-secondary) !important;
-    margin: 8px 0 10px !important;
-    overflow: hidden !important;
-    flex-shrink: 0 !important;
-}
-
 .blai-ai-rewrite-badge {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     border-radius: 6px !important;
     background: transparent !important;
-    color: var(--blai-accent-color) !important;
+    color: var(--accent-color) !important;
     font-size: 11px !important;
     font-weight: 800 !important;
     line-height: 1 !important;
@@ -57,96 +35,19 @@
     white-space: nowrap !important;
 }
 
-.blai-ai-warning {
-    font-size: 12px !important;
-    line-height: 1.45 !important;
-    color: var(--blai-text-secondary) !important;
-}
-.blai-ai-warning {
-    color: var(--blai-danger-color) !important;
-    background: var(--blai-danger-soft) !important;
-    border-radius: 6px !important;
-    padding: 7px 9px !important;
-}
-
-.blai-ai-field {
-    display: grid !important;
-    gap: 5px !important;
-    min-width: 0 !important;
-    color: var(--blai-text-secondary) !important;
-    font-size: 12px !important;
-    font-weight: 700 !important;
-}
-.blai-ai-field .blai-input,
-.blai-ai-field .blai-textarea {
-    min-height: 34px !important;
-    padding: 8px 10px !important;
-    border-radius: 8px !important;
-    font-size: 12px !important;
-}
-.blai-ai-key-row {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) 34px 34px !important;
-    gap: 6px !important;
-    align-items: center !important;
-}
-.blai-ai-key-row .blai-icon-btn {
-    width: 34px !important;
-    height: 34px !important;
-    min-width: 34px !important;
-    border-radius: 8px !important;
-}
 .blai-bind-menu {
     position: absolute !important;
     top: calc(100% + 8px) !important;
     right: 0 !important;
     width: min(224px, calc(100vw - 36px)) !important;
     padding: 6px !important;
-    border: 1px solid var(--blai-border-color) !important;
+    border: 1px solid var(--border-color) !important;
     border-radius: 10px !important;
-    background: var(--blai-background-popup) !important;
-    box-shadow: 0 14px 32px color-mix(in srgb, black 22%, transparent) !important;
+    background: var(--bg-surface) !important;
+    box-shadow: 0 14px 32px color-mix(in srgb, var(--bg-base) 22%, transparent) !important;
     z-index: 10000007 !important;
 }
 .blai-bind-menu[hidden] { display: none !important; }
-#blai-purifier-popup .blai-header .blai-icon-group .blai-bind-menu-item {
-    width: 100% !important;
-    min-width: 0 !important;
-    height: auto !important;
-    min-height: 46px !important;
-    display: grid !important;
-    grid-template-columns: 18px minmax(0, 1fr) !important;
-    align-items: center !important;
-    gap: 9px !important;
-    padding: 8px 9px !important;
-    border-radius: 8px !important;
-    color: var(--blai-text-primary) !important;
-    font-size: 12px !important;
-    font-weight: 720 !important;
-    line-height: 1.25 !important;
-    text-align: left !important;
-    white-space: normal !important;
-    transform: none !important;
-}
-#blai-purifier-popup .blai-header .blai-icon-group .blai-bind-menu-item:hover,
-#blai-purifier-popup .blai-header .blai-icon-group .blai-bind-menu-item.is-active {
-    background: var(--blai-background-secondary) !important;
-    color: var(--blai-accent-color) !important;
-    transform: none !important;
-}
-#blai-purifier-popup .blai-header .blai-icon-group .blai-bind-menu-item:disabled {
-    opacity: 0.48 !important;
-    cursor: not-allowed !important;
-}
-#blai-purifier-popup .blai-header .blai-icon-group .blai-bind-menu-item:disabled:hover {
-    background: transparent !important;
-    color: var(--blai-text-primary) !important;
-}
-#blai-purifier-popup .blai-header .blai-icon-group .blai-bind-menu-item i {
-    width: 18px !important;
-    min-width: 18px !important;
-    text-align: center !important;
-}
 .blai-bind-menu-copy {
     min-width: 0 !important;
     display: flex !important;
@@ -164,7 +65,7 @@
     color: inherit !important;
 }
 .blai-bind-menu-note {
-    color: var(--blai-text-secondary) !important;
+    color: var(--text-secondary) !important;
     font-size: 11px !important;
     font-weight: 620 !important;
 }
@@ -172,250 +73,29 @@
 /* 绑定状态按钮 */
 
 /* 下拉菜单与工具栏 */
-.blai-toolbar {
-    display: flex !important;
-    align-items: center !important;
-    gap: 15px !important;
-}
-#blai-purifier-popup .blai-toolbar .blai-icon-group {
-    flex: 0 0 30% !important;
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    gap: 0 !important;
-}
-#blai-purifier-popup .blai-toolbar .blai-icon-group button {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    font-size: 16px !important;
-    min-width: auto !important;
-    width: auto !important;
-    height: auto !important;
-    color: var(--blai-icon-color) !important;
-    transition: transform 0.2s, color 0.2s !important;
-}
-#blai-purifier-popup .blai-toolbar .blai-icon-group button i, #blai-purifier-popup .blai-toolbar .blai-icon-group button svg {
-    width: 18px !important; height: 18px !important; line-height: 1 !important; display: inline-flex !important; align-items: center !important; justify-content: center !important;
-}
-#blai-purifier-popup .blai-toolbar .blai-icon-group button.blai-zh-compat-toggle.blai-bind-active {
-    color: var(--blai-accent-color) !important;
-}
 .blai-select-box {
-    flex: 1 1 auto !important; min-width: 0 !important; background-color: var(--blai-bg-button);
-    padding: 0 14px; border-radius: 6px; font-size: 14px; color: var(--blai-text-main); cursor: pointer;
-    height: var(--blai-control-height); box-sizing: border-box; border: none; outline: none;
-}
-#blai-preset-select {
-    flex: 1 1 auto !important; min-width: 0 !important; height: var(--blai-control-height) !important;
-    padding: 0 38px 0 12px !important; border-radius: var(--blai-control-radius) !important;
-    border: 1px solid color-mix(in srgb, var(--blai-text-primary) 16%, transparent) !important;
-    background-color: color-mix(in srgb, var(--blai-text-primary) 4%, transparent) !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") !important;
-    background-repeat: no-repeat !important; background-position: right 12px center !important; background-size: 13px !important;
-    color: var(--blai-text-primary) !important; outline: none !important; font-family: inherit !important;
-    font-size: 16px !important; appearance: none !important; -webkit-appearance: none !important; display: block !important; margin: 0 !important;
-}
-#blai-preset-select:hover, #blai-preset-select:focus { border-color: var(--blai-accent-color) !important; }
-
-/* 操作按钮组 */
-
-#blai-open-new-rule-btn { width: 100% !important; margin-bottom: 0 !important; }
-
-/* 批量操作条 */
-.blai-batch-operations {
-    display: none; align-items: center; justify-content: space-between; background-color: var(--blai-batch-bar-bg);
-    padding: 6px 10px; border-radius: 6px; gap: 4px;
-}
-#blai-purifier-popup.blai-is-batch-mode .blai-batch-operations,
-#blai-purifier-popup.blai-is-batch-mode .blai-batch-checkbox-label { display: flex; }
-
-/* 底栏 */
-
-#blai-deep-clean-btn { flex: 1 1 auto !important; width: auto !important; }
-
-/* --- 4. 列表与卡片设计 --- */
-.blai-card-list { display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.blai-card {
-    background-color: var(--blai-bg-card);
-    border-radius: 8px;
-    padding: 8px 10px;
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--blai-card-border);
-    flex-shrink: 0 !important; /* 严禁 Android 端强行压缩卡片高度 */
+    flex: 1 1 auto !important; min-width: 0 !important; background-color: var(--bg-surface);
+    padding: 0 14px; border-radius: 6px; font-size: 14px; color: var(--text-main); cursor: pointer;
+    height: 40px; box-sizing: border-box; border: none; outline: none;
 }
 .blai-highlight-flash {
     animation: blaiHighlightFlash 0.8s ease-in-out 2;
     will-change: filter;
 }
-.blai-card.blai-is-disabled { opacity: 0.65; }
-.blai-card-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: nowrap !important; padding-bottom: 6px; }
-.blai-header-left { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
-
-/* 列表内控制按钮 */
 
 /* 自定义复选框 */
 .blai-checkbox-label { display: flex; align-items: center; gap: 6px; cursor: pointer; line-height: 1; }
 .blai-batch-checkbox-label { display: none; align-items: center; cursor: pointer; }
 .blai-checkbox-label input, .blai-batch-checkbox-label input { display: none; }
-.blai-custom-checkbox { width: 16px; height: 16px; min-width: 16px; min-height: 16px; flex: 0 0 16px; flex-shrink: 0; aspect-ratio: 1 / 1; border: 1px solid var(--blai-checkbox-border); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background-color: var(--blai-checkbox-bg); box-sizing: border-box; }
+.blai-custom-checkbox { width: 16px; height: 16px; min-width: 16px; min-height: 16px; flex: 0 0 16px; flex-shrink: 0; aspect-ratio: 1 / 1; border: 1px solid var(--border-color); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background-color: var(--bg-surface); box-sizing: border-box; }
 .blai-custom-checkbox.blai-square { border-radius: 4px; }
 .blai-custom-checkbox.blai-square-2px { border-radius: 2px; }
-.blai-ai-comment-protection-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px 10px;
-    min-width: 0;
-    padding: 2px 0;
-}
-.blai-ai-comment-protection-row .blai-checkbox-label {
-    min-width: 0;
-    color: var(--blai-text-primary);
-    font-weight: 700;
-}
-.blai-ai-comment-protection-row small {
-    color: var(--blai-text-secondary);
-    font-size: 11px;
-    line-height: 1.35;
-}
-.blai-checkbox-label input:checked + .blai-custom-checkbox { background-color: var(--blai-checkbox-checked); border-color: var(--blai-checkbox-checked); }
-.blai-batch-checkbox-label input:checked + .blai-custom-checkbox.blai-square-2px { background-color: var(--blai-batch-checkbox-checked); border-color: var(--blai-batch-checkbox-checked); }
+.blai-checkbox-label input:checked + .blai-custom-checkbox { background-color: var(--accent-color); border-color: var(--accent-color); }
+.blai-batch-checkbox-label input:checked + .blai-custom-checkbox.blai-square-2px { background-color: var(--accent-color); border-color: var(--accent-color); }
 .blai-checkbox-label input:checked + .blai-custom-checkbox::after, .blai-batch-checkbox-label input:checked + .blai-custom-checkbox.blai-square-2px::after {
-    content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: white; font-size: 10px; display: flex; align-items: center; justify-content: center;
+    content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: var(--bg-surface); font-size: 10px; display: flex; align-items: center; justify-content: center;
 }
 
-/* Responsive field and card layout corrections. */
-#blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-ai-limit-grid.blai-ai-limit-grid > .field {
-    min-width: 0 !important;
-    padding: 0 !important;
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) !important;
-    align-items: stretch !important;
-    gap: 6px !important;
-    border: 0 !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-}
-
-#blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-ai-limit-grid.blai-ai-limit-grid .setting-value {
-    width: 100% !important;
-    min-width: 0 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 6px !important;
-}
-
-#blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-ai-limit-grid.blai-ai-limit-grid .setting-input {
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    flex: 1 1 auto !important;
-}
-
-#blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-ai-limit-grid.blai-ai-limit-grid .setting-unit {
-    flex: 0 0 auto !important;
-    margin: 0 !important;
-    position: static !important;
-    transform: none !important;
-}
-
-@media (min-width: 601px) {
-    #blai-purifier-popup.blai-app-shell .overview-preset-panel.overview-preset-panel .metric.metric {
-        align-items: center !important;
-        line-height: 1 !important;
-    }
-
-    #blai-purifier-popup.blai-app-shell .overview-preset-panel.overview-preset-panel .metric.metric b,
-    #blai-purifier-popup.blai-app-shell .overview-preset-panel.overview-preset-panel .metric.metric span {
-        display: block !important;
-        line-height: 1 !important;
-    }
-
-    #blai-purifier-popup.blai-app-shell .binding-tools-panel.binding-tools-panel .binding-summary.binding-summary {
-        padding: 12px !important;
-        display: grid !important;
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        gap: 10px 14px !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 9px !important;
-        background: transparent !important;
-    }
-
-    #blai-purifier-popup.blai-app-shell .binding-tools-panel.binding-tools-panel .binding-summary.binding-summary > div {
-        min-width: 0 !important;
-        display: grid !important;
-        grid-template-columns: minmax(0, 1fr) !important;
-        gap: 3px !important;
-        color: var(--subtle) !important;
-        font-size: var(--blai-wide-type-tiny) !important;
-        line-height: 1.35 !important;
-    }
-
-    #blai-purifier-popup.blai-app-shell .binding-tools-panel.binding-tools-panel .binding-summary.binding-summary > div + div {
-        padding-left: 14px !important;
-        border-left: 1px solid var(--border) !important;
-    }
-
-    #blai-purifier-popup.blai-app-shell .binding-tools-panel.binding-tools-panel .binding-summary.binding-summary strong {
-        min-width: 0 !important;
-        overflow: hidden !important;
-        color: var(--text) !important;
-        font-size: var(--blai-wide-type-small) !important;
-        line-height: 1.25 !important;
-        text-overflow: ellipsis !important;
-        white-space: nowrap !important;
-    }
-
-    #blai-purifier-popup.blai-app-shell .binding-tools-panel.binding-tools-panel .binding-summary.binding-summary p {
-        grid-column: 1 / -1 !important;
-        margin: 0 !important;
-        padding-top: 9px !important;
-        border-top: 1px solid var(--border) !important;
-        color: var(--subtle) !important;
-        font-size: var(--blai-wide-type-tiny) !important;
-        line-height: 1.4 !important;
-    }
-}
-
-@media (min-width: 601px) and (max-width: 1024px) {
-    #blai-purifier-popup.blai-app-shell .binding-tools-panel.binding-tools-panel .binding-summary.binding-summary {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    }
-
-    #blai-purifier-popup.blai-app-shell .binding-tools-panel.binding-tools-panel .binding-summary.binding-summary > div:nth-child(3) {
-        padding-left: 0 !important;
-        border-left: 0 !important;
-    }
-}
-
-@media (max-width: 600px) {
-    #blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-ai-limit-grid.blai-ai-limit-grid {
-        gap: 10px !important;
-    }
-
-    #blai-purifier-popup.blai-app-shell .page-panel[data-page="ai"] .blai-ai-limit-grid.blai-ai-limit-grid .setting-value {
-        gap: 5px !important;
-    }
-}
-
-
-@media (max-width: 600px) {
-    #blai-purifier-popup.blai-app-shell .page-panel[data-page="tools"] .tools-subsection + .tools-subsection {
-        margin-top: 12px !important;
-        padding-top: 12px !important;
-        border-top: 1px solid var(--blai-border-color) !important;
-    }
-}
-/* 卡片内容排版 */
-.blai-group-title { font-size: 15px !important; font-weight: 600; color: var(--blai-text-main); display: flex; align-items: center; word-break: break-all; }
-.blai-card-body { display: flex; flex-direction: column; gap: 4px; }
-.blai-rule-item { display: flex; align-items: center; font-size: 12px; color: var(--blai-text-main); gap: 4px; min-width: 0 !important; }
-.blai-rule-item.blai-is-disabled,
 .blai-subrule-card.blai-is-disabled {
     opacity: 0.56 !important;
 }
@@ -423,10 +103,6 @@
     flex: 0 0 auto !important;
     margin: 0 !important;
 }
-.blai-tag { background-color: var(--blai-tag-bg); color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; }
-.blai-source { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--blai-text-main); font-weight: 500; display: block !important; min-width: 0; }
-.blai-target { color: var(--blai-text-sub); white-space: nowrap; display: block !important; flex-shrink: 0 !important; }
-.blai-arrow { color: var(--blai-text-mute); font-size: 10px; display: flex; align-items: center; }
-.blai-more-text { text-align: center; font-size: 12px; color: var(--blai-text-mute); margin-top: 4px; display: flex; justify-content: center; align-items: center; }
-.blai-empty-state { opacity: 0.58 !important; width: 100% !important; text-align: center !important; font-size: 13px !important; padding: 20px 0 !important; color: var(--blai-text-sub) !important; }
-
+.blai-tag { background-color: var(--accent-color); color: var(--bg-surface); padding: 2px 6px; border-radius: 10px; font-size: 10px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; }
+.blai-source { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); font-weight: 500; display: block !important; min-width: 0; }
+.blai-empty-state { opacity: 0.58 !important; width: 100% !important; text-align: center !important; font-size: 13px !important; padding: 20px 0 !important; color: var(--text-secondary) !important; }

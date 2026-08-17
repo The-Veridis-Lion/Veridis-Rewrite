@@ -1,0 +1,178 @@
+[
+  {
+    "name": "处理—…及多种增殖[选开]",
+    "subRules": [
+      {
+        "targets": [
+          "(?<=[“”「」])[—…]+|(?<=\")[—…]+(?=[\\u4e00-\\u9fff])"
+        ],
+        "replacements": [],
+        "mode": "regex",
+        "remark": "形式：对话引号+——或……",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "—+(?=[”」])|(?<=[\\u4e00-\\u9fff])—+(?=\")"
+        ],
+        "replacements": [
+          "。"
+        ],
+        "mode": "regex",
+        "remark": "形式：——+对话引号",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "[—…]+(?=[,，。!！?？])|(?<=[,，。!！?？])[—…]+"
+        ],
+        "replacements": [],
+        "mode": "regex",
+        "remark": "形式：—…与其他符号相邻",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "(?<=[\\u4e00-\\u9fff])—+(?=[\\u4e00-\\u9fff])"
+        ],
+        "replacements": [
+          "，"
+        ],
+        "mode": "regex",
+        "remark": "中文间破折号变逗号",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "(?<=[\\u4e00-\\u9fff])—+\\n+(?:—+)?(?=[\\u4e00-\\u9fff])"
+        ],
+        "replacements": [
+          "，"
+        ],
+        "mode": "regex",
+        "remark": "段尾处破折号连接下段",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "^[—…]+|(?<=\\n)\\n*^[—…]+$\\n"
+        ],
+        "replacements": [],
+        "mode": "regex",
+        "remark": "段首或单独成段的情况",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "([,，。~～!！?？])\\1+|(?<=……)…+|(?<=——)—+"
+        ],
+        "replacements": [
+          "$1"
+        ],
+        "mode": "regex",
+        "remark": "连续相同符号去重",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "(?<=[\\u4e00-\\u9fff])[\\u0020\\-]*-[\\u0020\\-]*(?=[\\u4e00-\\u9fff])"
+        ],
+        "replacements": [],
+        "mode": "regex",
+        "remark": "删中文间的连字符",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "(?<=的)(?:、[\\u4e00-\\u9fff]{1,6}的)+|(?<=地)(?:、[\\u4e00-\\u9fff]{1,6}地)+"
+        ],
+        "replacements": [],
+        "mode": "regex",
+        "remark": "AA的、BB的、CC的→AA的",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": "任务：改写命中句中“AA的、BB的、CC的”或“AA地、BB地、CC地”这类形容词/副词堆叠。不要整段重写，只处理命中表达所在句。\n改写时先判断场景：如果多个修饰语表达同一情绪，只保留最准确的一个；如果它们分别承担动作、心理、场景信息，把其中一部分改成动作或结果；如果堆叠只是制造华丽感，删去冗余修饰，让句子更白描。\n必须保留最核心的语义和原文节奏。只输出改写后的句子，不解释。"
+      },
+      {
+        "targets": [
+          "(?<=(?:^|[、。,，…~～])[\\u4e00-\\u9fff]{1,4})(?:[、。,，~～]|…{1,2}(?!…))(?=[\\u4e00-\\u9fff])"
+        ],
+        "replacements": [],
+        "mode": "regex",
+        "remark": "处理多种符号增殖",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      }
+    ],
+    "enabled": false,
+    "activationWarningEnabled": true
+  },
+  {
+    "name": "合并较短段落[选开]",
+    "subRules": [
+      {
+        "targets": [
+          "(?<=^[\\u4e00-\\u9fff，,]{1,20})[。!！…—]+\\n+(?=[\\u4e00-\\u9fff])"
+        ],
+        "replacements": [
+          "，"
+        ],
+        "mode": "regex",
+        "remark": "顺序① 段尾标点变逗号+跨行合并",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      },
+      {
+        "targets": [
+          "(?<=^[\\u4e00-\\u9fff,，。.、!！?？~～…—0-9a-zA-Z]{1,30}$)\\n+(?=[\\u4e00-\\u9fff])"
+        ],
+        "replacements": [],
+        "mode": "regex",
+        "remark": "顺序② 30字以内的段落与下段合并",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      }
+    ],
+    "enabled": false,
+    "activationWarningEnabled": true
+  },
+  {
+    "name": "分割较长段落[选开]",
+    "subRules": [
+      {
+        "targets": [
+          "^([,，。.、!！?？~～…—“”\"‘’「」〖〗（）()0-9a-zA-Z\\u4e00-\\u9fff]{150,200}。)([\\u4e00-\\u9fff])"
+        ],
+        "replacements": [
+          "$1\\n\\n$2"
+        ],
+        "mode": "regex",
+        "remark": "",
+        "enabled": true,
+        "rewriteMode": "program",
+        "aiPromptTemplate": ""
+      }
+    ],
+    "enabled": false,
+    "activationWarningEnabled": true
+  }
+]

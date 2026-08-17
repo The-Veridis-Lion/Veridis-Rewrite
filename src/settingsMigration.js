@@ -4,7 +4,7 @@
 import * as extensionsModule from "../../../../extensions.js";
 import { saveSettingsDebounced } from "../../../../../script.js";
 
-import { aiRewritePromptProtocolVersion, defaultAiRewriteSettings, defaultSettings, extensionName, modifiedExtensionName, legacyExtensionName, runtimeState, markRulesDataDirty, normalizeAiSamplingSettings, normalizeDiffTrackedMessageLimit } from './state.js';
+import { aiRewritePromptProtocolVersion, defaultAiRewriteSettings, defaultSettings, extensionName, modifiedExtensionName, legacyExtensionName, runtimeState, markRulesDataDirty, normalizeAiSamplingSettings, normalizeDiffTrackedMessageLimit, normalizeShujukuAutoProgramRewriteEnabled } from './state.js';
 import { logger } from './log.js';
 import { cleanupInvalidPresetBindings } from './ui.js';
 import { buildPresetEntry, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetRules, mergeScopeTagsWithBuiltins, normalizeOptionalXmlTagNameInput, normalizeRuleActivationSafety, normalizeScopeTagBuiltinDismissedList, normalizeScopeTagCollapsedGroupList, normalizeScopeTagGroupList } from './utils.js';
@@ -179,6 +179,7 @@ export function ensureSettingsShape() {
     if (settings.logLevel === undefined) settings.logLevel = 2;
     if (settings.skipUserMessages === undefined) settings.skipUserMessages = false;
     settings.showComposerAiRewriteButton = settings.showComposerAiRewriteButton === true;
+    settings.shujukuAutoProgramRewriteEnabled = normalizeShujukuAutoProgramRewriteEnabled(settings.shujukuAutoProgramRewriteEnabled);
     normalizeZhVariantSettings(settings);
     if (settings.zhVariantCompatEnabled === true && !restoreZhDictionaryPackageFromCache(settings)) {
         settings.zhVariantCompatEnabled = false;

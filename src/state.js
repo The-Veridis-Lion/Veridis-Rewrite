@@ -114,6 +114,7 @@ export const defaultSettings = {
     logLevel: 2,  // 0=off, 1=error, 2=warn(default), 3=info, 4=debug
     skipUserMessages: false,
     showComposerAiRewriteButton: false,
+    shujukuAutoProgramRewriteEnabled: false,
     zhVariantCompatEnabled: false,
     zhVariantCompatOptions: { tw: true, hk: true },
     zhVariantDictionary: {
@@ -223,6 +224,10 @@ function normalizeIntegerSetting(value, min, max, fallback) {
 
 export function normalizeDiffTrackedMessageLimit(value) {
     return normalizeIntegerSetting(value, minTrackedDiffMessages, maxTrackedDiffMessages, defaultTrackedDiffMessages);
+}
+
+export function normalizeShujukuAutoProgramRewriteEnabled(value) {
+    return value === true;
 }
 
 export function getDiffTrackedMessageLimit() {

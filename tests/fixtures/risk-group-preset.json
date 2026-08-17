@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {
+      "name": "处理—…及多种增殖[选开]",
+      "enabled": false,
+      "activationWarning": "该测试规则组需要显式确认",
+      "activationWarningEnabled": true,
+      "subRules": [
+        { "enabled": true },
+        { "enabled": true },
+        { "enabled": true },
+        { "enabled": true },
+        { "enabled": true },
+        { "enabled": true },
+        { "enabled": true },
+        { "enabled": true },
+        { "enabled": true },
+        { "enabled": true }
+      ]
+    }
+  ]
+}
