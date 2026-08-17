@@ -299,7 +299,7 @@ export function compileRegexTarget(target) {
     if (!source) return { ok: false, error: { message: '规则不能为空。' } };
 
     let pattern = source;
-    let flags = 'gu';
+    let flags = 'gmu';
 
     if (source.startsWith('/')) {
         const lastSlash = findLastUnescapedSlash(source);

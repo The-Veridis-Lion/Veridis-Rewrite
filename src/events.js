@@ -469,7 +469,7 @@ export function bindEvents() {
             replacementPlaceholder: "替换后词汇（逗号/空格分隔，可留空）\n留空时，命中后会直接删除",
         },
         regex: {
-            hint: '适合复杂匹配和捕获组替换；内置使用 gu 标志，不包含 m（多行）标志；每次命中会从替换项里随机选一个。',
+            hint: '适合复杂匹配和捕获组替换；每次命中会从替换项里随机选一个。',
             targetPlaceholder: "正则匹配规则 (每行一条)\n支持裸模式 foo|bar 或 /foo|bar/gmu",
             replacementPlaceholder: "替换模板（每行一条，支持随机；可用 $1、\\n，可留空）\n点“按行识别”后加入下方替换项",
             regexEditPlaceholder: "正在编辑替换项；可用 $1、\\n\n点“更新替换项”保存修改",
