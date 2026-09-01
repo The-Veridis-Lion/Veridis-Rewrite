@@ -292,7 +292,7 @@ body #toast-container > .blai-ai-rewrite-toast.blai-ai-rewrite-progress-toast > 
     gap: 8px !important;
 }
 
-#blai-purifier-popup.blai-app-shell .blai-ai-control > .blai-input, #blai-purifier-popup.blai-app-shell .blai-ai-compound-control > .blai-select-box, #blai-purifier-popup.blai-app-shell .blai-ai-key-control > .blai-input {
+#blai-purifier-popup.blai-app-shell .blai-ai-control > .blai-input, #blai-purifier-popup.blai-app-shell .blai-ai-compound-control > .blai-select-box, #blai-purifier-popup.blai-app-shell .blai-ai-compound-control > .blai-input, #blai-purifier-popup.blai-app-shell .blai-ai-key-control > .blai-input {
     width: 100% !important;
     min-width: 0 !important;
     height: 40px !important;
@@ -314,7 +314,7 @@ body #toast-container > .blai-ai-rewrite-toast.blai-ai-rewrite-progress-toast > 
     padding-right: 32px !important;
 }
 
-#blai-purifier-popup.blai-app-shell .blai-ai-control > .blai-input:focus, #blai-purifier-popup.blai-app-shell .blai-ai-compound-control > .blai-select-box:focus, #blai-purifier-popup.blai-app-shell .blai-ai-key-control > .blai-input:focus, #blai-purifier-popup.blai-app-shell .blai-ai-prompt-input:focus {
+#blai-purifier-popup.blai-app-shell .blai-ai-control > .blai-input:focus, #blai-purifier-popup.blai-app-shell .blai-ai-compound-control > .blai-select-box:focus, #blai-purifier-popup.blai-app-shell .blai-ai-compound-control > .blai-input:focus, #blai-purifier-popup.blai-app-shell .blai-ai-key-control > .blai-input:focus, #blai-purifier-popup.blai-app-shell .blai-ai-prompt-input:focus {
     border-color: var(--accent-color) !important;
     outline: 2px solid color-mix(in srgb, var(--accent-color) 18%, transparent) !important;
     outline-offset: 0 !important;

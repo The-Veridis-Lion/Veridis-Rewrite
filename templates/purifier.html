@@ -140,10 +140,11 @@
                                             <label class="blai-ai-control blai-ai-model-field">
                                                 <span class="blai-ai-control-heading">
                                                     <span class="blai-ai-control-label">模型</span>
-                                                    <small id="blai-ai-connection-status" class="blai-ai-connection-status" data-state="idle">未检测</small>
+                                                    <small id="blai-ai-connection-status" class="blai-ai-connection-status" data-state="idle">未拉取</small>
                                                 </span>
                                                 <span class="blai-ai-compound-control blai-ai-model-row">
-                                                    <select id="blai-ai-model" class="blai-select-box blai-ai-model-select"></select>
+                                                    <select id="blai-ai-model" class="blai-select-box blai-ai-model-select" aria-label="模型"></select>
+                                                    <input type="text" id="blai-ai-model-manual" class="blai-input" placeholder="输入模型 ID" autocomplete="off" hidden>
                                                     <button type="button" id="blai-ai-model-fetch" class="blai-ai-icon-button" title="刷新模型列表" aria-label="刷新模型列表"><i class="fas fa-rotate" aria-hidden="true"></i></button>
                                                 </span>
                                             </label>

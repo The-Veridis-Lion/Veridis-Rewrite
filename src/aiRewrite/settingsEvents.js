@@ -10,25 +10,6 @@ import { showToast } from '../ui/notifications.js';
 import { injectDiffButtons } from '../diff/view.js';
 let aiApiCheckSequence = 0;
 
-function resolveAiModelListBaseUrl(value) {
-    const baseUrl = String(value || '').trim();
-    if (!baseUrl) return '';
-    try {
-        const parsed = new URL(baseUrl);
-        const pathname = parsed.pathname.replace(/\/+$/, '');
-        if (parsed.hostname.toLowerCase() === 'qianfan.baidubce.com'
-            && pathname === '/v2/tokenplan/personal') {
-            parsed.pathname = '/v2';
-            parsed.search = '';
-            parsed.hash = '';
-            return parsed.toString().replace(/\/$/, '');
-        }
-    } catch {
-        return baseUrl;
-    }
-    return baseUrl;
-}
-
 export function bindAiSettingsEvents() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
     const settings = extension_settings[extensionName];
@@ -77,11 +58,11 @@ export function bindAiSettingsEvents() {
     const setAiApiCheckState = (state, title = '') => {
         const normalizedState = state || 'idle';
         const connectionLabels = {
-            idle: '未检测',
-            checking: '检测中',
-            ok: '连接正常',
-            failed: '连接失败',
-            missing: '未配置',
+            idle: '未拉取',
+            checking: '拉取中',
+            ok: '已拉取',
+            failed: '拉取失败',
+            missing: '配置不完整',
             disabled: '未启用',
         };
         $('#blai-ai-connection-status')
@@ -100,28 +81,36 @@ export function bindAiSettingsEvents() {
             setAiApiCheckState('disabled', 'AI 改写未启用，开启后再拉取模型列表。');
             return;
         }
+        const aiSettings = ensureAiRewriteSettings();
+        if (!String(aiSettings.baseUrl || '').trim() || !String(aiSettings.apiKey || '')) {
+            setAiApiCheckState('missing', '需要先填写 API 地址和 API Key。');
+            return;
+        }
         setAiApiCheckState('idle');
     };
     const normalizeAiModelOptions = (options) => {
         if (!Array.isArray(options)) return [];
         return [...new Set(options.map((value) => String(value || '').trim()).filter(Boolean))];
     };
-    const syncAiModelSelect = (aiSettings) => {
+    const syncAiModelControl = (aiSettings) => {
         const $select = $('#blai-ai-model');
-        if (!$select.length) return;
-        const selectedModel = String(aiSettings.model || '').trim();
+        const $manual = $('#blai-ai-model-manual');
+        if (!$select.length || !$manual.length) return;
         const fetchedModels = normalizeAiModelOptions(aiSettings.modelOptions);
-        const optionModels = selectedModel && !fetchedModels.includes(selectedModel)
-            ? [selectedModel, ...fetchedModels]
-            : fetchedModels;
+        let selectedModel = String(aiSettings.model || '').trim();
+        if (fetchedModels.length > 0 && !selectedModel) {
+            selectedModel = fetchedModels[0];
+            aiSettings.model = selectedModel;
+            saveSettingsDebounced();
+        }
         const fragment = document.createDocumentFragment();
-        const placeholder = new Option(optionModels.length > 0 ? '请选择模型' : '先拉取模型列表', '');
-        placeholder.disabled = optionModels.length > 0;
-        fragment.appendChild(placeholder);
-        optionModels.forEach((modelId) => fragment.appendChild(new Option(modelId, modelId)));
+        fetchedModels.forEach((modelId) => fragment.appendChild(new Option(modelId, modelId)));
+        if (fetchedModels.length > 0) fragment.appendChild(new Option('手动填写其他模型…', ''));
         $select.empty().append(fragment);
-        $select.prop('disabled', optionModels.length === 0);
-        $select.val(optionModels.includes(selectedModel) ? selectedModel : '');
+        const isFetchedModel = fetchedModels.includes(selectedModel);
+        $select.prop('hidden', fetchedModels.length === 0).val(isFetchedModel ? selectedModel : '');
+        $manual.prop('hidden', fetchedModels.length > 0 && isFetchedModel);
+        if (!$manual.is(':focus')) $manual.val(selectedModel);
     };
     const normalizeAiApiPresetSnapshot = (value = {}) => ({
         baseUrl: String(value.baseUrl || '').trim(),
@@ -217,7 +206,7 @@ export function bindAiSettingsEvents() {
             setAiApiCheckState('disabled', 'AI 改写未启用，开启后再拉取模型列表。');
             return false;
         }
-        const apiurl = resolveAiModelListBaseUrl(aiSettings.baseUrl);
+        const apiurl = String(aiSettings.baseUrl || '').trim();
         const key = String(aiSettings.apiKey || '');
         if (!apiurl || !key) {
             setAiApiCheckState('missing', '需要先填写 API 地址和 API Key。');
@@ -234,9 +223,7 @@ export function bindAiSettingsEvents() {
         try {
             const modelIds = normalizeAiModelOptions(await tavernHelper.getModelList({ apiurl, key }));
             if (requestId !== aiApiCheckSequence) return false;
-            if (modelIds.length === 0) throw new Error('返回的模型列表为空');
             aiSettings.modelOptions = modelIds;
-            if (!String(aiSettings.model || '').trim()) aiSettings.model = modelIds[0];
             saveSettingsDebounced();
             syncAiRewriteSettingsUI();
             const selectedModel = String(aiSettings.model || '').trim();
@@ -269,7 +256,7 @@ export function bindAiSettingsEvents() {
         setValueIfNotFocused('#blai-ai-xml-scope', xmlScopeTag ? `<${xmlScopeTag}>` : '');
         setValueIfNotFocused('#blai-ai-api-key', aiSettings.apiKey || '');
         syncAiApiPresetSelect(aiSettings);
-        syncAiModelSelect(aiSettings);
+        syncAiModelControl(aiSettings);
         setValueIfNotFocused('#blai-ai-temperature', aiSettings.temperature);
         setValueIfNotFocused('#blai-ai-top-p', aiSettings.topP);
         setValueIfNotFocused('#blai-ai-top-k', aiSettings.topK);
@@ -294,7 +281,7 @@ export function bindAiSettingsEvents() {
         if (options.markRulesDirty !== false) markRulesDataDirty({ rulesUi: false });
         saveSettingsDebounced();
         syncAiRewriteSettingsUI();
-        if (['enabled', 'baseUrl', 'apiKey', 'model'].includes(key)) resetAiApiCheckState();
+        if (['enabled', 'baseUrl', 'apiKey'].includes(key)) resetAiApiCheckState();
     };
     const openAiPromptEditor = () => {
         const aiSettings = ensureAiRewriteSettings();
@@ -340,6 +327,7 @@ export function bindAiSettingsEvents() {
         closeAiPromptEditor();
     };
     syncAiRewriteSettingsUI();
+    resetAiApiCheckState();
     syncAiResponsiveLayout();
     aiMobileLayoutMedia.addEventListener('change', syncAiResponsiveLayout);
 
@@ -421,7 +409,17 @@ export function bindAiSettingsEvents() {
         updateAiRewriteSetting('apiKey', String($(this).val() || ''), { markRulesDirty: false });
     });
 
-    $(document).off('input change', '#blai-ai-model').on('input change', '#blai-ai-model', function() {
+    $(document).off('change', '#blai-ai-model').on('change', '#blai-ai-model', function() {
+        const value = String($(this).val() || '').trim();
+        if (!value) {
+            const $manual = $('#blai-ai-model-manual');
+            $manual.prop('hidden', false).val(String(ensureAiRewriteSettings().model || '').trim()).trigger('focus');
+            return;
+        }
+        updateAiRewriteSetting('model', value, { markRulesDirty: false });
+    });
+
+    $(document).off('input change', '#blai-ai-model-manual').on('input change', '#blai-ai-model-manual', function() {
         updateAiRewriteSetting('model', String($(this).val() || '').trim(), { markRulesDirty: false });
     });
 
