@@ -1,63 +1,77 @@
-import { normalizeStringList } from './planning.js';
-
-export function stripSingleJsonFence(value) {
-    const trimmed = String(value || '').trim();
-    const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-    return fenceMatch ? fenceMatch[1].trim() : trimmed;
-}
-
-const cotThinkingBlockRegex = /<\s*think(?:ing)?\b[^>]*>[\s\S]*?<\s*\/\s*think(?:ing)?\s*>/giu;
-const cotThinkingOpenTailRegex = /<\s*think(?:ing)?\b[^>]*>[\s\S]*$/iu;
-const cotThinkingTagRegex = /<\s*\/?\s*think(?:ing)?\b[^>]*>/giu;
-const cotThinkingMarkerRegex = /<\s*\/?\s*think(?:ing)?\b/i;
-
-export function stripCotThinkingContent(value) {
-    return String(value || '')
-        .replace(cotThinkingBlockRegex, '')
-        .replace(cotThinkingOpenTailRegex, '')
-        .replace(cotThinkingTagRegex, '');
-}
-
-export function hasCotThinkingMarker(value) {
-    return cotThinkingMarkerRegex.test(String(value || ''));
-}
-
-function getBoundaryProbe(value = '', edge = 'end') {
-    const compact = String(value || '').replace(/\s+/g, ' ').trim();
-    if (compact.length < 6) return '';
-    return edge === 'start' ? compact.slice(0, 12) : compact.slice(-12);
-}
-
-export function getItemRewriteLengthLimit(item, absoluteLimit) {
-    const sourceLength = String(item?.text || '').length;
-    const fallbackLength = normalizeStringList(item?.localFallbackCandidates)
-        .reduce((max, value) => Math.max(max, value.length), 0);
-    const localLimit = Math.max(sourceLength + 8, Math.ceil(sourceLength * 3), fallbackLength);
-    return Math.min(absoluteLimit, localLimit);
-}
-
-export function countSentenceBoundaries(value = '') {
-    return (String(value || '').match(/[。！？!?\r\n]/gu) || []).length;
-}
-
-export function getRewrittenBoundaryIssue(rewritten, item) {
-    if (!rewritten) return '';
-    const beforeProbe = getBoundaryProbe(item?.beforeAnchor, 'end');
-    if (beforeProbe && rewritten.includes(beforeProbe)) return 'copied-before-context';
-    const afterProbe = getBoundaryProbe(item?.afterAnchor, 'start');
-    if (afterProbe && rewritten.includes(afterProbe)) return 'copied-after-context';
-    return '';
-}
-
 export class AiRewriteResponseFormatError extends Error {
-    constructor(message, cause = null) {
+    constructor(message, cause = null, diagnostic = null) {
         super(message);
         this.name = 'AiRewriteResponseFormatError';
         if (cause) this.cause = cause;
+        if (diagnostic) this.diagnostic = diagnostic;
     }
 }
 
 export function isAiRewriteResponseFormatError(error) {
     return error instanceof AiRewriteResponseFormatError
         || error?.name === 'AiRewriteResponseFormatError';
+}
+
+export function parseAiRewriteResponseObject(rawText) {
+    const candidate = String(rawText || '').trim();
+    if (!/^\{[\s\S]*\}$/.test(candidate)) {
+        throw new AiRewriteResponseFormatError('API 返回不是单个 JSON 对象', null, {
+            reason: 'not-json-object',
+            rawLength: String(rawText || '').length,
+            preview: String(rawText || '').slice(0, 300),
+        });
+    }
+
+    let parsed;
+    try {
+        parsed = JSON.parse(candidate);
+    } catch (error) {
+        throw new AiRewriteResponseFormatError('API 返回的 JSON 无法解析', error, {
+            reason: 'json-parse-error',
+            error: error?.message || String(error),
+            rawLength: String(rawText || '').length,
+            preview: String(rawText || '').slice(0, 300),
+        });
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new AiRewriteResponseFormatError('API 返回不是 id 到改写文本的 JSON 对象', null, {
+            reason: 'invalid-rewrite-map',
+        });
+    }
+    return parsed;
+}
+
+export function validateAiRewriteTargetValue(id, rawValue) {
+    if (typeof rawValue !== 'string') {
+        throw new AiRewriteResponseFormatError(`API 返回 ${id} 的改写结果不是字符串`);
+    }
+    return rawValue;
+}
+
+export function validateAiRewriteEntries(returnedEntries, itemById) {
+    if (returnedEntries.length !== itemById.size) {
+        throw new AiRewriteResponseFormatError(
+            `API 返回改写数量不一致：需要 ${itemById.size} 项，实际 ${returnedEntries.length} 项`,
+            null,
+            {
+                reason: 'rewrite-count-mismatch',
+                expectedCount: itemById.size,
+                returnedCount: returnedEntries.length,
+            },
+        );
+    }
+
+    const accepted = new Map();
+    for (const [rawId, rawValue] of returnedEntries) {
+        const id = String(rawId || '');
+        if (!itemById.has(id)) throw new AiRewriteResponseFormatError(`API 返回未知改写 id：${id || '(空)'}`);
+        accepted.set(id, validateAiRewriteTargetValue(id, rawValue));
+    }
+    return accepted;
+}
+
+export function validateAiRewriteResponse(rawText, itemById) {
+    const parsed = parseAiRewriteResponseObject(rawText);
+    return validateAiRewriteEntries(Object.entries(parsed), itemById);
 }

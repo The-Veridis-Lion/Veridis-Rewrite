@@ -1,0 +1,997 @@
+/* Shared Veridis theme tokens, common controls, and modal primitives. */
+
+#blai-purifier-popup, .blai-modal-shell, #blai-scope-tag-editor-modal, #blai-rule-transfer-modal, #blai-diff-modal, #blai-rule-search-modal, #blai-preset-import-choice-modal, .blai-toast, #blai-loading-overlay, #blai-tour-layer {
+    --status-danger: #B6494B;
+    --status-success: #5D8A68;
+}
+
+#blai-purifier-popup[data-theme="auto"], .blai-modal-shell[data-theme="auto"], #blai-scope-tag-editor-modal[data-theme="auto"], #blai-rule-transfer-modal[data-theme="auto"], #blai-diff-modal[data-theme="auto"], #blai-rule-search-modal[data-theme="auto"], #blai-preset-import-choice-modal[data-theme="auto"], .blai-toast[data-theme="auto"], #blai-loading-overlay[data-theme="auto"], #blai-tour-layer[data-theme="auto"] {
+    --bg-base: var(--SmartThemeBlurTintColor);
+    --bg-surface: var(--SmartThemeBlurTintColor);
+    --accent-color: var(--SmartThemeQuoteColor);
+    --text-main: var(--SmartThemeBodyColor);
+    --text-secondary: color-mix(
+        in srgb,
+        var(--SmartThemeBodyColor) 68%,
+        transparent
+    );
+    --border-color: var(--SmartThemeBorderColor);
+}
+
+#blai-purifier-popup[data-theme="light"], .blai-modal-shell[data-theme="light"], #blai-scope-tag-editor-modal[data-theme="light"], #blai-rule-transfer-modal[data-theme="light"], #blai-diff-modal[data-theme="light"], #blai-rule-search-modal[data-theme="light"], #blai-preset-import-choice-modal[data-theme="light"], .blai-toast[data-theme="light"], #blai-loading-overlay[data-theme="light"], #blai-tour-layer[data-theme="light"] {
+    --bg-base: #F5F7F4;
+    --bg-surface: #FFFFFF;
+    --accent-color: #5C7662;
+    --text-main: #3A403C;
+    --text-secondary: #657068;
+    --border-color: #E2E8E4;
+}
+
+#blai-purifier-popup[data-theme="dark"], .blai-modal-shell[data-theme="dark"], #blai-scope-tag-editor-modal[data-theme="dark"], #blai-rule-transfer-modal[data-theme="dark"], #blai-diff-modal[data-theme="dark"], #blai-rule-search-modal[data-theme="dark"], #blai-preset-import-choice-modal[data-theme="dark"], .blai-toast[data-theme="dark"], #blai-loading-overlay[data-theme="dark"], #blai-tour-layer[data-theme="dark"] {
+    --bg-base: #1C1D1A;
+    --bg-surface: #252622;
+    --accent-color: #D4B872;
+    --text-main: #E0E3DD;
+    --text-secondary: #9B9E98;
+    --border-color: #383A35;
+}
+
+#blai-purifier-popup, #blai-purifier-popup * {
+    text-shadow: none !important;
+}
+
+#blai-wand-btn {
+    cursor: pointer !important;
+}
+
+.blai-extension-settings-entry .inline-drawer-content {
+    padding: 8px 0 12px !important;
+}
+
+.blai-extension-open-btn {
+    width: min(260px, 100%) !important;
+    min-height: 38px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+}
+
+#blai-purifier-popup .page-panel::-webkit-scrollbar, #blai-edit-subrules-container::-webkit-scrollbar {
+    display: none;
+}
+
+#blai-purifier-popup[data-theme="dark"] .panel {
+    box-shadow: none;
+}
+
+#blai-purifier-popup .field, #blai-purifier-popup .clean-row {
+    min-height: 38px;
+    min-width: 0;
+    border-radius: 12px;
+    padding: 8px 10px;
+    background: var(--bg-surface);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    color: var(--text-main);
+    text-align: left;
+}
+
+#blai-purifier-popup .clean-row {
+    border: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-base) 12%, transparent);
+}
+
+#blai-purifier-popup[data-theme="dark"] .clean-row {
+    background: color-mix(in srgb, var(--bg-base) 12%, transparent);
+}
+
+#blai-purifier-popup .field span, #blai-purifier-popup .row-main strong {
+    min-width: 0;
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#blai-purifier-popup .field small {
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 850;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#blai-purifier-popup .text-btn, #blai-purifier-popup .mini-btn, #blai-purifier-popup .round-btn {
+    min-height: 28px;
+    border-radius: 10px;
+    padding: 0 10px;
+    display: inline-grid;
+    place-items: center;
+    color: var(--text-main);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    font-size: 11px;
+    font-weight: 900;
+    white-space: nowrap;
+    box-shadow: none !important;
+    transition:
+        background-color .16s ease,
+        border-color .16s ease,
+        color .16s ease,
+        opacity .16s ease,
+        transform .12s ease !important;
+}
+
+#blai-purifier-popup .round-btn {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    padding: 0;
+}
+
+#blai-purifier-popup .text-btn.accent, #blai-purifier-popup .mini-btn.accent {
+    color: var(--bg-base);
+    background: var(--accent-color);
+    border-color: transparent;
+}
+
+#blai-purifier-popup button:not(:disabled), #blai-purifier-popup .blai-proxy-field:not(:disabled), .blai-modal-shell button:not(:disabled) {
+    cursor: pointer !important;
+}
+
+#blai-purifier-popup .text-btn:not(.accent):hover, #blai-purifier-popup .mini-btn:not(.accent):hover, #blai-purifier-popup .round-btn:hover, #blai-purifier-popup .field.blai-proxy-field:not(.is-disabled):hover {
+    background: var(--bg-surface) !important;
+    border-color: color-mix(in srgb, var(--accent-color) 32%, var(--border-color) 68%) !important;
+}
+
+#blai-purifier-popup button:not(:disabled):active, #blai-purifier-popup .field.blai-proxy-field:not(.is-disabled):active, .blai-modal-shell button:not(:disabled):active {
+    transform: translateY(1px) scale(0.985) !important;
+}
+
+#blai-purifier-popup button:focus-visible, #blai-purifier-popup select:focus-visible, #blai-purifier-popup input:focus-visible, #blai-purifier-popup textarea:focus-visible, .blai-modal-shell button:focus-visible, .blai-modal-shell input:focus-visible, .blai-modal-shell textarea:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent-color) 62%, transparent) !important;
+    outline-offset: 2px !important;
+}
+
+#blai-purifier-popup button:disabled, #blai-purifier-popup .field.blai-proxy-field.is-disabled, .blai-modal-shell button:disabled {
+    opacity: .48 !important;
+    cursor: not-allowed !important;
+    filter: saturate(.72) !important;
+}
+
+#blai-purifier-popup .field.blai-proxy-field.is-active {
+    border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color) 58%) !important;
+    background: color-mix(in srgb, var(--accent-color) 14%, var(--bg-surface) 86%) !important;
+}
+
+#blai-purifier-popup[data-theme="dark"] .text-btn.accent, #blai-purifier-popup[data-theme="dark"] .mini-btn.accent, #blai-purifier-popup[data-theme="dark"] .rail-btn.active {
+    color: var(--bg-base);
+}
+
+#blai-purifier-popup .blai-select-box, #blai-purifier-popup .blai-input, #blai-purifier-popup .blai-textarea, #blai-purifier-popup .text-box, #blai-purifier-popup .setting-input {
+    min-width: 0;
+    border-radius: 10px !important;
+    border: 1px solid var(--border-color) !important;
+    background: color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+    color: var(--text-main) !important;
+    box-shadow: none !important;
+}
+
+#blai-purifier-popup[data-theme="dark"] .blai-input, #blai-purifier-popup[data-theme="dark"] .blai-textarea, #blai-purifier-popup[data-theme="dark"] .text-box, #blai-purifier-popup[data-theme="dark"] .setting-input {
+    background: color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+}
+
+#blai-purifier-popup .setting-input {
+    width: 72px !important;
+    min-height: 24px !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+    line-height: 1 !important;
+    font-weight: 900 !important;
+    text-align: right;
+}
+
+#blai-purifier-popup .setting-unit {
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+#blai-purifier-popup .row-main {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+}
+
+#blai-purifier-popup .clean-row p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.45;
+    font-weight: 700;
+}
+
+#blai-purifier-popup[data-theme="dark"] .bottom-nav {
+    background: color-mix(in srgb, var(--bg-base) 12%, transparent);
+}
+
+@media (max-width: 600px) {#blai-purifier-popup .text-btn {
+    min-height: 32px;
+    padding: 0 8px;
+}}
+
+.blai-legacy-warning {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+    border: 1px solid color-mix(in srgb, var(--status-danger) 42%, var(--border-color)) !important;
+    border-radius: 8px !important;
+    background: color-mix(in srgb, var(--status-danger) 13%, var(--bg-surface)) !important;
+    color: var(--text-main) !important;
+}
+
+.blai-legacy-warning[hidden] {
+    display: none !important;
+}
+
+.blai-legacy-warning-icon {
+    flex: 0 0 auto !important;
+    color: var(--status-danger) !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+}
+
+.blai-legacy-warning-main {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.blai-legacy-warning-title {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    line-height: 1.25 !important;
+}
+
+.blai-legacy-warning-text {
+    margin-top: 2px !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+    color: var(--text-secondary) !important;
+}
+
+.blai-legacy-warning-action {
+    flex: 0 0 auto !important;
+    min-height: 32px !important;
+    padding: 0 12px !important;
+    border: none !important;
+    border-radius: 7px !important;
+    background: var(--status-danger) !important;
+    color: var(--bg-base) !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+}
+
+.blai-legacy-warning-action:hover {
+    filter: brightness(1.05) !important;
+}
+
+.blai-legacy-target-flash {
+    animation: blaiLegacyTargetFlash 1.8s ease-out;
+}
+
+@keyframes blaiLegacyTargetFlash {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-danger) 58%, transparent); }
+    35% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--status-danger) 38%, transparent); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (max-width: 600px) {.blai-legacy-warning {
+    align-items: flex-start !important;
+    flex-wrap: wrap !important;
+}}
+
+@media (max-width: 600px) {.blai-legacy-warning-action {
+    width: 100% !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}}
+
+.blai-input, .blai-textarea {
+    width: 100% !important;
+    padding: 14px 16px !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    font-size: 18px !important;
+    box-sizing: border-box !important;
+    outline: none !important;
+    font-family: inherit !important;
+}
+
+.blai-textarea {
+    resize: vertical !important;
+}
+
+.blai-input:focus, .blai-textarea:focus {
+    border-color: var(--accent-color) !important;
+}
+
+.blai-input.blai-invalid, .blai-textarea.blai-invalid {
+    box-shadow: inset 0 0 0 1px var(--status-danger) !important;
+}
+
+.blai-field-error {
+    display: none !important;
+    margin-top: 6px !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+    color: var(--status-danger) !important;
+}
+
+.blai-field-error.is-visible {
+    display: block !important;
+}
+
+.blai-icon-btn {
+    padding: 0 10px !important;
+    min-height: 30px !important;
+    min-width: 30px !important;
+    font-size: 13px !important;
+    line-height: 1 !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    cursor: pointer !important;
+    color: var(--text-main) !important;
+}
+
+.blai-icon-btn:hover {
+    background: transparent !important;
+    transform: scale(1.15);
+    color: var(--accent-color) !important;
+}
+
+.blai-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4px 10px !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    margin-right: 12px !important;
+    font-weight: 800 !important;
+    color: var(--bg-surface) !important;
+    min-width: 50px !important;
+    line-height: 1 !important;
+    margin-top: 3px !important;
+    flex-shrink: 0 !important;
+}
+
+.blai-badge-compact {
+    font-size: 10px !important;
+    padding: 2px 5px !important;
+    min-width: auto !important;
+    margin-right: 6px !important;
+    margin-top: 0 !important;
+}
+
+.blai-icon-group button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    min-width: 24px;
+    min-height: 24px;
+    padding: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.blai-icon-group button:hover {
+    background: transparent !important;
+    transform: scale(1.15);
+    color: var(--accent-color) !important;
+}
+
+.blai-bind-menu-wrap {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.blai-bind-menu {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
+    width: min(224px, calc(100vw - 36px)) !important;
+    padding: 6px !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 10px !important;
+    background: var(--bg-surface) !important;
+    box-shadow: 0 14px 32px color-mix(in srgb, var(--bg-base) 22%, transparent) !important;
+    z-index: 10000007 !important;
+}
+
+.blai-bind-menu[hidden] {
+    display: none !important;
+}
+
+.blai-bind-menu-copy {
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+}
+
+.blai-bind-menu-label, .blai-bind-menu-note {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.blai-bind-menu-label {
+    color: inherit !important;
+}
+
+.blai-bind-menu-note {
+    color: var(--text-secondary) !important;
+    font-size: 11px !important;
+    font-weight: 620 !important;
+}
+
+.blai-select-box {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    background-color: var(--bg-surface);
+    padding: 0 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--text-main);
+    cursor: pointer;
+    height: 40px;
+    box-sizing: border-box;
+    border: none;
+    outline: none;
+}
+
+.blai-highlight-flash {
+    animation: blaiHighlightFlash 0.8s ease-in-out 2;
+    will-change: filter;
+}
+
+.blai-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.blai-checkbox-label input, .blai-batch-checkbox-label input {
+    display: none;
+}
+
+.blai-custom-checkbox {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    flex: 0 0 16px;
+    flex-shrink: 0;
+    aspect-ratio: 1 / 1;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-surface);
+    box-sizing: border-box;
+}
+
+.blai-custom-checkbox.blai-square {
+    border-radius: 4px;
+}
+
+.blai-custom-checkbox.blai-square-2px {
+    border-radius: 2px;
+}
+
+.blai-checkbox-label input:checked + .blai-custom-checkbox {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.blai-checkbox-label input:checked + .blai-custom-checkbox::after, .blai-batch-checkbox-label input:checked + .blai-custom-checkbox.blai-square-2px::after {
+    content: '\f00c';
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    color: var(--bg-surface);
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.blai-tag {
+    background-color: var(--accent-color);
+    color: var(--bg-surface);
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.blai-source {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-main);
+    font-weight: 500;
+    display: block !important;
+    min-width: 0;
+}
+
+.blai-empty-state {
+    opacity: 0.58 !important;
+    width: 100% !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    padding: 20px 0 !important;
+    color: var(--text-secondary) !important;
+}
+
+.blai-modal-shell {
+    display: none;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+    box-sizing: border-box !important;
+    z-index: 10000000 !important;
+    flex-direction: column !important;
+    font-family: inherit !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.blai-modal-shell:not(#blai-tour-layer) {
+    background: color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+    backdrop-filter: blur(9px) !important;
+}
+
+.blai-modal-shell.blai-is-open {
+    display: flex !important;
+}
+
+.blai-modal-card {
+    box-sizing: border-box !important;
+    border-radius: 18px !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    box-shadow: 0 18px 48px color-mix(in srgb, var(--bg-base) 18%, transparent) !important;
+}
+
+.blai-modal-actions {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    flex-shrink: 0 !important;
+    margin-top: 5px !important;
+}
+
+.blai-secondary-btn, .blai-primary-btn {
+    flex: 1 !important;
+    padding: 10px !important;
+    border-radius: 8px !important;
+    cursor: pointer !important;
+    font-weight: bold !important;
+}
+
+.blai-secondary-btn:hover {
+    background: var(--bg-surface) !important;
+}
+
+.blai-primary-btn:hover {
+    background: var(--accent-color) !important;
+}
+
+.blai-primary-btn:disabled, .blai-primary-btn.blai-is-disabled {
+    background: var(--bg-surface) !important;
+    color: var(--text-secondary) !important;
+    cursor: not-allowed !important;
+    opacity: 0.7 !important;
+}
+
+.blai-modal-actions .blai-secondary-btn, .blai-modal-actions .blai-primary-btn, .blai-modal-actions button {
+    flex: 1 !important;
+    padding: 10px !important;
+    font-size: 14px !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 6px !important;
+    margin: 0 !important;
+    border-radius: 8px !important;
+}
+
+.blai-confirm-card {
+    padding: 26px !important;
+    border-radius: 12px !important;
+    max-width: 450px !important;
+    text-align: center !important;
+}
+
+.blai-confirm-title {
+    color: var(--status-danger) !important;
+    margin-top: 0 !important;
+    font-size: 22px !important;
+}
+
+.blai-confirm-text {
+    font-size: 15px !important;
+    color: var(--text-main) !important;
+    line-height: 1.6 !important;
+    margin: 0 0 25px 0 !important;
+    text-align: left !important;
+}
+
+.blai-warning-callout {
+    color: var(--status-danger) !important;
+    background: var(--bg-surface) !important;
+    padding: 6px 10px !important;
+    border-radius: 6px !important;
+    display: inline-block !important;
+    margin-bottom: 10px !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+.blai-confirm-actions {
+    gap: 15px !important;
+}
+
+.blai-related-active-icon {
+    color: var(--accent-color) !important;
+}
+
+.blai-persona-description-protect-toggle:not(.blai-clean-switch) {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    margin-left: 8px !important;
+    padding: 2px 7px !important;
+    min-height: 24px !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 6px !important;
+    background: color-mix(in srgb, var(--text-main) 7%, transparent) !important;
+    color: var(--text-main) !important;
+    font: inherit !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+}
+
+.blai-persona-description-protect-toggle:not(.blai-clean-switch).is-active {
+    border-color: var(--accent-color) !important;
+    color: var(--accent-color) !important;
+    background: color-mix(in srgb, var(--accent-color) 14%, transparent) !important;
+}
+
+.blai-persona-description-protect-toggle:not(.blai-clean-switch):hover {
+    transform: translateY(-1px);
+}
+
+@media screen and (max-width: 600px) {.blai-icon-group {
+    flex: 0 1 55% !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 3px !important;
+    min-width: 0 !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-select-box {
+    flex: 1 1 0% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 160px) !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    display: block !important;
+    height: 32px !important;
+    font-size: 13px !important;
+    padding: 3px 8px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-icon-btn {
+    min-height: 36px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-input, .blai-textarea {
+    font-size: 14px !important;
+    padding: 10px 12px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-modal-actions {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-secondary-btn, .blai-primary-btn {
+    height: auto !important;
+    min-height: 40px !important;
+    max-height: 48px !important;
+}}
+
+
+.blai-toast {
+    position: fixed !important;
+    top: 50vh !important;
+    left: 50vw !important;
+    transform: translate(-50%, -40%) scale(0.95) !important;
+    opacity: 0 !important;
+    width: max-content !important;
+    max-width: 85vw !important;
+    padding: 12px 20px !important;
+    border-radius: 12px !important;
+    border: 1px solid color-mix(in srgb, var(--text-main) 22%, var(--border-color));
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.5 !important;
+    text-align: center !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px;
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--text-main) 24%, transparent) !important;
+    z-index: 2147483647 !important;
+    pointer-events: none !important;
+    transition: opacity 0.3s ease-out, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
+.blai-toast > i {
+    color: inherit;
+    font-size: 15px;
+}
+
+.blai-toast-content {
+    min-width: 0;
+    text-align: left;
+}
+
+.blai-toast-title {
+    display: block;
+}
+
+.blai-toast-description {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.35;
+}
+
+.blai-toast.blai-show {
+    opacity: 1 !important;
+    transform: translate(-50%, -50%) scale(1) !important;
+}
+
+#blai-purifier-popup .blai-icon-group button, #blai-purifier-popup .blai-icon-btn, .blai-modal-shell .blai-icon-btn {
+    min-width: 34px !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--border-color) !important;
+    background: transparent !important;
+    color: var(--text-main) !important;
+    box-shadow: none !important;
+}
+
+#blai-purifier-popup .blai-icon-group button:hover, #blai-purifier-popup .blai-icon-btn:hover, .blai-modal-shell .blai-icon-btn:hover {
+    background: var(--bg-surface) !important;
+    transform: none !important;
+}
+
+#blai-purifier-popup .blai-select-box, #blai-purifier-popup .blai-input, .blai-modal-shell .blai-input, .blai-modal-shell .blai-textarea {
+    min-height: 38px !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--border-color) !important;
+    background: transparent !important;
+    color: var(--text-main) !important;
+    box-shadow: none !important;
+}
+
+.blai-modal-shell .blai-secondary-btn, .blai-modal-shell .blai-primary-btn {
+    min-height: 38px !important;
+    border-radius: 12px !important;
+    border: 1px solid var(--border-color) !important;
+    background: transparent !important;
+    color: var(--text-main) !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    box-shadow: none !important;
+}
+
+.blai-modal-shell .blai-primary-btn, .blai-modal-shell .blai-primary-btn:hover {
+    background: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--bg-base) !important;
+}
+
+#blai-risk-confirm-modal .blai-risk-confirm-card, #blai-risk-info-modal .blai-risk-info-card {
+    width: min(440px, calc(100vw - 28px)) !important;
+    max-height: calc(100dvh - 28px) !important;
+    padding: 18px !important;
+}
+
+#blai-risk-confirm-text, #blai-risk-info-text {
+    max-height: min(55dvh, 420px) !important;
+    margin: 0 !important;
+    overflow-y: auto !important;
+    color: var(--text-main) !important;
+    font-size: 14px !important;
+    line-height: 1.7 !important;
+    white-space: pre-wrap !important;
+}
+
+#blai-risk-confirm-modal .blai-modal-actions, #blai-risk-info-modal .blai-modal-actions {
+    margin-top: 16px !important;
+}
+
+#blai-add-subrule-btn, #blai-modal-sub-save {
+    background: var(--accent-color) !important;
+    border-color: var(--accent-color) !important;
+    color: var(--bg-base) !important;
+}
+
+.blai-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+#blai-purifier-popup .blai-theme-button {
+    grid-row: 1;
+    justify-self: start;
+}
+
+#blai-purifier-popup .blai-global-icon-button:active, #blai-purifier-popup .blai-home-dataset-actions button:active, #blai-purifier-popup .blai-home-toolbar-button:active, #blai-purifier-popup .blai-home-batch-actions button:active, #blai-purifier-popup .blai-home-card-menu:active {
+    transform: translateY(1px) scale(0.985);
+}
+
+#blai-purifier-popup .blai-global-icon-button:focus-visible, #blai-purifier-popup .blai-home-preset-select:focus-visible, #blai-purifier-popup .blai-home-dataset-actions button:focus-visible, #blai-purifier-popup .blai-home-toolbar-button:focus-visible, #blai-purifier-popup .blai-home-batch-actions button:focus-visible, #blai-purifier-popup .blai-home-card-menu:focus-visible, #blai-purifier-popup .blai-home-selection-control:focus-within, #blai-purifier-popup .blai-home-enabled-control:focus-within {
+    outline: 2px solid color-mix(in srgb, var(--accent-color) 58%, transparent);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {#blai-purifier-popup .blai-global-icon-button, #blai-purifier-popup .blai-home-dataset-actions button, #blai-purifier-popup .blai-home-toolbar-button, #blai-purifier-popup .blai-home-batch-actions button, #blai-purifier-popup .blai-home-card-menu {
+    transition: none;
+}}
+
+#blai-purifier-popup.blai-app-shell .page-panel:not([data-page="overview"]) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(#blai-scope-quick-input), #blai-purifier-popup.blai-app-shell .page-panel:not([data-page="overview"]) select, #blai-purifier-popup.blai-app-shell .page-panel:not([data-page="overview"]) textarea {
+    background: var(--bg-surface) !important;
+}
+
+@media (max-width: 600px) {.blai-modal-shell {
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell:not(#blai-tour-layer) {
+    background: color-mix(in srgb, var(--text-main) 38%, transparent) !important;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell > .blai-modal-card {
+    width: 100% !important;
+    max-width: 420px !important;
+    max-height: calc(100dvh - 40px) !important;
+    padding: 18px !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 16px !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--text-main) 16%, transparent) !important;
+    box-sizing: border-box !important;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell .blai-edit-modal-title, .blai-modal-shell .blai-confirm-title, .blai-modal-shell h3 {
+    font-size: 16px !important;
+    line-height: 1.2 !important;
+    font-weight: 800 !important;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell input, .blai-modal-shell select, .blai-modal-shell textarea {
+    font-size: 12px !important;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell input, .blai-modal-shell select {
+    min-height: 38px !important;
+    border-radius: 8px !important;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell small, .blai-modal-shell p, .blai-modal-shell .blai-subrule-mode-hint, .blai-modal-shell .blai-field-error {
+    font-size: 10px !important;
+    line-height: 1.4 !important;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell .blai-modal-actions, .blai-modal-shell .blai-subrule-footer {
+    gap: 8px !important;
+    margin-top: 16px !important;
+    padding-top: 0 !important;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell .blai-primary-btn, .blai-modal-shell .blai-secondary-btn, .blai-modal-shell .blai-modal-actions button, .blai-modal-shell .blai-subrule-footer button {
+    min-height: 36px !important;
+    padding: 0 12px !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+    font-weight: 800 !important;
+}}
+
+@media (max-width: 600px) {#blai-risk-confirm-modal > .blai-risk-confirm-card, #blai-risk-info-modal > .blai-risk-info-card {
+    width: 100% !important;
+    max-width: 420px !important;
+    max-height: calc(100dvh - 40px) !important;
+    border-radius: 16px !important;
+}}
+
+#blai-purifier-popup .blai-clean-switch-state, #blai-purifier-popup .blai-switch-state {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+@media (min-width: 601px) {.blai-modal-shell {
+    padding: clamp(24px, 4vw, 44px) !important;
+    align-items: center !important;
+    justify-content: center !important;
+}}

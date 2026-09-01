@@ -1,0 +1,2597 @@
+/* Clean/Scope/Deep Clean presentation, including Deep Clean responsive layout. */
+
+.blai-scope-tag-editor-modal {
+    z-index: 10000006 !important;
+}
+
+.blai-scope-tag-editor-card {
+    width: 100% !important;
+    max-width: 520px !important;
+    max-height: calc(100dvh - 40px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 34px 38px 36px !important;
+    border-radius: 18px !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 24px 60px color-mix(in srgb, var(--bg-base) 28%, transparent) !important;
+    box-sizing: border-box !important;
+}
+
+.blai-scope-tag-editor-title {
+    margin: 0 0 30px !important;
+    color: var(--text-main) !important;
+    font-size: 26px !important;
+    line-height: 1.25 !important;
+    font-weight: 760 !important;
+    text-align: center !important;
+}
+
+.blai-scope-tag-editor-field {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    margin-bottom: 24px !important;
+}
+
+.blai-scope-tag-editor-field .blai-field-label {
+    margin: 0 !important;
+    color: var(--text-main) !important;
+    font-size: 18px !important;
+    line-height: 1.3 !important;
+    font-weight: 700 !important;
+}
+
+.blai-scope-tag-input {
+    height: 58px !important;
+    border-radius: 12px !important;
+    font-size: 18px !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+}
+
+.blai-scope-tag-field-help {
+    color: var(--text-secondary) !important;
+    font-size: 14px !important;
+    line-height: 1.45 !important;
+}
+
+.blai-scope-tag-editor-actions {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 18px !important;
+    margin-top: 26px !important;
+}
+
+.blai-scope-tag-cancel, .blai-scope-tag-confirm {
+    min-width: 96px !important;
+    min-height: 56px !important;
+    padding: 0 20px !important;
+    border: none !important;
+    border-radius: 14px !important;
+    font-size: 18px !important;
+    font-weight: 760 !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    transition: transform 0.18s ease, filter 0.18s ease, background-color 0.18s ease !important;
+}
+
+.blai-scope-tag-cancel {
+    background: var(--bg-surface) !important;
+    color: var(--text-secondary) !important;
+}
+
+.blai-scope-tag-confirm {
+    background: var(--status-danger) !important;
+    color: var(--bg-surface) !important;
+}
+
+.blai-scope-tag-cancel:hover, .blai-scope-tag-confirm:hover {
+    filter: brightness(1.03) !important;
+}
+
+.blai-scope-tag-cancel:active, .blai-scope-tag-confirm:active {
+    transform: scale(0.98) !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) {
+    padding: 12px 14px !important;
+    background: var(--bg-surface) !important;
+    border-left: 4px solid var(--accent-color) !important;
+    border-radius: 6px !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) del {
+    color: var(--status-danger) !important;
+    background: transparent !important;
+    text-decoration: line-through !important;
+    padding: 0 3px !important;
+    border-radius: 3px !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) ins {
+    color: var(--status-success) !important;
+    background: color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+    text-decoration: none !important;
+    padding: 0 3px !important;
+    border-radius: 3px !important;
+    font-weight: 600 !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) :is(ins, del)[data-blai-diff-source="program"] {
+    color: var(--blai-diff-source-program-color) !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) ins[data-blai-diff-source="program"] {
+    background: var(--blai-diff-source-program-background) !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) :is(ins, del)[data-blai-diff-source="ai"] {
+    color: var(--blai-diff-source-ai-color) !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) ins[data-blai-diff-source="ai"] {
+    background: var(--blai-diff-source-ai-background) !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) :is(ins, del)[data-blai-diff-source="manual"] {
+    color: var(--blai-diff-source-manual-color) !important;
+}
+
+.blai-diff-full-modified:not(.blai-deep-clean-review-modified) ins[data-blai-diff-source="manual"] {
+    background: var(--blai-diff-source-manual-background) !important;
+}
+
+@media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-card {
+    width: 100% !important;
+    max-width: 440px !important;
+    max-height: calc(100dvh - 40px) !important;
+    padding: 24px 26px 26px !important;
+    border-radius: 14px !important;
+}}
+
+@media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-title {
+    margin-bottom: 20px !important;
+    font-size: 19px !important;
+}}
+
+@media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-field {
+    gap: 8px !important;
+    margin-bottom: 16px !important;
+}}
+
+@media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-field .blai-field-label {
+    font-size: 13px !important;
+}}
+
+@media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-input {
+    height: 44px !important;
+    font-size: 13px !important;
+}}
+
+@media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-field-help {
+    font-size: 12px !important;
+}}
+
+@media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-actions {
+    gap: 10px !important;
+    margin-top: 18px !important;
+}}
+
+@media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-cancel, #blai-scope-tag-editor-modal .blai-scope-tag-confirm {
+    min-width: 78px !important;
+    min-height: 40px !important;
+    border-radius: 10px !important;
+    font-size: 13px !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal {
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-card {
+    width: 100% !important;
+    max-width: 420px !important;
+    max-height: calc(100dvh - 40px) !important;
+    padding: 18px !important;
+    border-radius: 12px !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-title {
+    margin-bottom: 16px !important;
+    font-size: 16px !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-field {
+    gap: 6px !important;
+    margin-bottom: 13px !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-field .blai-field-label {
+    font-size: 14px !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-input {
+    height: 38px !important;
+    min-height: 38px !important;
+    font-size: 12px !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-field-help {
+    font-size: 10px !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-actions {
+    gap: 8px !important;
+    margin-top: 16px !important;
+}}
+
+@media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-cancel, #blai-scope-tag-editor-modal .blai-scope-tag-confirm {
+    min-width: 72px !important;
+    min-height: 36px !important;
+    padding: 0 14px !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+}}
+
+#blai-purifier-popup .blai-clean-page {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 24px;
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-clean-page h2, #blai-purifier-popup .blai-clean-page h3, #blai-purifier-popup .blai-clean-page p {
+    margin: 0;
+}
+
+#blai-purifier-popup .blai-clean-columns {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.72fr) minmax(280px, 1fr);
+    align-items: start;
+    gap: clamp(24px, 3vw, 36px);
+}
+
+#blai-purifier-popup .blai-clean-primary-column, #blai-purifier-popup .blai-clean-secondary-column, #blai-purifier-popup .blai-clean-section {
+    min-width: 0;
+}
+
+#blai-purifier-popup .blai-clean-secondary-column {
+    display: grid;
+    align-content: start;
+    gap: 32px;
+}
+
+#blai-purifier-popup .blai-clean-section-header {
+    padding-bottom: 13px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-purifier-popup .blai-clean-section-header h2, #blai-purifier-popup .blai-clean-danger-header h2 {
+    font-size: 15px;
+    font-weight: 760;
+    line-height: 1.3;
+}
+
+#blai-purifier-popup .blai-clean-section-header p {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.5;
+    text-wrap: pretty;
+}
+
+#blai-purifier-popup .blai-clean-mode-cards {
+    min-width: 0;
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+#blai-purifier-popup .blai-clean-mode-card {
+    min-width: 0;
+    min-height: 92px;
+    padding: 12px 14px;
+    position: relative;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px 10px 4px 4px;
+    background: color-mix(in srgb, var(--bg-surface) 64%, transparent);
+    color: var(--text-secondary);
+    box-sizing: border-box;
+    font: inherit;
+    text-align: left;
+    box-shadow: none;
+    transition: border-color .18s ease, background-color .18s ease, color .18s ease;
+}
+
+#blai-purifier-popup .blai-clean-mode-card::after {
+    content: "";
+    height: 3px;
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    border-radius: 0 0 3px 3px;
+    background: transparent;
+}
+
+#blai-purifier-popup .blai-clean-mode-card:hover {
+    background: var(--bg-surface);
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-clean-mode-card.is-active {
+    border-color: color-mix(in srgb, var(--accent-color) 36%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-color) 8%, var(--bg-surface));
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-clean-mode-card.is-active::after {
+    background: var(--accent-color);
+}
+
+#blai-purifier-popup .blai-clean-mode-card > svg, #blai-purifier-popup .blai-clean-toolbar-button svg, #blai-purifier-popup .blai-clean-add-field svg, #blai-purifier-popup .blai-clean-tag-action svg, #blai-purifier-popup .blai-clean-warning svg, #blai-purifier-popup .blai-clean-danger-button svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+#blai-purifier-popup .blai-clean-mode-card > svg {
+    width: 23px;
+    height: 23px;
+}
+
+#blai-purifier-popup .blai-clean-mode-copy {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+#blai-purifier-popup .blai-clean-mode-copy strong {
+    color: inherit;
+    font-size: 13px;
+    font-weight: 740;
+    line-height: 1.35;
+}
+
+#blai-purifier-popup .blai-clean-mode-copy > span {
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.55;
+    text-wrap: pretty;
+}
+
+#blai-purifier-popup .blai-clean-mode-status {
+    min-height: 18px;
+    margin-top: 10px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+#blai-purifier-popup .blai-clean-list-toolbar {
+    min-width: 0;
+    margin-top: 20px;
+    padding: 0 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+#blai-purifier-popup .blai-clean-list-label, #blai-purifier-popup .blai-clean-list-actions {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#blai-purifier-popup .blai-clean-list-label strong {
+    font-size: 13px;
+    font-weight: 740;
+}
+
+#blai-purifier-popup .blai-clean-count-badge {
+    min-width: 24px;
+    height: 20px;
+    padding: 0 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+#blai-purifier-popup .blai-clean-toolbar-button {
+    min-height: 30px;
+    padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 680;
+    box-shadow: none;
+}
+
+#blai-purifier-popup .blai-clean-toolbar-button:hover, #blai-purifier-popup .blai-clean-toolbar-button.is-active {
+    color: var(--accent-color);
+}
+
+#blai-purifier-popup .blai-clean-toolbar-button svg {
+    width: 15px;
+    height: 15px;
+}
+
+#blai-purifier-popup .blai-clean-add-field {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-purifier-popup .blai-clean-add-field button {
+    width: 34px;
+    height: 38px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--accent-color);
+    box-shadow: none;
+}
+
+#blai-purifier-popup .blai-clean-add-field button:hover {
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-clean-add-field svg {
+    width: 16px;
+    height: 16px;
+}
+
+#blai-purifier-popup .blai-clean-add-field input {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 0 6px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: var(--text-main) !important;
+    font-family: inherit !important;
+    font-size: 12px !important;
+    box-shadow: none !important;
+}
+
+#blai-purifier-popup .blai-clean-add-field input::placeholder {
+    color: color-mix(in srgb, var(--text-secondary) 76%, transparent);
+}
+
+#blai-purifier-popup .blai-clean-group-list {
+    min-width: 0;
+    max-height: min(54vh, 560px);
+    margin-top: 14px;
+    padding-right: 4px;
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+#blai-purifier-popup .blai-clean-tag-group {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--bg-surface) 24%, transparent);
+}
+
+#blai-purifier-popup .blai-clean-tag-group-header {
+    min-width: 0;
+    min-height: 42px;
+    padding: 0 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-purifier-popup .blai-clean-tag-group-header.is-managing {
+    grid-template-columns: minmax(120px, 1fr) auto auto;
+}
+
+#blai-purifier-popup .blai-clean-group-disclosure {
+    min-width: 0;
+    height: 41px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    text-align: left;
+    box-shadow: none;
+}
+
+#blai-purifier-popup .blai-clean-group-caret {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    fill: none;
+    stroke: var(--text-secondary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform .18s ease;
+}
+
+#blai-purifier-popup .blai-clean-tag-group.is-collapsed .blai-clean-group-caret {
+    transform: rotate(-90deg);
+}
+
+#blai-purifier-popup .blai-clean-group-title {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 720;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#blai-purifier-popup .blai-clean-group-count {
+    min-width: 20px;
+    height: 18px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+}
+
+#blai-purifier-popup .blai-clean-group-switch, #blai-purifier-popup .blai-clean-switch, #blai-purifier-popup .blai-clean-tag-switch, #blai-purifier-popup .blai-clean-checkbox-switch {
+    width: 34px;
+    min-width: 34px;
+    height: 20px;
+    padding: 0;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    border: 0;
+    background: transparent;
+    color: transparent;
+    box-shadow: none;
+}
+
+#blai-purifier-popup .blai-clean-switch-track {
+    width: 34px;
+    height: 20px;
+    position: relative;
+    display: block;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--bg-surface);
+    box-sizing: border-box;
+    transition: border-color .18s ease, background-color .18s ease;
+}
+
+#blai-purifier-popup .blai-clean-switch-track > span {
+    width: 14px;
+    height: 14px;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    border-radius: 50%;
+    background: var(--bg-base);
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--text-main) 18%, transparent);
+    transition: transform .18s ease, background-color .18s ease;
+}
+
+#blai-purifier-popup .blai-clean-group-switch.is-on .blai-clean-switch-track, #blai-purifier-popup .blai-clean-switch[aria-pressed="true"] .blai-clean-switch-track, #blai-purifier-popup .blai-clean-tag-switch input:checked + .blai-clean-switch-track, #blai-purifier-popup .blai-clean-checkbox-switch input:checked + .blai-clean-switch-track {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+}
+
+#blai-purifier-popup .blai-clean-group-switch.is-on .blai-clean-switch-track > span, #blai-purifier-popup .blai-clean-switch[aria-pressed="true"] .blai-clean-switch-track > span, #blai-purifier-popup .blai-clean-tag-switch input:checked + .blai-clean-switch-track > span, #blai-purifier-popup .blai-clean-checkbox-switch input:checked + .blai-clean-switch-track > span {
+    transform: translateX(14px);
+    background: var(--bg-base);
+}
+
+#blai-purifier-popup .blai-clean-group-switch:focus-visible .blai-clean-switch-track, #blai-purifier-popup .blai-clean-switch:focus-visible .blai-clean-switch-track, #blai-purifier-popup .blai-clean-tag-switch input:focus-visible + .blai-clean-switch-track, #blai-purifier-popup .blai-clean-checkbox-switch input:focus-visible + .blai-clean-switch-track {
+    outline: 2px solid color-mix(in srgb, var(--accent-color) 58%, transparent);
+    outline-offset: 2px;
+}
+
+#blai-purifier-popup .blai-clean-tag-switch input, #blai-purifier-popup .blai-clean-checkbox-switch input {
+    width: 34px;
+    height: 20px;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+#blai-purifier-popup .blai-clean-tag-group-body {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows .18s ease;
+}
+
+#blai-purifier-popup .blai-clean-tag-group.is-collapsed .blai-clean-tag-group-body {
+    grid-template-rows: 0fr;
+}
+
+#blai-purifier-popup .blai-clean-tag-group-items {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#blai-purifier-popup .blai-clean-tag-item {
+    min-width: 0;
+    min-height: 48px;
+    padding: 7px 10px 7px 12px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    transition: background-color .18s ease, opacity .18s ease;
+}
+
+#blai-purifier-popup .blai-clean-tag-item + .blai-clean-tag-item {
+    border-top: 1px solid var(--border-color);
+}
+
+#blai-purifier-popup .blai-clean-tag-item:hover, #blai-purifier-popup .blai-clean-tag-item.is-active {
+    background: color-mix(in srgb, var(--bg-surface) 66%, transparent);
+}
+
+#blai-purifier-popup .blai-clean-tag-item.is-disabled {
+    opacity: .58;
+}
+
+#blai-purifier-popup .blai-clean-tag-copy {
+    min-width: 0;
+    padding: 0;
+    display: grid;
+    justify-items: start;
+    gap: 3px;
+    border: 0;
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    text-align: left;
+    box-shadow: none;
+}
+
+#blai-purifier-popup .blai-clean-tag-title {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+#blai-purifier-popup .blai-clean-tag-code {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--text-secondary) !important;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important;
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+#blai-purifier-popup .blai-clean-tag-actions, #blai-purifier-popup .blai-clean-group-manager-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+#blai-purifier-popup .blai-clean-tag-action {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    box-shadow: none;
+}
+
+#blai-purifier-popup .blai-clean-tag-action:hover {
+    background: var(--bg-surface);
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-clean-tag-delete:hover, #blai-purifier-popup .blai-clean-group-delete:hover {
+    color: var(--status-danger);
+}
+
+#blai-purifier-popup .blai-clean-tag-action svg {
+    width: 14px;
+    height: 14px;
+}
+
+#blai-purifier-popup .blai-clean-group-name-input {
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 680;
+}
+
+#blai-purifier-popup .blai-clean-group-empty {
+    padding: 14px 12px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    text-align: center;
+}
+
+#blai-purifier-popup .blai-clean-settings-list {
+    display: grid;
+}
+
+#blai-purifier-popup .blai-clean-setting-row {
+    min-width: 0;
+    padding: 16px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-clean-setting-row + .blai-clean-setting-row {
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 74%, transparent);
+}
+
+#blai-purifier-popup .blai-clean-setting-row > div {
+    min-width: 0;
+}
+
+#blai-purifier-popup .blai-clean-setting-row strong {
+    font-size: 12px;
+    font-weight: 720;
+    line-height: 1.35;
+}
+
+#blai-purifier-popup .blai-clean-setting-row p {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.5;
+    text-wrap: pretty;
+}
+
+#blai-purifier-popup .blai-clean-danger-zone {
+    min-width: 0;
+}
+
+#blai-purifier-popup .blai-clean-danger-header {
+    padding-bottom: 11px;
+    border-bottom: 1px solid color-mix(in srgb, var(--status-danger) 32%, var(--border-color));
+}
+
+#blai-purifier-popup .blai-clean-danger-header h2 {
+    color: var(--status-danger);
+}
+
+#blai-purifier-popup .blai-clean-danger-content {
+    padding-top: 15px;
+}
+
+#blai-purifier-popup .blai-clean-danger-content h3 {
+    font-size: 12px;
+    font-weight: 740;
+    line-height: 1.35;
+}
+
+#blai-purifier-popup .blai-clean-danger-content > p {
+    margin-top: 6px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.55;
+    text-wrap: pretty;
+}
+
+#blai-purifier-popup .blai-clean-warning {
+    margin-top: 14px;
+    padding: 10px 11px;
+    display: grid;
+    grid-template-columns: 17px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--accent-color) 9%, transparent);
+    color: var(--accent-color);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+#blai-purifier-popup .blai-clean-warning svg {
+    width: 17px;
+    height: 17px;
+}
+
+#blai-purifier-popup .blai-clean-danger-button {
+    width: 100%;
+    min-height: 38px;
+    margin-top: 14px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--status-danger);
+    border-radius: 8px;
+    background: var(--status-danger);
+    color: var(--bg-surface);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 740;
+    box-shadow: none;
+    transition: filter .18s ease;
+}
+
+#blai-purifier-popup .blai-clean-danger-button:hover {
+    filter: brightness(.94);
+}
+
+#blai-purifier-popup .blai-clean-danger-button svg {
+    width: 15px;
+    height: 15px;
+}
+
+#blai-deep-clean-workspace {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    min-width: 0;
+    min-height: 0;
+    display: none;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    box-sizing: border-box;
+}
+
+#blai-deep-clean-workspace.blai-is-open {
+    display: grid;
+}
+
+#blai-deep-clean-workspace *, #blai-deep-clean-workspace *::before, #blai-deep-clean-workspace *::after {
+    box-sizing: border-box;
+}
+
+#blai-deep-clean-workspace [hidden] {
+    display: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-header {
+    min-height: 58px;
+    padding: 9px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-surface);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-heading {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 13px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-eyebrow, #blai-deep-clean-workspace .blai-deep-clean-header h2, #blai-deep-clean-workspace .blai-deep-clean-header p, #blai-deep-clean-workspace .blai-deep-clean-content p, #blai-deep-clean-workspace .blai-deep-clean-content h3, #blai-deep-clean-workspace .blai-deep-clean-content h4 {
+    margin: 0;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-eyebrow {
+    color: var(--accent-color);
+    font: 750 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+    letter-spacing: .09em;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-header h2 {
+    color: var(--text-main);
+    font-size: 15px;
+    font-weight: 720;
+    line-height: 1.25;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-header #blai-deep-clean-description {
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-header-actions {
+    flex: 0 0 auto;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-header-stop {
+    min-height: 32px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-header-stop:hover {
+    color: var(--text-main);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-content {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--bg-surface);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-loading, #blai-deep-clean-workspace .blai-deep-clean-error, #blai-deep-clean-workspace .blai-deep-clean-empty {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+    text-align: center;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-primary-action, #blai-deep-clean-workspace .blai-deep-clean-secondary-action, #blai-deep-clean-workspace .blai-deep-clean-actions button, #blai-deep-clean-workspace .blai-deep-clean-state button, #blai-deep-clean-workspace .blai-deep-clean-review-apply button {
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 720;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-primary-action, #blai-deep-clean-workspace .blai-deep-clean-actions .blai-deep-clean-primary-action, #blai-deep-clean-workspace .blai-deep-clean-review-apply button:not(:disabled) {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: var(--bg-surface);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-primary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#blai-deep-clean-workspace button:disabled {
+    cursor: not-allowed;
+    opacity: .48;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-selection {
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 276px minmax(0, 1fr);
+    overflow: hidden;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-side {
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-base) 54%, var(--bg-surface));
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-controls > summary {
+    display: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-side-inner {
+    min-width: 0;
+    display: grid;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-section {
+    min-width: 0;
+    padding: 20px 18px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-section h3 {
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 760;
+    line-height: 1.35;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-section > p {
+    margin-top: 5px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-quick-list {
+    margin-top: 12px;
+    display: grid;
+    gap: 3px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-specified-picker {
+    min-width: 0;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-specified-picker > summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-specified-picker > summary::-webkit-details-marker {
+    display: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-specified-picker[open] > summary > i {
+    transform: rotate(90deg);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-quick {
+    width: 100%;
+    min-height: 36px;
+    padding: 0 9px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 9px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 680;
+    text-align: left;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-quick > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-quick > span i {
+    width: 14px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-quick > i {
+    color: var(--text-secondary);
+    font-size: 8px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-quick:hover, #blai-deep-clean-workspace .blai-deep-clean-quick.is-active {
+    border-color: color-mix(in srgb, var(--accent-color) 28%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-color) 9%, var(--bg-surface));
+    color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-clear {
+    margin-top: 9px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 10px;
+    text-decoration: underline;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-specified {
+    margin: 0 0 4px 18px;
+    padding: 8px 0 0;
+    display: grid;
+    gap: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 68%, transparent);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-specified .blai-deep-clean-search-field {
+    width: 100%;
+    min-width: 0;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-input, #blai-deep-clean-workspace .blai-deep-clean-select {
+    width: 100%;
+    min-width: 0;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--bg-base) !important;
+    color: var(--text-main);
+    font: inherit;
+    font-size: 11px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-specified-list {
+    max-height: 170px;
+    overflow-y: auto;
+    border-block: 1px solid var(--border-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-options {
+    margin-top: 13px;
+    display: grid;
+    gap: 13px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-option {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+    display: grid;
+    gap: 6px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-option > span, #blai-deep-clean-workspace .blai-deep-clean-option > legend {
+    padding: 0;
+    color: var(--text-main);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-mode-options {
+    display: grid;
+    gap: 2px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-mode-option {
+    min-width: 0;
+    min-height: 34px;
+    padding: 6px 4px;
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    text-align: left;
+    cursor: pointer;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-mode-option:hover {
+    background: color-mix(in srgb, var(--bg-base) 54%, var(--bg-surface));
+    color: var(--text-main);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-mode-option input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-mode-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-mode-copy strong {
+    font-size: 10px;
+    font-weight: 700;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-mode-option input:checked + .blai-deep-clean-mode-copy strong {
+    color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-mode-copy small {
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-program-policy {
+    margin: 1px 0 3px 7px;
+    padding-left: 15px;
+    display: grid;
+    gap: 2px;
+    border-left: 1px solid var(--border-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-option-choices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-option-choices button {
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 8px;
+    border: 0;
+    border-left: 1px solid var(--border-color);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-option-choices button:first-child {
+    border-left: 0;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-option-choices button[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--accent-color) 12%, var(--bg-surface));
+    color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-main {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+    background: var(--bg-surface);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-header {
+    min-width: 0;
+    padding: 20px 24px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-header > div:first-child {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-header h3 {
+    font-size: 18px;
+    font-weight: 720;
+    letter-spacing: -.015em;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-header p {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-header p strong {
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-tabs {
+    margin-top: 16px;
+    display: flex;
+    gap: 24px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-tabs button {
+    position: relative;
+    min-height: 34px;
+    padding: 0 0 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-tabs button span {
+    color: var(--text-secondary);
+    font: 9px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-tabs button[aria-selected="true"] {
+    color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-tabs button[aria-selected="true"]::after {
+    position: absolute;
+    right: -1px;
+    bottom: 0;
+    left: -1px;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: var(--accent-color);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--accent-color) 22%, transparent);
+    content: "";
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-workspace {
+    min-width: 0;
+    min-height: 0;
+    padding: 0 24px;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: hidden;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-panel {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-toolbar {
+    min-width: 0;
+    padding: 13px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 68%, transparent);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-search-field {
+    width: min(340px, 46%);
+    min-width: 210px;
+    height: 34px;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--bg-base) !important;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-search-field i {
+    grid-column: 1;
+    justify-self: center;
+    color: var(--text-secondary);
+    font-size: 10px;
+    pointer-events: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-search-field .blai-deep-clean-input {
+    grid-column: 2;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    padding: 0 10px 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent !important;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-summary {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 13px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-summary strong {
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-search-selection-actions {
+    display: inline-flex;
+    gap: 8px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-search-selection-actions button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent-color);
+    font: inherit;
+    font-size: 10px;
+    text-decoration: underline;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-resource-list {
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-choice {
+    min-width: 0;
+    min-height: 42px;
+    padding: 7px 10px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
+    cursor: pointer;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-choice:hover {
+    background: color-mix(in srgb, var(--bg-base) 54%, var(--bg-surface));
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-choice input {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    accent-color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-choice-copy {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-choice-title, #blai-deep-clean-workspace .blai-deep-clean-choice-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-choice-title {
+    color: var(--text-main);
+    font-size: 11px;
+    font-weight: 680;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-choice-meta {
+    color: var(--text-secondary);
+    font: 9px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-shujuku-note {
+    padding: 9px 0 10px;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 1.45;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-selection-actions {
+    min-height: 58px;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 9px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-surface);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-processing {
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    overflow: hidden;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-processing-main {
+    min-width: 0;
+    min-height: 0;
+    padding: clamp(28px, 5vw, 64px);
+    overflow-y: auto;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-processing-intro {
+    max-width: 680px;
+    margin: 0 auto 34px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-processing-intro h3 {
+    color: var(--text-main);
+    font-size: 22px;
+    font-weight: 720;
+    letter-spacing: -.02em;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-processing-intro p {
+    margin-top: 7px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline {
+    width: min(100%, 680px);
+    margin: 0 auto;
+    padding: 0;
+    list-style: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline li {
+    position: relative;
+    min-height: 62px;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 14px;
+    color: var(--text-secondary);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline li:not(:last-child)::before {
+    position: absolute;
+    top: 24px;
+    bottom: 0;
+    left: 11px;
+    width: 1px;
+    background: var(--border-color);
+    content: "";
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline li.is-complete::before {
+    background: color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline-marker {
+    position: relative;
+    z-index: 1;
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    background: var(--bg-surface);
+    color: var(--accent-color);
+    font-size: 9px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline li.is-active .blai-deep-clean-pipeline-marker {
+    border: 2px solid var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline li.is-active .blai-deep-clean-pipeline-marker::after {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    content: "";
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline li > div {
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 4px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline strong {
+    color: inherit;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline li.is-active strong {
+    color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline span {
+    color: var(--text-secondary);
+    font: 9px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline span > .fa-spinner {
+    margin-right: 5px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline progress {
+    width: min(100%, 400px);
+    height: 5px;
+    margin-top: 4px;
+    accent-color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline progress.is-determinate {
+    appearance: none;
+    border: 0;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--border-color) 72%, transparent);
+    overflow: hidden;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline progress.is-determinate::-webkit-progress-bar {
+    background: color-mix(in srgb, var(--border-color) 72%, transparent);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline progress.is-determinate::-webkit-progress-value {
+    background: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-pipeline progress.is-determinate::-moz-progress-bar {
+    background: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-processing-main > .blai-deep-clean-secondary-action {
+    margin: 18px max(0px, calc((100% - 680px) / 2)) 0;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-summary {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-left: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-base) 52%, var(--bg-surface));
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-head {
+    flex: 0 0 auto;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-head h3 {
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-weight: 780;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-body {
+    min-height: 0;
+    padding: 18px;
+    overflow-y: auto;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-metrics {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-metrics > span {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-metrics strong {
+    color: var(--text-main);
+    font-size: 16px;
+    font-weight: 720;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-metrics i {
+    color: var(--text-secondary);
+    font-style: normal;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-status {
+    margin-top: 18px;
+    padding: 13px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    border-block: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-size: 11px;
+    font-weight: 680;
+    line-height: 1.45;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-status > span {
+    width: 7px;
+    height: 7px;
+    margin-top: 4px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-contents {
+    margin-top: 18px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-contents h4 {
+    margin-bottom: 8px;
+    color: var(--text-main);
+    font-size: 9px;
+    font-weight: 760;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-contents ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-contents li {
+    position: relative;
+    padding: 8px 0 8px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-contents li::before {
+    position: absolute;
+    top: 14px;
+    left: 1px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--text-secondary) 56%, transparent);
+    content: "";
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-batch-empty {
+    padding: 18px 0;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-result {
+    width: min(980px, 100%);
+    height: 100%;
+    margin: 0 auto;
+    padding: clamp(24px, 5vw, 56px);
+    overflow-y: auto;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-result > header {
+    margin-bottom: 24px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-result > header h3 {
+    font-size: 20px;
+    font-weight: 720;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-result > header p {
+    margin-top: 6px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-scan-metrics, #blai-deep-clean-workspace .blai-deep-clean-scan-categories {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 12px 18px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-scan-categories {
+    margin-top: 28px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-scan-categories h3 {
+    grid-column: 1 / -1;
+    padding: 0 0 2px;
+    font-size: 11px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-scan-metrics > div, #blai-deep-clean-workspace .blai-deep-clean-scan-categories > div {
+    min-width: 0;
+    padding: 8px 0;
+    display: grid;
+    gap: 6px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-scan-metrics span, #blai-deep-clean-workspace .blai-deep-clean-scan-categories span {
+    color: var(--text-secondary);
+    font-size: 9px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-scan-metrics strong, #blai-deep-clean-workspace .blai-deep-clean-scan-categories strong {
+    color: var(--text-main);
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-actions {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-state {
+    width: min(540px, calc(100% - 40px));
+    height: 100%;
+    margin: 0 auto;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 11px;
+    text-align: center;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-state > i {
+    color: var(--accent-color);
+    font-size: 20px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-state h3 {
+    font-size: 16px;
+    font-weight: 720;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-state p {
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-complete-state {
+    width: min(720px, calc(100% - 40px));
+    padding: 30px 24px;
+    overflow-y: auto;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-complete-state > p {
+    max-width: 52em;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-summary {
+    width: 100%;
+    margin-top: 10px;
+    border-block: 1px solid var(--border-color);
+    text-align: left;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-summary > section {
+    padding: 13px 0 15px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-summary > section + section {
+    border-top: 1px solid var(--border-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-summary h4 {
+    color: var(--accent-color);
+    font-size: 9px;
+    font-weight: 760;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-metrics {
+    margin: 9px 0 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-metrics.is-ai {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-metrics > div {
+    min-width: 0;
+    padding-right: 12px;
+    display: grid;
+    align-content: space-between;
+    gap: 6px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-metrics dt, #blai-deep-clean-workspace .blai-deep-clean-completion-metrics dd {
+    margin: 0;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-metrics dt {
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 1.35;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-completion-metrics dd {
+    color: var(--text-main);
+    font-size: 17px;
+    font-weight: 740;
+    font-variant-numeric: tabular-nums;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-complete-state > button {
+    margin-top: 8px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-stopped-state h3 {
+    color: var(--accent-color);
+    font-size: 18px;
+    font-weight: 800;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-stopped-state p {
+    max-width: 34em;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-error-state > i, #blai-deep-clean-workspace .blai-deep-clean-error-state .blai-deep-clean-error {
+    color: var(--status-danger);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-shell {
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto auto;
+    overflow: hidden;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-main {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    overflow: hidden;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-area {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    border-right: 1px solid var(--border-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-area > .blai-deep-clean-empty {
+    align-self: center;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-head {
+    min-width: 0;
+    padding: 13px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-head p {
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-weight: 720;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-head h3 {
+    margin-top: 4px;
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-views {
+    flex: 0 0 auto;
+    display: inline-flex;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-views button {
+    min-height: 28px;
+    padding: 0 8px;
+    border: 0;
+    border-left: 1px solid var(--border-color);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-views button:first-child {
+    border-left: 0;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-views button[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--accent-color) 12%, var(--bg-surface));
+    color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-protection {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 650;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-scroll {
+    min-width: 0;
+    min-height: 0;
+    padding: 18px 22px 24px;
+    overflow-y: auto;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-fragment {
+    cursor: pointer;
+    outline: none;
+    display: inline;
+    border-radius: 2px;
+    padding: 0 1px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-empty-branch {
+    min-height: 20px;
+    margin: 0 4px;
+    padding: 0 6px;
+    vertical-align: baseline;
+    border: 1px dashed var(--border-color);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 9px;
+    font-weight: 700;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-empty-branch.is-inactive {
+    opacity: .55;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-empty-branch.is-active {
+    border-color: var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+    color: var(--accent-color);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-projection {
+    min-height: 1.5em;
+    color: var(--text-main);
+    font-size: 12px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-equal {
+    cursor: text;
+    outline: none;
+}
+
+#blai-deep-clean-workspace .blai-diff-full-text .blai-deep-clean-review-fragment.is-active {
+    cursor: text;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-scroll .blai-diff-full-normal {
+    opacity: 1;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-fragment.is-old {
+    color: #d9534f;
+    background: rgb(217 83 79 / 8%);
+    text-decoration: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-fragment.is-new {
+    color: #5cb85c;
+    background: rgb(92 184 92 / 8%);
+    text-decoration: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-fragment.is-inactive {
+    background: transparent;
+    text-decoration: line-through;
+    opacity: 0.3;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-fragment.is-inactive:hover {
+    opacity: 0.55;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-fragment.is-active.is-old {
+    color: #d9534f;
+    background: rgb(217 83 79 / 15%);
+    border-bottom: 1px dashed rgb(217 83 79 / 50%);
+    text-decoration: none;
+    opacity: 1;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-fragment.is-active.is-new, #blai-deep-clean-workspace .blai-deep-clean-review-fragment.is-restored-deletion, #blai-deep-clean-workspace .blai-deep-clean-review-manual {
+    color: #5cb85c;
+    background: rgb(92 184 92 / 15%);
+    border-bottom: 1px dashed rgb(92 184 92 / 50%);
+    text-decoration: none;
+    opacity: 1;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-manual {
+    display: inline;
+    border-radius: 2px;
+    padding: 0 1px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-navigation {
+    min-height: 48px;
+    padding: 7px 22px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-surface);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-navigation button {
+    width: max-content;
+    min-height: 32px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    box-shadow: none;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-navigation button:last-child {
+    justify-self: end;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-navigation button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--bg-base) 62%, var(--bg-surface));
+    color: var(--text-main);
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-navigation strong {
+    color: var(--text-main);
+    font: 700 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-apply {
+    min-height: 62px;
+    padding: 10px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border-top: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-base) 52%, var(--bg-surface));
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-apply p {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+#blai-deep-clean-workspace .blai-deep-clean-review-apply strong {
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-header {
+    min-height: 54px;
+    padding-inline: 16px;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-selection {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-side {
+    max-height: 46dvh;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color);
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-controls > summary {
+    min-height: 44px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-main);
+    font-size: 11px;
+    font-weight: 720;
+    list-style: none;
+    cursor: pointer;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-controls > summary::-webkit-details-marker {
+    display: none;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-controls > summary span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-controls > summary > i {
+    color: var(--text-secondary);
+    font-size: 9px;
+    transition: transform .16s ease;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-controls[open] > summary > i {
+    transform: rotate(90deg);
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-controls:not([open]) .blai-deep-clean-side-inner {
+    display: none;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-side-inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 1px solid var(--border-color);
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-section {
+    padding: 16px;
+    border-right: 1px solid var(--border-color);
+    border-bottom: 0;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-section:last-child {
+    border-right: 0;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-processing {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-processing-main {
+    grid-row: 2;
+    padding: 24px;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-processing > .blai-deep-clean-batch-summary {
+    grid-row: 1;
+    max-height: 30dvh;
+    border-left: 0;
+    border-bottom: 1px solid var(--border-color);
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-batch-head {
+    padding: 10px 16px;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-batch-body {
+    padding: 12px 16px;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-batch-status {
+    margin-top: 10px;
+    padding: 8px 0;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-batch-contents {
+    margin-top: 10px;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-review-main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-review-area {
+    grid-row: 2;
+    border-right: 0;
+}}
+
+@media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-review-main > .blai-deep-clean-batch-summary {
+    grid-row: 1;
+    max-height: 180px;
+    border-left: 0;
+    border-bottom: 1px solid var(--border-color);
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-heading {
+    gap: 8px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-eyebrow {
+    display: none;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-side {
+    max-height: 56dvh;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-side-inner {
+    grid-template-columns: minmax(0, 1fr);
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-section {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color);
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-resource-header {
+    padding: 14px 14px 0;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-resource-header h3 {
+    font-size: 16px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-resource-tabs {
+    gap: 18px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-resource-workspace {
+    padding-inline: 14px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-resource-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 9px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-search-field {
+    width: 100%;
+    min-width: 0;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-resource-summary {
+    justify-content: space-between;
+    white-space: normal;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-choice-copy {
+    display: grid;
+    gap: 3px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-selection-actions {
+    min-height: 56px;
+    padding: 9px 14px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-processing-main {
+    padding: 20px 16px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-processing-intro {
+    margin-bottom: 24px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-processing-intro h3 {
+    font-size: 18px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-scan-metrics, #blai-deep-clean-workspace .blai-deep-clean-scan-categories {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-result {
+    padding: 22px 16px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-complete-state {
+    width: min(calc(100% - 24px), 720px);
+    padding: 22px 12px;
+    place-content: start center;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-completion-metrics, #blai-deep-clean-workspace .blai-deep-clean-completion-metrics.is-ai {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 13px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-head, #blai-deep-clean-workspace .blai-deep-clean-review-scroll {
+    padding-inline: 14px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-views {
+    max-width: 100%;
+    overflow-x: auto;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-navigation {
+    padding-inline: 8px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-navigation button {
+    font-size: 9px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-apply {
+    padding: 10px 14px;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 9px;
+}}
+
+@media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-apply button {
+    width: 100%;
+}}
+
+@media (max-width: 920px) {#blai-purifier-popup .blai-clean-columns {
+    grid-template-columns: minmax(0, 1.58fr) minmax(250px, 1fr);
+    gap: 22px;
+}}
+
+@media (max-width: 920px) {#blai-purifier-popup .blai-clean-mode-card {
+    min-height: 96px;
+    padding-inline: 12px;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 9px;
+}}
+
+@media (max-width: 920px) {#blai-purifier-popup .blai-clean-mode-card > svg {
+    width: 20px;
+    height: 20px;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-page {
+    gap: 20px;
+    padding: 12px 16px 84px;
+    box-sizing: border-box;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-mode-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-mode-card {
+    min-height: 84px;
+    padding: 10px;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 7px;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-mode-card > svg {
+    width: 18px;
+    height: 18px;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-mode-copy {
+    gap: 3px;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-mode-copy strong {
+    font-size: 12px;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-mode-copy > span {
+    font-size: 10px;
+    line-height: 1.4;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-group-list {
+    max-height: none;
+    overflow: visible;
+}}
+
+@media (max-width: 700px) {#blai-purifier-popup .blai-clean-secondary-column {
+    gap: 28px;
+}}

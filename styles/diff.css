@@ -1,0 +1,555 @@
+/* Normal Diff modal, snippets, related-rule UI, and message Diff buttons. */
+
+.blai-diff-btn {
+    font-size: inherit !important;
+}
+
+#blai-diff-modal {
+    --blai-diff-source-program-color: color-mix(in srgb, var(--text-main) 42%, #4F8A63);
+    --blai-diff-source-program-background: color-mix(in srgb, var(--blai-diff-source-program-color) 16%, transparent);
+    --blai-diff-source-ai-color: color-mix(in srgb, var(--text-main) 42%, #7868C7);
+    --blai-diff-source-ai-background: color-mix(in srgb, var(--blai-diff-source-ai-color) 16%, transparent);
+    --blai-diff-source-manual-color: color-mix(in srgb, var(--text-main) 42%, #557FAF);
+    --blai-diff-source-manual-background: color-mix(in srgb, var(--blai-diff-source-manual-color) 16%, transparent);
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 10000000 !important;
+    background: color-mix(in srgb, var(--bg-base) 58%, transparent) !important;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+.blai-diff-modal-card {
+    width: min(860px, 96vw);
+    max-height: min(82vh, 900px);
+    background: var(--bg-surface);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 12px 30px color-mix(in srgb, var(--bg-base) 12%, transparent);
+    display: flex;
+    flex-direction: column;
+}
+
+.blai-diff-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.blai-diff-modal-title {
+    margin: 0;
+    color: var(--text-main);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.blai-diff-title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.blai-diff-modal-close {
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 26px;
+    cursor: pointer;
+    line-height: 1;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.blai-diff-modal-content {
+    padding: 12px 16px 16px;
+    overflow-y: auto;
+    max-height: min(70vh, 760px);
+    color: var(--text-main);
+}
+
+.blai-diff-legend {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 8px 16px !important;
+    padding: 9px 16px !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    color: var(--text-secondary) !important;
+    font-size: 12px !important;
+}
+
+.blai-diff-legend-item {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    white-space: nowrap !important;
+}
+
+.blai-diff-legend-item i {
+    width: 9px !important;
+    height: 9px !important;
+    border-radius: 999px !important;
+    background: var(--text-secondary) !important;
+}
+
+.blai-diff-legend-item[data-source="program"] {
+    color: var(--blai-diff-source-program-color) !important;
+}
+
+.blai-diff-legend-item[data-source="ai"] {
+    color: var(--blai-diff-source-ai-color) !important;
+}
+
+.blai-diff-legend-item[data-source="manual"] {
+    color: var(--blai-diff-source-manual-color) !important;
+}
+
+.blai-diff-legend-item[data-source="program"] i {
+    background: var(--blai-diff-source-program-color) !important;
+}
+
+.blai-diff-legend-item[data-source="ai"] i {
+    background: var(--blai-diff-source-ai-color) !important;
+}
+
+.blai-diff-legend-item[data-source="manual"] i {
+    background: var(--blai-diff-source-manual-color) !important;
+}
+
+.blai-diff-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex: 0 0 auto !important;
+}
+
+.blai-diff-header-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 6px 12px !important;
+    min-height: 34px !important;
+    font-size: 13px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+.blai-diff-menu-wrap {
+    position: relative !important;
+    flex: 0 0 auto !important;
+}
+
+.blai-diff-menu-toggle {
+    width: 34px !important;
+    min-width: 34px !important;
+    padding: 0 !important;
+}
+
+.blai-diff-actions-menu {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
+    width: 208px !important;
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 12px 24px color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+    overflow: hidden !important;
+    z-index: 4 !important;
+}
+
+.blai-diff-actions-item {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-main) !important;
+    font-size: 14px !important;
+    text-align: left !important;
+    padding: 12px 14px !important;
+    cursor: pointer !important;
+}
+
+.blai-diff-actions-item + .blai-diff-actions-item {
+    border-top: 1px solid var(--border-color) !important;
+}
+
+.blai-diff-actions-item:hover {
+    background: var(--bg-surface) !important;
+}
+
+.blai-diff-actions-item i {
+    flex: 0 0 16px !important;
+    width: 16px !important;
+    text-align: center !important;
+}
+
+.blai-diff-inline-icon {
+    margin: 0 3px !important;
+}
+
+.blai-diff-related-mode .blai-diff-change {
+    cursor: crosshair !important;
+    transition: outline-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.blai-diff-related-mode .blai-diff-change:hover, .blai-diff-related-mode .blai-diff-change-selected {
+    outline: 2px solid var(--accent-color) !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 18%, transparent) !important;
+}
+
+#blai-diff-related-modal {
+    z-index: 10000004 !important;
+}
+
+.blai-diff-related-card {
+    width: min(520px, 94vw) !important;
+    max-height: min(78vh, 720px) !important;
+    padding: 14px !important;
+    border-radius: 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+}
+
+.blai-diff-related-modal-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    flex-shrink: 0 !important;
+}
+
+.blai-diff-related-title {
+    margin: 0 !important;
+    min-width: 0 !important;
+}
+
+.blai-diff-related-body {
+    min-height: 80px !important;
+    overflow-y: auto !important;
+    padding-right: 2px !important;
+}
+
+.blai-diff-related-head, .blai-diff-related-note {
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+}
+
+.blai-diff-related-head {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+
+.blai-diff-related-head strong {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.blai-diff-related-head span, .blai-diff-related-note {
+    color: var(--text-secondary) !important;
+}
+
+.blai-diff-related-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin-top: 10px !important;
+}
+
+.blai-diff-related-candidate {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 5px !important;
+    padding: 10px !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    text-align: left !important;
+    cursor: pointer !important;
+}
+
+.blai-diff-related-candidate:hover {
+    border-color: var(--accent-color) !important;
+    background: var(--bg-surface) !important;
+}
+
+.blai-diff-related-candidate-main {
+    display: flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    min-width: 0 !important;
+}
+
+.blai-diff-related-candidate-main strong, .blai-diff-related-candidate-preview, .blai-diff-related-candidate-reason {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+}
+
+.blai-diff-related-candidate-preview {
+    font-size: 12px !important;
+    color: var(--text-main) !important;
+}
+
+.blai-diff-related-candidate-reason {
+    font-size: 11px !important;
+    color: var(--text-secondary) !important;
+}
+
+.blai-diff-snippet {
+    display: block !important;
+    line-height: 1.8 !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    padding: 12px 14px !important;
+    background: var(--bg-surface) !important;
+    border-radius: 8px !important;
+    border-left: 3px solid var(--border-color) !important;
+}
+
+.blai-diff-snippet del {
+    color: var(--status-danger) !important;
+    background: transparent !important;
+    text-decoration: line-through !important;
+    text-decoration-thickness: 2px !important;
+    padding: 2px 4px !important;
+    border-radius: 4px !important;
+    margin: 0 2px !important;
+}
+
+.blai-diff-snippet ins {
+    color: var(--status-success) !important;
+    background: color-mix(in srgb, var(--status-success) 16%, transparent) !important;
+    text-decoration: none !important;
+    padding: 2px 4px !important;
+    border-radius: 4px !important;
+    margin: 0 2px !important;
+    font-weight: bold !important;
+}
+
+.blai-diff-snippet :is(ins, del)[data-blai-diff-source="program"] {
+    color: var(--blai-diff-source-program-color) !important;
+}
+
+.blai-diff-snippet ins[data-blai-diff-source="program"] {
+    background: var(--blai-diff-source-program-background) !important;
+}
+
+.blai-diff-snippet :is(ins, del)[data-blai-diff-source="ai"] {
+    color: var(--blai-diff-source-ai-color) !important;
+}
+
+.blai-diff-snippet ins[data-blai-diff-source="ai"] {
+    background: var(--blai-diff-source-ai-background) !important;
+}
+
+.blai-diff-snippet :is(ins, del)[data-blai-diff-source="manual"] {
+    color: var(--blai-diff-source-manual-color) !important;
+}
+
+.blai-diff-snippet ins[data-blai-diff-source="manual"] {
+    background: var(--blai-diff-source-manual-background) !important;
+}
+
+.blai-diff-full-text {
+    color: var(--text-main) !important;
+    padding: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+}
+
+.blai-diff-full-normal {
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    opacity: 0.85 !important;
+}
+
+.blai-diff-full-modified {
+    font-size: 16px !important;
+    line-height: 1.8 !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+}
+
+.blai-diff-btn-bottom {
+    position: absolute !important;
+    bottom: 6px !important;
+    right: 48px !important;
+    z-index: 10 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    opacity: 0.45 !important;
+    cursor: pointer !important;
+    transition: opacity 0.2s, color 0.2s !important;
+    color: var(--text-main) !important;
+}
+
+.blai-diff-btn-bottom:hover {
+    opacity: 1 !important;
+    color: var(--accent-color) !important;
+}
+
+@media screen and (max-width: 600px) {#blai-diff-modal, #blai-diff-related-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)) !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    z-index: 10000005 !important;
+}}
+
+@media screen and (max-width: 600px) {#blai-diff-related-modal > .blai-diff-related-card, .blai-diff-modal-card {
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: 85vh !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-diff-modal-header {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-diff-modal-content {
+    flex: 1 1 auto !important;
+    min-height: 120px !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin: 10px 0 !important;
+}}
+
+@media screen and (min-width: 601px) and (max-width: 1024px) {#blai-diff-modal, #blai-diff-related-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+    box-sizing: border-box !important;
+}}
+
+@media screen and (min-width: 601px) and (max-width: 1024px) {#blai-diff-related-modal > .blai-diff-related-card, .blai-diff-modal-card {
+    width: min(680px, 100%) !important;
+    max-height: calc(100dvh - 48px) !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-diff-modal-header {
+    gap: 8px !important;
+    padding: 12px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-diff-modal-title {
+    font-size: 15px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-diff-header-actions {
+    gap: 4px !important;
+}}
+
+@media screen and (max-width: 600px) {#blai-diff-modal .blai-diff-header-btn, #blai-diff-modal .blai-diff-modal-close {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+}}
+
+@media screen and (max-width: 600px) {#blai-diff-mode-text, #blai-diff-revert-text, #blai-diff-ai-rewrite span {
+    display: none !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-diff-actions-menu {
+    width: min(220px, 74vw) !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-diff-actions-item {
+    font-size: 14px !important;
+    padding: 12px 13px !important;
+}}
+
+@media screen and (min-width: 601px) and (max-width: 1024px) {#blai-diff-modal .blai-diff-modal-card {
+    width: min(860px, 100%) !important;
+}}
+
+@media (max-width: 600px) {#blai-diff-related-modal > .blai-diff-related-card {
+    width: 100% !important;
+    max-width: 420px !important;
+    max-height: calc(100dvh - 40px) !important;
+    border-radius: 16px !important;
+}}
+
+@media (max-width: 600px) {#blai-diff-modal {
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: color-mix(in srgb, var(--text-main) 38%, transparent) !important;
+    box-sizing: border-box !important;
+}}
+
+@media (max-width: 600px) {#blai-diff-modal > .blai-diff-modal-card {
+    width: 100% !important;
+    max-width: 420px !important;
+    max-height: calc(100dvh - 40px) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 16px !important;
+    background: var(--bg-surface) !important;
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--text-main) 16%, transparent) !important;
+    box-sizing: border-box !important;
+}}
+
+@media (min-width: 601px) {#blai-diff-modal {
+    padding: clamp(24px, 4vw, 44px) !important;
+    align-items: center !important;
+    justify-content: center !important;
+}}

@@ -2,7 +2,8 @@
  * 统一日志输出，级别由 `extension_settings[extensionName].logLevel` 控制。
  */
 
-import { extensionName, getAppContext } from './state.js';
+import { extensionName } from './settings/defaults.js';
+import { getAppContext } from './host/appContext.js';
 
 const LOG_PREFIX = '[屏蔽词净化助手]';
 

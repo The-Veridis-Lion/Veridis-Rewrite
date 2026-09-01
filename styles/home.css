@@ -1,0 +1,1857 @@
+/* Overview/Home page, Rules editor/search/transfer, and Preset action presentation. */
+
+#blai-purifier-popup .edit-field > span {
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.blai-batch-checkbox-label {
+    display: none;
+    align-items: center;
+    cursor: pointer;
+}
+
+.blai-batch-checkbox-label input:checked + .blai-custom-checkbox.blai-square-2px {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.blai-subrule-card.blai-is-disabled {
+    opacity: 0.56 !important;
+}
+
+.blai-subrule-enable-label {
+    flex: 0 0 auto !important;
+    margin: 0 !important;
+}
+
+#blai-rule-edit-modal {
+    z-index: 10000005 !important;
+}
+
+#blai-subrule-edit-modal {
+    z-index: 10000006 !important;
+}
+
+.blai-edit-modal-card {
+    width: 95% !important;
+    max-width: 480px !important;
+    max-height: 85vh !important;
+    padding: 20px !important;
+    border-radius: 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+.blai-edit-modal-title {
+    margin: 0 0 10px 0 !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+    flex-shrink: 0 !important;
+}
+
+.blai-edit-field {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    margin-bottom: 12px !important;
+    flex-shrink: 0 !important;
+}
+
+.blai-field-label {
+    font-size: 13px !important;
+    color: var(--text-secondary) !important;
+}
+
+.blai-subrule-modal-card {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+.blai-subrule-modal-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    gap: 16px !important;
+    margin-bottom: 18px !important;
+    padding-bottom: 14px !important;
+    border-bottom: 1px dotted var(--border-color) !important;
+    flex-wrap: nowrap !important;
+    min-width: 0 !important;
+}
+
+.blai-subrule-mode-block {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+}
+
+.blai-subrule-mode-select-wrap {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    align-self: flex-start !important;
+    flex: 0 1 auto !important;
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+}
+
+.blai-subrule-mode-select {
+    margin: 0 !important;
+    display: inline-block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    flex: 0 0 auto !important;
+    max-width: 100% !important;
+    padding: 0 22px 0 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-sizing: border-box !important;
+    color: var(--text-main) !important;
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    line-height: 1.3 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    cursor: pointer !important;
+}
+
+.blai-subrule-mode-select:focus {
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.blai-subrule-mode-arrow {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+    pointer-events: none;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.blai-subrule-mode-hint {
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    font-size: 12px !important;
+    line-height: 1.55 !important;
+}
+
+#blai-modal-sub-target-error {
+    margin-top: 0 !important;
+    margin-bottom: 8px !important;
+}
+
+.blai-subrule-modal-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-right: 4px !important;
+    margin-right: -4px !important;
+}
+
+.blai-subrule-replacement-head {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin-bottom: 6px !important;
+}
+
+.blai-regex-replacement-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+}
+
+.blai-regex-replacement-actions[hidden], .blai-regex-replacement-list[hidden] {
+    display: none !important;
+}
+
+.blai-subrule-mini-btn {
+    padding: 6px 10px !important;
+    border-radius: 999px !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+}
+
+.blai-subrule-mini-btn:hover {
+    background: var(--bg-surface) !important;
+    border-color: var(--accent-color) !important;
+}
+
+.blai-regex-replacement-list {
+    margin-top: 10px !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+}
+
+.blai-regex-replacement-empty {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+    min-height: 34px !important;
+    padding: 8px 10px !important;
+    border: 1px dashed var(--border-color) !important;
+    border-radius: 8px !important;
+    color: var(--text-secondary) !important;
+    background: color-mix(in srgb, var(--bg-surface) 72%, transparent) !important;
+    font-size: 12px !important;
+    box-sizing: border-box !important;
+}
+
+.blai-regex-replacement-empty i {
+    color: var(--accent-color) !important;
+    flex: 0 0 auto !important;
+}
+
+.blai-regex-replacement-chip {
+    display: inline-flex !important;
+    align-items: center !important;
+    max-width: 100% !important;
+    border-radius: 999px !important;
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+.blai-regex-replacement-chip.is-active {
+    border-color: var(--accent-color) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 45%, transparent) !important;
+}
+
+.blai-regex-replacement-chip-main {
+    max-width: min(240px, 62vw) !important;
+    padding: 7px 8px 7px 12px !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-main) !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    cursor: pointer !important;
+}
+
+.blai-regex-replacement-chip-remove {
+    padding: 6px 10px 6px 4px !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+}
+
+.blai-regex-replacement-chip-remove:hover {
+    color: var(--status-danger) !important;
+}
+
+.blai-subrule-close-btn {
+    background: transparent !important;
+    border: none !important;
+    color: var(--text-secondary) !important;
+    font-size: 22px !important;
+    padding: 0 !important;
+    min-width: 36px !important;
+    width: 36px !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    flex: 0 0 36px !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.blai-subrule-close-btn:hover {
+    color: var(--text-main) !important;
+}
+
+.blai-subrule-footer {
+    margin-top: auto !important;
+    padding-top: 10px !important;
+    flex: 0 0 auto !important;
+    background: var(--bg-surface) !important;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent) !important;
+}
+
+.blai-subrule-footer-save {
+    width: 100% !important;
+    min-height: 50px !important;
+    border-radius: 10px !important;
+    border: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent) !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+    box-shadow: none !important;
+}
+
+.blai-subrule-footer-save:hover {
+    background: color-mix(in srgb, var(--bg-surface) 84%, var(--bg-surface) 16%) !important;
+    border-color: color-mix(in srgb, var(--text-main) 16%, transparent) !important;
+}
+
+.blai-subrule-card {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-shrink: 0 !important;
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 10px !important;
+    padding: 12px 14px !important;
+    margin-bottom: 12px !important;
+    box-shadow: 0 4px 10px color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+}
+
+.blai-subrule-field {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+}
+
+#blai-rule-transfer-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    background: color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+    z-index: 10000000 !important;
+    display: none;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16px !important;
+    box-sizing: border-box !important;
+}
+
+.blai-transfer-content {
+    width: min(420px, 96vw) !important;
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    padding: 14px !important;
+    box-shadow: 0 12px 24px color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+}
+
+.blai-transfer-title {
+    margin-bottom: 10px !important;
+    font-size: 16px !important;
+}
+
+.blai-transfer-target {
+    font-size: 14px !important;
+    padding: 8px 36px 8px 10px !important;
+    margin-bottom: 12px !important;
+}
+
+.blai-transfer-actions {
+    display: flex !important;
+    gap: 8px !important;
+    flex-wrap: nowrap !important;
+}
+
+.blai-transfer-btn {
+    flex: 1 !important;
+    padding: 9px 10px !important;
+    border-radius: 8px !important;
+    border: 1px solid var(--border-color) !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-main) !important;
+    cursor: pointer !important;
+    transition: background 0.2s !important;
+    white-space: nowrap !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+}
+
+.blai-transfer-btn:hover {
+    background: var(--bg-surface) !important;
+}
+
+#blai-preset-import-choice-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)) !important;
+    box-sizing: border-box !important;
+    pointer-events: auto !important;
+    z-index: 10000008 !important;
+}
+
+#blai-preset-import-choice-modal.blai-is-open {
+    display: flex !important;
+}
+
+.blai-import-choice-card {
+    width: min(460px, 94vw) !important;
+    max-height: calc(100dvh - 36px) !important;
+    padding: 18px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}
+
+.blai-import-choice-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+}
+
+.blai-import-choice-header .blai-edit-modal-title {
+    margin: 0 !important;
+}
+
+.blai-import-choice-summary {
+    padding: 10px 12px !important;
+    border-radius: 8px !important;
+    background: var(--bg-surface) !important;
+    color: var(--text-secondary) !important;
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+}
+
+.blai-import-choice-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+}
+
+.blai-import-choice-btn {
+    min-height: 42px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+}
+
+#blai-rule-search-modal {
+    z-index: 10000004 !important;
+}
+
+.blai-rule-search-card {
+    width: min(580px, 96vw) !important;
+    max-height: min(85vh, 860px) !important;
+    border-radius: 16px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+.blai-rule-search-header {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 14px 16px !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    flex-shrink: 0 !important;
+}
+
+.blai-rule-search-back {
+    flex: 0 0 34px !important;
+    min-width: 34px !important;
+    width: 34px !important;
+    min-height: 34px !important;
+    height: 34px !important;
+    padding: 0 !important;
+    color: var(--text-main) !important;
+}
+
+.blai-rule-search-field {
+    position: relative !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.blai-rule-search-field-icon {
+    position: absolute !important;
+    left: 14px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: var(--text-secondary) !important;
+    font-size: 15px !important;
+    pointer-events: none !important;
+}
+
+.blai-rule-search-field.has-value .blai-rule-search-field-icon {
+    display: none !important;
+}
+
+.blai-rule-search-input {
+    height: 44px !important;
+    padding: 0 40px 0 40px !important;
+    border-radius: 999px !important;
+    font-size: 15px !important;
+    line-height: 44px !important;
+    white-space: nowrap !important;
+    overflow-x: auto !important;
+    text-overflow: clip !important;
+    scrollbar-width: none !important;
+}
+
+.blai-rule-search-field.has-value .blai-rule-search-input {
+    padding-left: 14px !important;
+}
+
+.blai-rule-search-input::-webkit-scrollbar {
+    display: none !important;
+}
+
+.blai-rule-search-clear {
+    position: absolute !important;
+    right: 8px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    min-width: 28px !important;
+    width: 28px !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    padding: 0 !important;
+    color: var(--text-secondary) !important;
+}
+
+#blai-rule-search-modal .blai-rule-search-clear:hover {
+    color: var(--text-main) !important;
+    transform: translateY(-50%) !important;
+}
+
+.blai-rule-search-submit {
+    flex: 0 0 auto !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--status-danger) !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    padding: 0 2px !important;
+    cursor: pointer !important;
+    white-space: nowrap !important;
+}
+
+.blai-rule-search-body {
+    flex: 1 1 auto !important;
+    min-height: 320px !important;
+    padding: 16px !important;
+    overflow-y: auto !important;
+    background: color-mix(in srgb, var(--text-main) 2%, transparent) !important;
+}
+
+.blai-rule-search-empty {
+    min-height: 280px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    color: var(--text-secondary) !important;
+    text-align: center !important;
+}
+
+.blai-rule-search-empty-icon {
+    font-size: 24px !important;
+    color: var(--text-secondary) !important;
+}
+
+.blai-rule-search-empty-title {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: var(--text-main) !important;
+}
+
+.blai-rule-search-empty-text {
+    font-size: 13px !important;
+    line-height: 1.6 !important;
+}
+
+.blai-rule-search-results {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+}
+
+.blai-rule-search-result-card {
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 14px !important;
+    padding: 14px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+}
+
+.blai-rule-search-result-card.blai-is-disabled {
+    opacity: 0.65 !important;
+}
+
+.blai-rule-search-result-head {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+}
+
+.blai-rule-search-result-group {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    color: var(--text-secondary) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+}
+
+.blai-rule-search-menu-wrap {
+    position: relative !important;
+    flex: 0 0 auto !important;
+}
+
+.blai-rule-search-menu-toggle {
+    min-width: 30px !important;
+    width: 30px !important;
+    min-height: 30px !important;
+    height: 30px !important;
+    padding: 0 !important;
+    color: var(--text-secondary) !important;
+}
+
+.blai-rule-search-menu {
+    position: absolute !important;
+    top: calc(100% + 8px) !important;
+    right: 0 !important;
+    width: 128px !important;
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 12px 24px color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
+    overflow: hidden !important;
+    z-index: 3 !important;
+}
+
+.blai-rule-search-menu-item {
+    width: 100% !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-main) !important;
+    font-size: 14px !important;
+    text-align: left !important;
+    padding: 12px 14px !important;
+    cursor: pointer !important;
+}
+
+.blai-rule-search-menu-item + .blai-rule-search-menu-item {
+    border-top: 1px solid var(--border-color) !important;
+}
+
+.blai-rule-search-menu-item:hover {
+    background: var(--bg-surface) !important;
+}
+
+.blai-rule-search-result-preview {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+    font-size: 14px !important;
+}
+
+.blai-rule-search-result-preview .blai-source {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.blai-rule-search-result-preview .blai-target {
+    flex: 0 1 38% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+@media screen and (max-width: 600px) {.blai-edit-modal-title {
+    font-size: 15px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-subrule-replacement-head {
+    gap: 6px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-regex-replacement-actions {
+    gap: 4px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-subrule-mini-btn {
+    padding: 5px 8px !important;
+    font-size: 11px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-regex-replacement-chip-main {
+    max-width: min(180px, 52vw) !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-transfer-actions {
+    flex-wrap: nowrap !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-transfer-actions > .blai-transfer-btn {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    font-size: 12px !important;
+    padding: 8px 6px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-header {
+    gap: 8px !important;
+    padding: 12px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-back {
+    flex: 0 0 32px !important;
+    min-width: 32px !important;
+    width: 32px !important;
+    min-height: 32px !important;
+    height: 32px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-input {
+    height: 42px !important;
+    font-size: 16px !important;
+    padding: 0 36px 0 38px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-field-icon {
+    left: 13px !important;
+    font-size: 14px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-clear {
+    right: 6px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-submit {
+    font-size: 15px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-body {
+    min-height: 260px !important;
+    padding: 14px 12px 18px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-empty {
+    min-height: 220px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-empty-title {
+    font-size: 16px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-result-card {
+    padding: 12px !important;
+    border-radius: 12px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-result-preview {
+    font-size: 13px !important;
+    gap: 5px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-rule-search-menu {
+    width: 122px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-subrule-modal-body {
+    padding-right: 2px !important;
+    margin-right: -2px !important;
+}}
+
+@media screen and (max-width: 600px) {#blai-rule-edit-modal .blai-modal-actions > #blai-add-subrule-btn, #blai-rule-edit-modal .blai-modal-actions > #blai-edit-save {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-subrule-mode-block, .blai-subrule-mode-select-wrap {
+    min-width: 0 !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-subrule-mode-select {
+    width: 100% !important;
+    min-height: 40px !important;
+    font-size: 16px !important;
+    padding: 8px 20px 8px 0 !important;
+    line-height: 1.3 !important;
+}}
+
+@media screen and (max-width: 600px) {#blai-modal-sub-target-error {
+    margin-bottom: 7px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-subrule-close-btn {
+    flex: 0 0 34px !important;
+    min-width: 34px !important;
+    width: 34px !important;
+    min-height: 34px !important;
+    height: 34px !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-subrule-footer-save {
+    min-height: 46px !important;
+    max-height: none !important;
+    font-size: 15px !important;
+}}
+
+@media screen and (min-width: 601px) and (max-width: 1024px) {#blai-rule-transfer-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    display: none;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+    background: color-mix(in srgb, var(--bg-base) 58%, transparent) !important;
+    box-sizing: border-box !important;
+}}
+
+@media screen and (min-width: 601px) and (max-width: 1024px) {#blai-rule-transfer-modal .blai-transfer-content {
+    width: min(480px, 100%) !important;
+    max-height: calc(100dvh - 48px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+}}
+
+.blai-subrule-btn-group button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 15px !important;
+    color: var(--text-secondary) !important;
+    min-width: auto !important;
+    width: auto !important;
+    height: auto !important;
+    padding: 2px !important;
+    transition: transform 0.2s, color 0.2s !important;
+}
+
+.blai-subrule-btn-group button.blai-danger-btn {
+    color: var(--status-danger) !important;
+}
+
+.blai-subrule-btn-group button:hover {
+    background: transparent !important;
+    transform: scale(1.15);
+}
+
+@media screen and (max-width: 600px) {.blai-subrule-btn-group button {
+    width: auto !important;
+    height: auto !important;
+    min-width: auto !important;
+    min-height: auto !important;
+    font-size: 15px !important;
+    padding: 4px !important;
+}}
+
+#blai-edit-subrules-container .blai-mapping-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 auto !important;
+    box-sizing: border-box !important;
+    min-width: 45px !important;
+    height: 21px !important;
+    margin: 0 !important;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+    background: var(--accent-color) !important;
+    color: var(--bg-base) !important;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+}
+
+@media screen and (max-width: 600px) {#blai-rule-edit-modal, #blai-preset-import-choice-modal, #blai-rule-search-modal, #blai-subrule-edit-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)) !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    z-index: 10000005 !important;
+}}
+
+@media screen and (max-width: 600px) {#blai-rule-edit-modal > .blai-edit-modal-card, #blai-preset-import-choice-modal > .blai-import-choice-card, #blai-rule-search-modal > .blai-rule-search-card, #blai-subrule-edit-modal > .blai-edit-modal-card {
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: 85vh !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+}}
+
+@media screen and (max-width: 600px) {.blai-edit-modal-title, .blai-edit-field, .blai-edit-modal-card > .blai-field-label, .blai-subrule-field, #blai-add-subrule-btn {
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+}}
+
+@media screen and (max-width: 600px) {#blai-edit-subrules-container {
+    flex: 1 1 auto !important;
+    min-height: 120px !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin: 10px 0 !important;
+}}
+
+@media screen and (min-width: 601px) and (max-width: 1024px) {#blai-rule-edit-modal, #blai-preset-import-choice-modal, #blai-rule-search-modal, #blai-subrule-edit-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+    box-sizing: border-box !important;
+}}
+
+@media screen and (min-width: 601px) and (max-width: 1024px) {#blai-rule-edit-modal > .blai-edit-modal-card, #blai-preset-import-choice-modal > .blai-import-choice-card, #blai-rule-search-modal > .blai-rule-search-card, #blai-subrule-edit-modal > .blai-edit-modal-card {
+    width: min(680px, 100%) !important;
+    max-height: calc(100dvh - 48px) !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}}
+
+#blai-rule-edit-modal .blai-edit-modal-card, #blai-subrule-edit-modal .blai-subrule-modal-card {
+    width: min(520px, calc(100vw - 28px)) !important;
+    max-height: min(760px, calc(100dvh - 28px)) !important;
+    border-radius: 20px !important;
+    padding: 16px !important;
+}
+
+#blai-rule-edit-modal .blai-edit-modal-title, #blai-subrule-edit-modal .blai-edit-modal-title {
+    font-size: 18px !important;
+    font-weight: 850 !important;
+    letter-spacing: 0 !important;
+    color: var(--text-main) !important;
+}
+
+#blai-edit-subrules-container {
+    flex: 1 1 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    min-height: 160px !important;
+    max-height: min(420px, 50dvh) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    margin: 10px 0 !important;
+    padding-right: 2px !important;
+    scrollbar-width: none !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-card {
+    margin: 0 !important;
+    padding: 12px !important;
+    border-radius: 15px !important;
+    border: 1px solid var(--border-color) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 10px !important;
+    border-bottom: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent)) !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-badges {
+    display: flex !important;
+    align-items: center !important;
+    flex: 1 1 auto !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-btn-group {
+    display: flex !important;
+    align-items: center !important;
+    flex: 0 0 auto !important;
+    gap: 2px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-btn-group .blai-icon-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 22px !important;
+    min-width: 22px !important;
+    width: 22px !important;
+    min-height: 22px !important;
+    height: 22px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-btn-group .blai-icon-btn:disabled {
+    opacity: .35 !important;
+    cursor: not-allowed !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-preview {
+    color: var(--text-main) !important;
+    font-size: 13px !important;
+    font-weight: 400 !important;
+    line-height: 1.5 !important;
+    word-break: break-all !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-preview-source {
+    font-weight: 700 !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-preview-replacement, #blai-edit-subrules-container .blai-subrule-remark, #blai-edit-subrules-container .blai-subrule-empty {
+    font-weight: 400 !important;
+}
+
+#blai-edit-subrules-container .blai-subrule-empty {
+    padding: 20px !important;
+    color: var(--text-secondary) !important;
+    font-size: 12px !important;
+    text-align: center !important;
+}
+
+#blai-rule-edit-modal .blai-modal-actions, #blai-subrule-edit-modal .blai-subrule-footer {
+    gap: 8px !important;
+    padding-top: 10px !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-modal-header {
+    gap: 10px !important;
+    align-items: flex-start !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-mode-block {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-mode-select-wrap {
+    border-radius: 14px !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-mode-hint {
+    margin-top: 7px !important;
+    color: var(--text-secondary) !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
+}
+
+#blai-subrule-edit-modal .blai-subrule-field {
+    margin-bottom: 10px !important;
+}
+
+#blai-subrule-edit-modal .blai-textarea {
+    min-height: 92px !important;
+    resize: vertical !important;
+}
+
+#blai-rule-search-modal .blai-modal-card {
+    width: min(520px, calc(100vw - 28px)) !important;
+    border-radius: 20px !important;
+}
+
+@media screen and (max-width: 600px) {#blai-rule-edit-modal .blai-edit-modal-card, #blai-subrule-edit-modal .blai-subrule-modal-card {
+    width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    padding: 12px !important;
+}}
+
+#blai-purifier-popup .blai-home-page {
+    width: 100%;
+    color: var(--text-main);
+    font-family: "Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+#blai-purifier-popup .blai-home-dataset {
+    padding: 2px 0 18px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-purifier-popup .blai-home-dataset-row {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+#blai-purifier-popup .blai-home-dataset-summary {
+    min-width: 0;
+    flex: 0 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#blai-purifier-popup .blai-home-preset-field {
+    position: relative;
+    width: clamp(240px, 26vw, 320px);
+    min-width: 0;
+    flex: 0 1 clamp(240px, 26vw, 320px);
+}
+
+#blai-purifier-popup .blai-home-preset-field::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid var(--text-secondary);
+    border-bottom: 2px solid var(--text-secondary);
+    transform: translateY(-70%) rotate(45deg);
+    pointer-events: none;
+}
+
+#blai-purifier-popup .blai-home-preset-select {
+    width: 100%;
+    height: 42px;
+    padding: 0 38px 0 14px !important;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--bg-surface) !important;
+    background-image: none !important;
+    color: var(--text-main);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#blai-purifier-popup .blai-home-preset-select option {
+    background-color: var(--bg-surface);
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-home-preset-select option:checked {
+    background-color: color-mix(
+        in srgb,
+        var(--accent-color) 20%,
+        var(--bg-surface)
+    );
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-home-preset-select:hover {
+    border-color: color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
+}
+
+#blai-purifier-popup .blai-home-metrics {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 14px;
+    color: var(--text-main);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+#blai-purifier-popup .blai-home-metric b {
+    color: var(--text-main);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+#blai-purifier-popup .blai-home-dataset-actions {
+    margin-left: auto;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+}
+
+#blai-purifier-popup .blai-home-dataset-actions button {
+    min-height: 36px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+#blai-purifier-popup .blai-home-dataset-actions button:hover {
+    background: var(--bg-surface);
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-home-danger-action, #blai-purifier-popup .blai-home-dataset-actions .blai-home-danger-action {
+    color: var(--status-danger);
+}
+
+#blai-purifier-popup .blai-home-sticky-controls {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    min-width: 0;
+    display: grid;
+    gap: 0;
+    background: var(--bg-surface);
+}
+
+#blai-purifier-popup .blai-home-toolbar {
+    min-width: 0;
+    padding: 4px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+#blai-purifier-popup .blai-home-toolbar h2 {
+    margin: 0;
+    color: var(--text-main);
+    font-size: 17px;
+    font-weight: 780;
+    line-height: 1.2;
+}
+
+#blai-purifier-popup .blai-home-toolbar-actions {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+#blai-purifier-popup .blai-home-toolbar-button {
+    min-height: 34px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    box-shadow: 0 2px 7px color-mix(in srgb, var(--bg-base) 12%, transparent);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+#blai-purifier-popup .blai-home-toolbar-button:hover, #blai-purifier-popup .blai-home-toolbar-button.blai-active {
+    border-color: color-mix(in srgb, var(--accent-color) 34%, var(--border-color));
+    color: var(--accent-color);
+}
+
+#blai-purifier-popup .blai-home-toolbar-button-primary, #blai-purifier-popup .blai-home-toolbar-button-primary:hover {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: var(--bg-base);
+    box-shadow: none;
+}
+
+#blai-purifier-popup .blai-home-batch-panel {
+    padding: 13px;
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--bg-surface) 58%, transparent);
+}
+
+#blai-purifier-popup:not(.blai-is-batch-mode) .blai-home-batch-panel {
+    display: none;
+}
+
+#blai-purifier-popup .blai-home-batch-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-main);
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+#blai-purifier-popup .blai-home-batch-heading strong {
+    font-weight: 700;
+}
+
+#blai-purifier-popup .blai-home-batch-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+#blai-purifier-popup .blai-home-batch-actions button {
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+#blai-purifier-popup .blai-home-batch-actions button:hover {
+    border-color: color-mix(in srgb, var(--accent-color) 34%, var(--border-color));
+    color: var(--accent-color);
+}
+
+#blai-purifier-popup .blai-home-rules {
+    min-width: 0;
+}
+
+#blai-purifier-popup .blai-home-rule-grid {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
+}
+
+#blai-purifier-popup .blai-home-card {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: transparent;
+    box-shadow: none;
+}
+
+#blai-purifier-popup .blai-home-card.blai-is-disabled {
+    opacity: 0.58;
+}
+
+#blai-purifier-popup .blai-home-card-header {
+    min-height: 50px;
+    padding: 0 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#blai-purifier-popup .blai-home-card-heading, #blai-purifier-popup .blai-home-enabled-control {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+#blai-purifier-popup .blai-home-enabled-control {
+    cursor: pointer;
+}
+
+#blai-purifier-popup .blai-home-selection-control {
+    display: none;
+    align-items: center;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+#blai-purifier-popup.blai-is-batch-mode .blai-home-selection-control {
+    display: inline-flex;
+}
+
+#blai-purifier-popup .blai-home-selection-control input, #blai-purifier-popup .blai-home-enabled-control input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+#blai-purifier-popup .blai-home-selection-indicator, #blai-purifier-popup .blai-home-enabled-indicator {
+    position: relative;
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 50%;
+    background: var(--bg-surface);
+}
+
+#blai-purifier-popup.blai-is-batch-mode .blai-home-enabled-indicator {
+    display: none;
+}
+
+#blai-purifier-popup .blai-home-selection-control input:checked + .blai-home-selection-indicator, #blai-purifier-popup .blai-home-enabled-control input:checked + .blai-home-enabled-indicator {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+}
+
+#blai-purifier-popup .blai-home-selection-control input:checked + .blai-home-selection-indicator::after, #blai-purifier-popup .blai-home-enabled-control input:checked + .blai-home-enabled-indicator::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 5px;
+    height: 9px;
+    border-right: 2px solid var(--bg-base);
+    border-bottom: 2px solid var(--bg-base);
+    transform: rotate(42deg);
+}
+
+#blai-purifier-popup .blai-home-card-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-main);
+    font-size: 14px;
+    font-weight: 760;
+}
+
+#blai-purifier-popup .blai-home-card-count {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border-radius: 7px;
+    background: var(--bg-surface);
+    color: var(--accent-color);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+#blai-purifier-popup .blai-home-card-actions {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+#blai-purifier-popup .blai-home-card-menu, #blai-purifier-popup .blai-home-card-risk {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 14px;
+}
+
+#blai-purifier-popup .blai-home-card-menu:hover {
+    background: var(--bg-surface);
+    color: var(--text-main);
+}
+
+#blai-purifier-popup .blai-home-card-risk {
+    color: var(--status-danger);
+    cursor: pointer;
+}
+
+#blai-purifier-popup .blai-home-card-body {
+    padding: 0 13px 9px;
+}
+
+#blai-purifier-popup .blai-home-rule-item {
+    min-width: 0;
+    min-height: 62px;
+    padding: 9px 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) 18px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+
+#blai-purifier-popup .blai-home-rule-item + .blai-home-rule-item {
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+}
+
+#blai-purifier-popup .blai-home-rule-item.blai-is-disabled {
+    opacity: 0.48;
+}
+
+#blai-purifier-popup .blai-home-rule-source, #blai-purifier-popup .blai-home-rule-target {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+}
+
+#blai-purifier-popup .blai-home-rule-labels {
+    min-width: 0;
+    min-height: 18px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+}
+
+#blai-purifier-popup .blai-home-rule-badge {
+    flex: 0 0 auto;
+    min-height: 18px;
+    padding: 3px 7px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-surface);
+    color: var(--accent-color);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+#blai-purifier-popup .blai-home-source-text, #blai-purifier-popup .blai-home-target-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.35;
+}
+
+#blai-purifier-popup .blai-home-preview-label {
+    min-height: 18px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-main);
+    font-size: 10px;
+    font-weight: 750;
+    line-height: 1.2;
+}
+
+#blai-purifier-popup .blai-home-rule-arrow {
+    color: var(--text-main);
+    font-size: 11px;
+    text-align: center;
+}
+
+#blai-purifier-popup .blai-home-more-text {
+    padding: 3px 0 1px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 550;
+    text-align: right;
+}
+
+#blai-purifier-popup .blai-home-card-empty {
+    min-height: 74px;
+    padding: 16px;
+    display: grid;
+    place-items: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+#blai-purifier-popup .blai-home-empty-state {
+    min-height: 180px;
+    grid-column: 1 / -1;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    border: 1px dashed var(--border-color);
+    border-radius: 14px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+#blai-purifier-popup .blai-home-empty-state i {
+    color: var(--accent-color);
+    font-size: 22px;
+}
+
+#blai-purifier-popup .blai-home-empty-state strong {
+    color: var(--text-main);
+    font-size: 13px;
+}
+
+#blai-purifier-popup .blai-home-empty-state span {
+    font-size: 11px;
+}
+
+@media (max-width: 1120px) {#blai-purifier-popup .blai-home-dataset-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+}}
+
+@media (max-width: 1120px) {#blai-purifier-popup .blai-home-dataset-actions {
+    margin-left: 0;
+    justify-content: flex-start;
+}}
+
+@media (max-width: 1120px) {#blai-purifier-popup .blai-home-rule-grid {
+    grid-template-columns: minmax(0, 1fr);
+}}
+
+@media (min-width: 601px) and (max-width: 780px) {#blai-purifier-popup .blai-home-dataset-summary {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+}}
+
+@media (min-width: 601px) and (max-width: 780px) {#blai-purifier-popup .blai-home-preset-field {
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+}}
+
+@media (min-width: 601px) and (max-width: 780px) {#blai-purifier-popup .blai-home-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+}}
+
+@media (min-width: 601px) and (max-width: 780px) {#blai-purifier-popup .blai-home-toolbar-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}}
+
+@media (min-width: 601px) and (max-width: 780px) {#blai-purifier-popup .blai-home-toolbar-button {
+    padding-inline: 7px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-page {
+    padding: 0 16px 84px;
+    gap: 16px;
+    box-sizing: border-box;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-dataset {
+    padding-top: 12px;
+    padding-bottom: 8px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-dataset-row {
+    gap: 4px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-dataset-summary {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-preset-field {
+    width: clamp(104px, 34vw, 132px);
+    min-width: 0;
+    flex: 0 1 clamp(104px, 34vw, 132px);
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-preset-select {
+    height: 38px;
+    padding: 0 24px 0 9px !important;
+    font-size: 11px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-metrics {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    gap: 8px;
+    font-size: 10px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-metric b {
+    font-size: 11px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-dataset-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-dataset-actions button {
+    min-width: 0;
+    min-height: 30px;
+    padding-inline: 3px;
+    gap: 3px;
+    font-size: 10px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-toolbar-actions {
+    gap: 4px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-toolbar-button {
+    min-height: 30px;
+    padding-inline: 6px;
+    gap: 4px;
+    font-size: 10px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-batch-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-batch-panel {
+    padding: 4px 0 0;
+    gap: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-batch-heading {
+    display: none;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-batch-actions button {
+    min-height: 30px;
+    padding: 0 4px;
+    gap: 3px;
+    font-size: 10px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-card {
+    background: transparent;
+    box-shadow: none;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-rule-item {
+    grid-template-columns: minmax(0, 1.35fr) 14px minmax(0, 1fr);
+    gap: 5px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-home-source-text, #blai-purifier-popup .blai-home-target-text, #blai-purifier-popup .blai-home-preview-label, #blai-purifier-popup .blai-home-more-text {
+    font-weight: 400;
+}}
+
+@media (max-width: 600px) {.blai-modal-shell .blai-field-label, .blai-modal-shell .blai-edit-field > label, .blai-modal-shell .blai-subrule-field > label {
+    font-size: 14px !important;
+    line-height: 1.35 !important;
+    font-weight: 600 !important;
+}}
+
+@media (max-width: 600px) {#blai-rule-edit-modal .blai-subrule-preview, #blai-rule-edit-modal .blai-subrule-preview-source, #blai-rule-edit-modal .blai-subrule-preview-replacement, #blai-rule-edit-modal .blai-subrule-remark, #blai-rule-edit-modal .blai-subrule-empty {
+    font-weight: 400 !important;
+}}
+
+@media (max-width: 600px) {#blai-rule-edit-modal .blai-edit-modal-title {
+    font-weight: 800 !important;
+}}
+
+@media (max-width: 600px) {#blai-rule-edit-modal .blai-field-label {
+    font-weight: 600 !important;
+}}
+
+@media (max-width: 600px) {#blai-edit-subrules-container .blai-mapping-badge {
+    font-weight: 800 !important;
+}}
+
+@media (min-width: 601px) {#blai-rule-edit-modal > .blai-edit-modal-card, #blai-subrule-edit-modal > .blai-subrule-modal-card, #blai-rule-transfer-modal > .blai-transfer-content {
+    width: min(720px, 100%) !important;
+    max-width: 720px !important;
+    max-height: calc(100dvh - clamp(48px, 8vw, 88px)) !important;
+    border-radius: 14px !important;
+}}
+
+@media (max-width: 600px) {#blai-rule-edit-modal > .blai-edit-modal-card, #blai-preset-import-choice-modal > .blai-import-choice-card, #blai-rule-search-modal > .blai-rule-search-card, #blai-subrule-edit-modal > .blai-subrule-modal-card {
+    width: 100% !important;
+    max-width: 420px !important;
+    max-height: calc(100dvh - 40px) !important;
+    border-radius: 16px !important;
+}}
+
+@media (max-width: 600px) {#blai-rule-transfer-modal {
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100dvh !important;
+    padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: color-mix(in srgb, var(--text-main) 38%, transparent) !important;
+    box-sizing: border-box !important;
+}}
+
+@media (max-width: 600px) {#blai-rule-transfer-modal > .blai-transfer-content {
+    width: 100% !important;
+    max-width: 420px !important;
+    max-height: calc(100dvh - 40px) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 16px !important;
+    background: var(--bg-surface) !important;
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--text-main) 16%, transparent) !important;
+    box-sizing: border-box !important;
+}}
+
+@media (min-width: 601px) {#blai-rule-transfer-modal {
+    padding: clamp(24px, 4vw, 44px) !important;
+    align-items: center !important;
+    justify-content: center !important;
+}}

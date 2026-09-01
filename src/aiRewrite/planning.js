@@ -1,9 +1,9 @@
-import { defaultAiRewriteSettings } from '../state.js';
-import { mergeScopeTagsWithBuiltins } from '../utils.js';
-import { collectXmlCommentRanges, maskXmlCommentRanges } from '../aiCommentProtection.js';
+import { defaultAiRewriteSettings } from '../settings/defaults.js';
+import { mergeScopeTagsWithBuiltins } from '../scope/model.js';
+import { collectXmlCommentRanges, maskXmlCommentRanges } from './commentProtection.js';
 import { recordAiRewriteDebug } from './debug.js';
 
-const responseGuard = `输出必须是一个 JSON 对象，键必须恰好为本次全部 rewrite_target 的 id，值必须是可直接替换对应标签内容的字符串；空字符串表示删除。禁止 markdown、解释和额外包装。`;
+const responseGuard = `输出必须是一个 JSON 对象，键必须恰好为本次全部 rewrite_target 的 id。每个值必须是替换对应完整目标句子的完整结果字符串；空字符串表示删除整个目标句子。禁止 markdown、解释和额外包装。`;
 
 export function normalizeLimit(value, fallback, min, max) {
     const parsed = Number(value);
@@ -105,19 +105,10 @@ function getItemRewriteInstructions(item) {
         .filter(Boolean))];
 }
 
-export function normalizeStringList(values) {
-    return [...new Set((Array.isArray(values) ? values : [])
-        .map((value) => String(value || '').trim())
-        .filter(Boolean))];
-}
-
 function buildCompactPromptPayload(items) {
     const rewriteRules = {};
     const ruleIdByInstruction = new Map();
     const ruleIdsByItem = new Map();
-    const localFallbackCandidates = {};
-    const candidateIdByValues = new Map();
-    const candidateIdByItem = new Map();
 
     items.forEach((item) => {
         const ruleIds = getItemRewriteInstructions(item).map((instruction) => {
@@ -130,34 +121,21 @@ function buildCompactPromptPayload(items) {
             return ruleId;
         });
         ruleIdsByItem.set(item.id, ruleIds);
-
-        const candidates = normalizeStringList(item.localFallbackCandidates);
-        if (candidates.length > 0) {
-            const candidateKey = JSON.stringify(candidates);
-            let candidateId = candidateIdByValues.get(candidateKey);
-            if (!candidateId) {
-                candidateId = `c${candidateIdByValues.size + 1}`;
-                candidateIdByValues.set(candidateKey, candidateId);
-                localFallbackCandidates[candidateId] = candidates;
-            }
-            candidateIdByItem.set(item.id, candidateId);
-        }
     });
 
     return {
         rewriteRulesJson: JSON.stringify(rewriteRules),
-        localFallbackCandidatesJson: JSON.stringify(localFallbackCandidates),
         ruleIdsByItem,
-        candidateIdByItem,
         ruleCount: ruleIdByInstruction.size,
-        candidateSetCount: candidateIdByValues.size,
     };
 }
 
-function buildAnnotatedSource(originalText, items, settings, maxContextChars, ruleIdsByItem, candidateIdByItem, aiSettings) {
+function buildAnnotatedSource(originalText, items, settings, maxContextChars, ruleIdsByItem, aiSettings, completeSource = false) {
     const source = String(originalText || '');
     const sortedItems = [...items].sort((a, b) => a.start - b.start || a.end - b.end);
-    const window = getContextWindow(source, sortedItems, maxContextChars);
+    const window = completeSource
+        ? { start: 0, end: source.length }
+        : getContextWindow(source, sortedItems, maxContextChars);
     const commentRanges = aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
     const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const scopeRanges = settings.scopeTagMode === 'cleanse-inside' ? [] : collectScopeRanges(scopeScanText, settings);
@@ -178,9 +156,7 @@ function buildAnnotatedSource(originalText, items, settings, maxContextChars, ru
         rendered += redactSourceRange(source, cursor, item.start, protectedRanges);
         const ruleIds = ruleIdsByItem.get(item.id) || [];
         const rulesAttribute = ruleIds.length > 0 ? ` rules="${ruleIds.join(',')}"` : '';
-        const candidateId = candidateIdByItem.get(item.id) || '';
-        const candidatesAttribute = candidateId ? ` candidates="${candidateId}"` : '';
-        rendered += `<rewrite_target id="${item.id}"${rulesAttribute}${candidatesAttribute}>${source.slice(item.start, item.end)}</rewrite_target>`;
+        rendered += `<rewrite_target id="${item.id}"${rulesAttribute}>${source.slice(item.start, item.end)}</rewrite_target>`;
         cursor = item.end;
     });
 
@@ -202,7 +178,29 @@ export function groupRewriteItemsByPrompt(items, aiSettings) {
     return groups;
 }
 
-export function renderPrompt(originalText, items, settings, aiSettings, promptTemplate = getGlobalPromptTemplate(aiSettings)) {
+function finishPromptRender(items, annotatedSource, promptTemplate, payload) {
+    const template = String(promptTemplate || '');
+    const hasRulesPlaceholder = template.includes('{{rewriteRulesJson}}');
+    const hasSourcePlaceholder = template.includes('{{annotatedSource}}');
+    let rendered = template
+        .replaceAll('{{rewriteRulesJson}}', payload.rewriteRulesJson)
+        .replaceAll('{{annotatedSource}}', annotatedSource);
+    if (!hasRulesPlaceholder) rendered += `\n\n<rewrite_rules>${payload.rewriteRulesJson}</rewrite_rules>`;
+    if (!hasSourcePlaceholder) rendered += `\n\n<source>${annotatedSource}</source>`;
+    const expectedIds = items.map((item) => item.id);
+    return {
+        prompt: `${rendered}\n\n${responseGuard}\n本次 id：${JSON.stringify(expectedIds)}。`,
+        metrics: {
+            templateLength: template.length,
+            annotatedSourceLength: annotatedSource.length,
+            rewriteRulesLength: payload.rewriteRulesJson.length,
+            itemCount: items.length,
+            ruleCount: payload.ruleCount,
+        },
+    };
+}
+
+function buildSingleSourcePromptRender(originalText, items, settings, aiSettings, promptTemplate) {
     const payload = buildCompactPromptPayload(items);
     const annotatedSource = buildAnnotatedSource(
         originalText,
@@ -210,31 +208,41 @@ export function renderPrompt(originalText, items, settings, aiSettings, promptTe
         settings,
         aiSettings.maxContextChars,
         payload.ruleIdsByItem,
-        payload.candidateIdByItem,
         aiSettings
     );
-    const template = String(promptTemplate || '');
-    const hasRulesPlaceholder = template.includes('{{rewriteRulesJson}}');
-    const hasCandidatesPlaceholder = template.includes('{{localFallbackCandidatesJson}}');
-    const hasSourcePlaceholder = template.includes('{{annotatedSource}}');
-    let rendered = template
-        .replaceAll('{{rewriteRulesJson}}', payload.rewriteRulesJson)
-        .replaceAll('{{localFallbackCandidatesJson}}', payload.localFallbackCandidatesJson)
-        .replaceAll('{{annotatedSource}}', annotatedSource);
-    if (!hasRulesPlaceholder) rendered += `\n\n<rewrite_rules>${payload.rewriteRulesJson}</rewrite_rules>`;
-    if (!hasCandidatesPlaceholder) rendered += `\n\n<local_fallback_candidates>${payload.localFallbackCandidatesJson}</local_fallback_candidates>`;
-    if (!hasSourcePlaceholder) rendered += `\n\n<source>${annotatedSource}</source>`;
-    const expectedIds = items.map((item) => item.id);
-    const prompt = `${rendered}\n\n${responseGuard}\n本次 id：${JSON.stringify(expectedIds)}。`;
+    return finishPromptRender(items, annotatedSource, promptTemplate, payload);
+}
+
+export function renderPromptPure(originalText, items, settings, aiSettings, promptTemplate = getGlobalPromptTemplate(aiSettings)) {
+    return buildSingleSourcePromptRender(originalText, items, settings, aiSettings, promptTemplate).prompt;
+}
+
+export function renderMultiItemPromptPure(requestItems, settings, aiSettings, promptTemplate = getGlobalPromptTemplate(aiSettings)) {
+    const orderedItems = Array.isArray(requestItems) ? requestItems : [];
+    const rewriteItems = orderedItems.flatMap((item) => item.rewriteItems || []);
+    const payload = buildCompactPromptPayload(rewriteItems);
+    const annotatedSource = orderedItems.map((item) => {
+        const itemIndex = Number(item.itemIndex);
+        const itemIdentity = `item-${itemIndex}`;
+        const annotatedItemSource = buildAnnotatedSource(
+            item.requestSource,
+            item.rewriteItems,
+            settings,
+            0,
+            payload.ruleIdsByItem,
+            aiSettings,
+            true,
+        );
+        return `<content_item id="${itemIdentity}">\n${annotatedItemSource}\n</content_item>`;
+    }).join('\n');
+    return finishPromptRender(rewriteItems, annotatedSource, promptTemplate, payload).prompt;
+}
+
+export function renderPrompt(originalText, items, settings, aiSettings, promptTemplate = getGlobalPromptTemplate(aiSettings)) {
+    const result = buildSingleSourcePromptRender(originalText, items, settings, aiSettings, promptTemplate);
     recordAiRewriteDebug('prompt-built', {
-        promptLength: prompt.length,
-        templateLength: template.length,
-        annotatedSourceLength: annotatedSource.length,
-        rewriteRulesLength: payload.rewriteRulesJson.length,
-        localFallbackCandidatesLength: payload.localFallbackCandidatesJson.length,
-        itemCount: items.length,
-        ruleCount: payload.ruleCount,
-        candidateSetCount: payload.candidateSetCount,
+        promptLength: result.prompt.length,
+        ...result.metrics,
     });
-    return prompt;
+    return result.prompt;
 }

@@ -1,0 +1,103 @@
+#blai-tour-layer {
+    --blai-tour-scrim: color-mix(in srgb, var(--bg-base) 66%, transparent);
+    position: fixed;
+    z-index: 1000001;
+    inset: 0;
+    pointer-events: auto;
+    color: var(--text-main);
+}
+
+#blai-tour-layer::before {
+    position: absolute;
+    inset: 0;
+    content: '';
+    background: var(--blai-tour-scrim);
+}
+
+#blai-tour-layer.blai-tour-has-spotlight::before {
+    display: none;
+}
+
+#blai-tour-layer .blai-tour-spotlight {
+    position: fixed;
+    z-index: 1;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 78%, white 22%);
+    border-radius: 10px;
+    box-shadow: 0 0 0 100vmax var(--blai-tour-scrim);
+    pointer-events: none;
+}
+
+#blai-tour-layer .blai-tour-card {
+    z-index: 2;
+    overflow: auto;
+    box-sizing: border-box;
+    padding: 18px;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 28%, var(--border-color) 72%);
+    border-radius: 14px;
+    background: var(--bg-surface);
+    box-shadow: 0 16px 38px color-mix(in srgb, var(--bg-base) 45%, transparent);
+}
+
+#blai-tour-layer .blai-tour-card-head, #blai-tour-layer .blai-tour-actions, #blai-tour-layer .blai-tour-review-navigation, #blai-tour-layer .blai-tour-review-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#blai-tour-layer .blai-tour-card-head { justify-content: space-between; color: var(--text-secondary); font-size: 11px; font-weight: 800; }
+#blai-tour-layer .blai-tour-card-head b, #blai-tour-layer .blai-tour-kicker, #blai-tour-layer .blai-tour-preview-label { color: var(--accent-color); font-size: 11px; font-weight: 850; }
+#blai-tour-layer .blai-tour-card h2 { margin: 10px 0 8px; color: var(--text-main); font-size: 18px; line-height: 1.25; }
+#blai-tour-layer .blai-tour-copy p { margin: 0 0 8px; color: var(--text-secondary); font-size: 13px; line-height: 1.55; }
+#blai-tour-layer .blai-tour-actions { justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+#blai-tour-layer button { min-height: 32px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface); color: var(--text-main); font: inherit; font-size: 12px; font-weight: 750; }
+#blai-tour-layer button:not(.blai-tour-primary):hover:not(:disabled), #blai-tour-layer button:not(.blai-tour-primary):focus-visible { border-color: var(--accent-color); color: var(--accent-color); outline: none; }
+#blai-tour-layer .blai-tour-primary { border-color: var(--accent-color); background: var(--accent-color); color: var(--bg-base); }
+#blai-tour-layer button:disabled { opacity: .45; cursor: default; }
+
+#blai-tour-layer .blai-tour-paths { display: grid; gap: 8px; margin-top: 12px; }
+#blai-tour-layer .blai-tour-paths > div { display: grid; gap: 3px; padding: 10px; border: 1px solid var(--border-color); border-radius: 9px; }
+#blai-tour-layer .blai-tour-paths span, #blai-tour-layer .blai-tour-paths small { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+
+#blai-tour-layer .blai-tour-preview { margin-top: 14px; padding: 12px; border: 1px solid var(--border-color); border-radius: 10px; background: color-mix(in srgb, var(--bg-base) 8%, var(--bg-surface) 92%); }
+#blai-tour-layer .blai-tour-preview-label { margin: 0 0 10px; }
+#blai-tour-layer .blai-tour-review-preview { padding: 10px; }
+#blai-tour-layer .blai-tour-review-surface { overflow: hidden; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface); }
+#blai-tour-layer .blai-tour-review-main { display: grid; grid-template-columns: minmax(0, 1fr) 116px; min-height: 142px; }
+#blai-tour-layer .blai-tour-review-area { min-width: 0; border-right: 1px solid var(--border-color); }
+#blai-tour-layer .blai-tour-review-head { display: flex; justify-content: space-between; gap: 8px; padding: 9px 10px; border-bottom: 1px solid var(--border-color); }
+#blai-tour-layer .blai-tour-review-head p { margin: 0; color: var(--text-secondary); font-size: 9px; font-weight: 750; }
+#blai-tour-layer .blai-tour-review-head strong { display: block; margin-top: 3px; color: var(--text-main); font-size: 11px; }
+#blai-tour-layer .blai-tour-review-tabs { flex: 0 0 auto; gap: 0; align-self: flex-start; overflow: hidden; border: 1px solid var(--border-color); border-radius: 6px; }
+#blai-tour-layer .blai-tour-review-tabs span { padding: 5px 6px; border-left: 1px solid var(--border-color); color: var(--text-secondary); font-size: 9px; font-weight: 750; white-space: nowrap; }
+#blai-tour-layer .blai-tour-review-tabs span:first-child { border-left: 0; }
+#blai-tour-layer .blai-tour-review-tabs .is-active { background: color-mix(in srgb, var(--accent-color) 12%, var(--bg-surface)); color: var(--accent-color); }
+#blai-tour-layer .blai-tour-review-document { padding: 17px 10px; color: var(--text-main); font-size: 12px; line-height: 1.7; }
+#blai-tour-layer .blai-tour-review-document del, #blai-tour-layer .blai-tour-review-document ins { display: inline; padding: 1px 2px; text-decoration: none; }
+#blai-tour-layer .blai-tour-review-document .is-old { color: #d9534f; background: rgb(217 83 79 / 8%); text-decoration: line-through; }
+#blai-tour-layer .blai-tour-review-document .is-new { color: #5cb85c; background: rgb(92 184 92 / 15%); }
+#blai-tour-layer .blai-tour-review-lookahead { display: grid; align-content: end; gap: 3px; padding: 10px; color: var(--text-secondary); font-size: 10px; }
+#blai-tour-layer .blai-tour-review-lookahead strong { color: var(--text-main); font-size: 11px; }
+#blai-tour-layer .blai-tour-review-navigation { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; min-height: 38px; padding: 0 10px; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 10px; font-weight: 750; }
+#blai-tour-layer .blai-tour-review-navigation span:last-child { justify-self: end; }
+#blai-tour-layer .blai-tour-review-navigation strong { color: var(--text-main); font: 700 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; }
+#blai-tour-layer .blai-tour-review-apply { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 7px 10px; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 10px; }
+#blai-tour-layer .blai-tour-review-apply strong { color: var(--text-main); }
+#blai-tour-layer .blai-tour-review-apply b { display: inline-flex; align-items: center; min-height: 26px; padding: 0 8px; border: 1px solid var(--accent-color); border-radius: 6px; background: var(--accent-color); color: var(--bg-base); font-size: 10px; white-space: nowrap; }
+
+@media (min-width: 601px) {
+    #blai-tour-layer .blai-tour-card { position: fixed; width: min(390px, calc(100vw - 32px)); max-width: var(--blai-tour-popover-max-width, calc(100vw - 24px)); max-height: min(680px, var(--blai-tour-popover-max-height, calc(100dvh - 24px))); }
+    #blai-tour-layer .blai-tour-centered { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(620px, calc(100vw - 32px)); }
+}
+
+@media (max-width: 600px) {
+    #blai-tour-layer .blai-tour-card {
+        width: min(420px, var(--blai-tour-popover-max-width, calc(100vw - 24px))) !important;
+        max-width: var(--blai-tour-popover-max-width, calc(100vw - 24px)) !important;
+        max-height: var(--blai-tour-popover-max-height, calc(100dvh - 24px)) !important;
+    }
+    #blai-tour-layer .blai-tour-card:not(.blai-tour-centered) { position: fixed; }
+    #blai-tour-layer .blai-tour-review-main { grid-template-columns: minmax(0, 1fr); }
+    #blai-tour-layer .blai-tour-review-area { border-right: 0; }
+    #blai-tour-layer .blai-tour-review-lookahead { min-height: 38px; border-top: 1px solid var(--border-color); }
+    #blai-tour-layer .blai-tour-review-head { align-items: flex-start; flex-direction: column; }
+}

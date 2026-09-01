@@ -2,9 +2,22 @@
 
 Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展。它在传统屏蔽词替换的基础上，加入了规则预设、范围标签保护、净化前文透视，以及可选的 OpenAI 兼容 AI 局部改写能力，用来在聊天生成、历史记录和相关数据中稳定处理不想保留的词句、句式或表达。
 
-当前版本：`2.6`
+当前版本：`3.0`
 
 使用、修改或再发布前，请阅读[许可与版权](#许可与版权)。
+
+---
+
+## 3.0 版本更新
+
+- **Deep Clean 重做**：现在可以先选择需要处理的聊天、角色、人设和世界书，再进行 Program Rewrite、可选 AI Rewrite 和结果预览，确认后才正式应用；同时完善了 Shujuku 数据处理。
+- **AI Rewrite 改为完整句子改写**：规则命中后，会将命中表达所在的完整句子交给 AI，并同时提供实际命中的规则；多个规则命中同一句时会合并处理。
+- **AI 设置更新**：更新默认全局提示词，并支持迁移旧版默认提示词；移除推荐温度按钮和旧的单条改写长度限制，部分旧模型配置会自动更新到新的默认参数。
+- **历史消息处理调整**：打开或切换聊天时不再自动重新净化整段历史记录；需要重新处理历史聊天或其他资源时统一使用 Deep Clean。
+- **预设绑定检查增强**：可以更直观地查看当前角色、全局预设和对话补全预设的实际绑定状态，并突出显示当前生效的绑定。
+- **Diff 与相关规则体验改进**：相关规则会优先显示真正与当前修改有关的规则，并补充命中内容、匹配依据和备注；Diff 的修改来源和撤回后查看体验也进行了调整。
+- **新增匿名反馈与诊断中心**：支持提交 Bug 或功能建议，并按需附加运行环境、日志和 Deep Clean 诊断；发送前可以查看实际提交的完整内容。
+- **新增操作导览并调整界面**：加入主界面和 Deep Clean 导览，同时优化桌面、平板和手机端的布局与状态显示。
 
 ---
 
@@ -16,7 +29,7 @@ Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展
 - 改写诊断与状态显示：最新 60 条调试记录按新到旧展示，常用字段和阶段采用更紧凑、易读的中文标签，同时保留完整结构化 JSON 复制；可区分 Program Rewrite、AI Rewrite 与 Shujuku 事件。AI 改写成功通知会显示总耗时秒数，进度、成功和失败通知的布局更紧凑一致，进行中的通知仍可直接终止任务。
 - 流式视觉净化性能：减少流式视觉投影中的冗余 DOM 处理和重复文本节点写入，降低持续生成时不必要的页面更新。
 - 中文破折号视觉投影：对当前规则明确支持的中文 `——` 标点场景增加窄范围的实时显示处理；该处理只改变实时可见文本，不修改聊天数据、Swipe 数据、Diff 元数据或持久化内容，最终结果仍以 Program Rewrite 为准，并非无条件删除所有 `——`。
-- 可选 Shujuku 兼容：工具页新增可主动启用的 Shujuku 数据库自动净化开关；Shujuku 完成自身数据库操作后，Veridis 可通过其可用的公共 API，将当前 Program Rewrite 规则应用到符合条件的单元格。重复或已消费的回调不会造成重复写入，Deep Clean 在 Shujuku 可用时会等待其持久化完成；Shujuku 不是必需依赖。
+- 可选 Shujuku 兼容：工具页新增可主动启用的 Shujuku 数据库自动净化开关；Shujuku 完成自身数据库操作后，Veridis 可通过其可用的公共 API，将当前 Program Rewrite 规则应用到符合条件的单元格。重复或已消费的回调不会造成重复写入；Shujuku 不是必需依赖。
 - Diff 生命周期修正：聊天与 DOM 的预备刷新保持为纯视觉操作，不再仅因刷新或预备 DOM 就持久化 Diff 元数据；Diff 持久化仍由正常生成与终稿收敛流程负责。
 - 工作台界面整理：首页、净化、AI 与工具页的职责更清晰，桌面、平板和手机端的布局及页头行为统一；AI 改写对话框与通知采用更紧凑、一致的格式。
 
@@ -73,18 +86,19 @@ Veridis Rewrite 是一个面向 SillyTavern 的文本净化与局部改写扩展
 
 ### 实时净化
 
-- 在消息生成、消息渲染、非流式生成结束、聊天切换等阶段自动执行净化。
-- 支持视觉层实时遮罩与最终数据写回，减少流式输出时的漏屏、闪现和反复替换。
+- 流式与已完成的当前消息会按各自生命周期处理；流式阶段提供视觉投影，终稿阶段处理正式消息结果。
+- DOM 处理只在允许的已渲染表面提供视觉投影。
 - AI 处理期间不修改当前可见正文；最终渲染完成前持续显示旧消息，完成后一次切换到最终结果。
-- 对长聊天采用分片后台处理，降低打开超长对话时的卡顿风险。
+- 聊天切换会重置生命周期、恢复 Diff 状态并执行 Diff 保留/历史维护及按钮投影，不会重新处理整段历史聊天。
+- 需要处理历史内容或资源范围时，请显式使用 Deep Clean。
 - 支持跳过用户消息，避免用户输入、用户消息编辑区和历史用户消息被规则误伤。
 
 ### 深度清理
 
-- 可对聊天记录、角色卡、世界书和人设执行深度清理。
-- 深度清理按阶段分片运行，并在固定时间窗口后询问是否继续，避免长时间卡死。
-- 会跳过插件自身配置、内部净化元数据和已撤回净化的消息对象。
-- 不递归处理未知元数据或插件设置；对数据库扩展字段做保护，避免误清理 Prompt、Settings、Template 等配置内容。
+- 支持 Character、Chat Branch、Persona 与 World Book 的资源范围选择；Chat Branch 也可处理受支持的持久化 Shujuku 单元格。
+- 实际流程为：`Initial Selection → Freeze / resource read → Scan → Program processing → optional AI processing → Review or Program Direct Apply → resource-specific Apply → Complete / Stop`。
+- 可选处理方式为 `Program only` 或 `Program + AI`；Program 结果可按所选策略进入 Review 或 Direct Apply。
+- Review 可在 Apply 前选择并编辑最终建议文本。
 
 ### 净化前文透视
 
@@ -191,7 +205,10 @@ AI 改写不是整篇润色，而是“命中片段的局部替换”。它会�
 
 ## 数据安全提示
 
-- 深度清理会修改聊天记录、角色卡、世界书、人设等已有数据，请先确认当前预设和规则范围。
+- Deep Clean 在 Freeze、Scan、Program 处理、AI 处理和普通 Review 期间不会修改所选资源；正式资源写入只发生在 Apply 持久化阶段。
+- 明确选择 Program Direct Apply 时，处理会不经手动 Review 进入正式持久化路径。
+- Apply 前会将冻结的原始值与当前资源逐项核验；Character、Chat Branch、Persona、外部 World Book 与 Shujuku Chat 数据继续遵循各自的持久化契约。
+- Stop 不会虚构回滚或部分资源恢复。
 - 使用正则或简易通配时，避免写出可以匹配空字符串的规则。
 - AI 改写会把命中范围内的上下文发送到你配置的接口服务，请确认接口来源和隐私边界。
 - 如果需要保护特定内容，优先使用范围标签或“跳过用户消息”。
@@ -201,45 +218,59 @@ AI 改写不是整篇润色，而是“命中片段的局部替换”。它会�
 ## 项目结构
 
 ```text
-index.js                         扩展启动入口
-manifest.json                    SillyTavern 扩展清单
-style.css                        有序 CSS partial 入口
-styles/                          保持原级联顺序的样式 partial
-src/settingsMigration.js         设置导入、规范化与迁移
-src/aiRewrite.js                 AI 改写公开门面
-src/aiRewrite/debug.js           AI 改写诊断记录
-src/aiRewrite/planning.js        AI 提示、目标分组、上下文与请求构造
-src/aiRewrite/response.js        AI 响应信封清理与格式验证
-src/aiRewrite/runtime.js         AI 请求执行、应用、流式、MVU 与生命周期协调
-src/aiCommunicationMonitor.js    TavernHelper AI 调用记录与后台通信监视器
-src/replacementEngine.js         规则编译、范围替换与视觉遮罩
-src/chatPersistence.js           队列式增量聊天持久化
-src/cleanse.js                   深度清理流程
-src/core.js                      消息净化、数据与 DOM 协调
-src/diff.js                      净化前文透视与差异缓存
-src/dom.js                       DOM 定位、流式视觉掩码、精确范围编辑和最终消息原子交换
-src/events.js                    管理 UI 事件门面
-src/events/aiSettings.js         AI、主题与简繁设置绑定
-src/events/diff.js               Diff 控件绑定
-src/events/hostLifecycle.js      实时拦截与宿主生命周期绑定
-src/messageMeta.js               消息与 Swipe 分支的净化元数据
-src/platform.js                  宿主与扩展兼容层
-src/shujukuCompatibility.js      可选 Shujuku 数据库净化集成
-src/state.js                     默认设置和运行时状态
-src/ui.js                        工作台 UI 和弹窗交互
-src/utils.js                     规则、预设、标签等工具函数
-src/zhConversion.js              简繁兼容词典
+Veridis-Rewrite/
+├─ index.js
+├─ manifest.json
+├─ style.css
+├─ README.md
+├─ templates/
+│  └─ purifier.html
+├─ styles/
+│  ├─ foundation.css
+│  ├─ shell.css
+│  ├─ home.css
+│  ├─ diff.css
+│  ├─ clean.css
+│  ├─ tools.css
+│  └─ ai.css
+├─ src/
+│  ├─ events.js
+│  ├─ log.js
+│  ├─ settings/
+│  ├─ host/
+│  ├─ integrations/
+│  ├─ rules/
+│  ├─ scope/
+│  ├─ presets/
+│  ├─ chat/
+│  ├─ dom/
+│  ├─ aiRewrite/
+│  ├─ diff/
+│  ├─ deepClean/
+│  │  └─ apply/
+│  ├─ shujuku/
+│  │  └─ deepClean/
+│  ├─ zh/
+│  └─ ui/
+└─ vendor/
+   ├─ pinyin-pro/
+   └─ sql.js/
 ```
+
+`style.css` 按 `foundation.css`、`shell.css`、`home.css`、`diff.css`、`clean.css`、`tools.css`、`ai.css` 的顺序导入功能所有者样式；响应式规则与各自功能所有者同处，而非放在旧式 responsive 或 cascade-seal 覆盖文件中。
+
+- `settings`：持久化默认值与迁移。
+- `host`：注入上下文与 SillyTavern 生命周期/流式处理。
+- `integrations`：TavernHelper、MVU、TauriTavern、BaiBai、LoreFrame 合约。
+- `rules`：Program Rule 语义、运行时、视图与事件；`scope`：范围标签语义、视图与事件；`presets`：预设模型、应用、绑定、视图与事件。
+- `chat`：已完成消息净化、消息分支、显示与持久化；`dom`：DOM 身份、保护、净化、流式与观察。
+- `aiRewrite`：匹配、任务、应用、运行时、设置、调试与生成；`diff`：追踪、状态、消息元数据、比较、视图与事件。
+- `deepClean`：资源清单、扫描、处理、审阅、生命周期与资源专用 Apply；`shujuku`：实时集成与 Deep Clean 持久化回放。
+- `zh`：词典生命周期与运行时转换；`ui`：壳层与共享呈现原语。
 
 ## AI 改写日志诊断
 
-日志即使带有终端的 `Exit code` / `Output` 包装，或末尾 JSON 被截断，也可以直接分析其中所有完整事件：
-
-```powershell
-node tools/analyze-ai-rewrite-log.mjs <日志文件> [更多日志文件...]
-```
-
-报告会分别统计自动与手动任务、`content-scope-changed` 取消、API 响应及最终写回结果。
+插件内提供 AI debug log、完整结构化 JSON 复制与 AI communication monitor，用于查看请求、重试、响应、最终应用与可取得的错误信息。TavernHelper 链路不提供 Provider HTTP 状态码或 Token 用量。
 
 运行全部 Node 测试：
 
@@ -247,16 +278,14 @@ node tools/analyze-ai-rewrite-log.mjs <日志文件> [更多日志文件...]
 node --test
 ```
 
-保留的四个 `scripts/verify-*.mjs` 覆盖注释保护、终稿持久化、生成参数和共享设置等独特的跨文件契约。
-
 ## 发布打包
 
-运行时归档只包含 `index.js`、`manifest.json`、`README.md`、`style.css`、`src/**`、`styles/**` 与 `templates/**`。测试、维护脚本、工具、Agent 指令、日志和本地 Git 数据不进入发布包。
+运行时归档只包含 `README.md`、`index.js`、`manifest.json`、`style.css`、`images/**`、`src/**`、`styles/**`、`templates/**` 与 `vendor/**`。其中 `vendor/pinyin-pro/**` 和 `vendor/sql.js/**` 是 Deep Clean Shujuku 回放的运行时依赖。测试、维护脚本、工具、Agent 指令、日志和本地 Git 数据不进入发布包；本地开发内容可包括 `tests/`、`tmp/`、`scripts/`、`tools/`、`AGENTS.md` 与本地审计/验证产物，并非扩展发布所必需。
 
 待当前快照由仓库所有者提交后，从该提交生成确定性发布包：
 
 ```powershell
-git archive --format=zip --prefix=Veridis-Rewrite/ -o Veridis-Rewrite-2.6.zip HEAD
+git archive --format=zip --prefix=Veridis-Rewrite/ -o Veridis-Rewrite-3.0.zip HEAD README.md index.js manifest.json style.css images src styles templates vendor
 ```
 
 `git archive` 只归档已提交内容，不包含当前未提交改动。
@@ -265,9 +294,11 @@ git archive --format=zip --prefix=Veridis-Rewrite/ -o Veridis-Rewrite-2.6.zip HE
 
 ## 许可与版权
 
-本插件允许在**修改后**进行二次发布，但请遵守以下规则：
+本插件允许在**修改后**进行非商业性质的二次发布，但必须遵守以下规则：
 
-  * **禁止直接二传本体**：未修改版本不得原样转载、搬运或二次发布。
-  * **修改后二传需署名**：如进行二次修改与发布，需保留原作者署名，并附上原 **Discord** 与 **GitHub** 链接。
-  * **禁止墙内社交媒体传播**：不得将本插件本体或修改版发布至墙内社交媒体平台。
-  * **预设修改欢迎**：预设相关的更新与修改不受上述限制。
+- **禁止任何商业使用**：不得以任何形式将本插件、本插件的修改版或其代码用于直接或间接商业获利，包括但不限于出售、付费分发、付费下载、订阅服务、商业产品捆绑、收费整合、商业推广或其他盈利性用途。
+- **禁止直接二传本体**：未经修改的原版插件不得原样转载、搬运、镜像、重新打包或二次发布。
+- **修改后二传需署名**：如对插件进行实质修改后再次发布，必须保留原作者署名，并明确附上原项目的 **Discord** 与 **GitHub** 链接，不得移除、隐藏或模糊原始来源信息。
+- **禁止在中国大陆社交媒体平台传播**：不得将本插件原版、修改版或重新打包版本发布、转载、上传或分发至面向中国大陆地区运营的社交媒体、内容社区及类似公开传播平台。
+- **不得通过修改规避许可限制**：对插件进行改名、换皮、简单删改、重新打包或其他形式的修改，不会解除上述非商业、署名及传播限制。
+- **预设修改与分享欢迎**：仅针对插件使用的规则预设、AI 预设等独立预设文件，可以自由修改与分享，无需遵守“禁止直接二传插件本体”和“修改后二传需署名”的限制；但**不得将插件本体或其代码作为预设的一部分重新分发，且商业使用限制仍然适用**。

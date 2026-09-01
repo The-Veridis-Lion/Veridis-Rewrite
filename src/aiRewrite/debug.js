@@ -1,7 +1,8 @@
 /**
  * Owns AI rewrite diagnostic storage, export, and logging.
  */
-import { extensionName, runtimeState } from '../state.js';
+import { extensionName } from '../settings/defaults.js';
+import { aiRewriteState } from './state.js';
 import { logger } from '../log.js';
 
 const debugLogStorageKey = `${extensionName}_ai_rewrite_debug_events`;
@@ -37,7 +38,6 @@ const debugDisplayLabels = {
     chatId: '会话 ID',
     validationMode: '校验模式',
     validationReason: '校验原因',
-    contentSnapshotHash: '内容快照哈希',
     mode: '模式',
     phase: '阶段',
     reason: '原因',
@@ -45,6 +45,9 @@ const debugDisplayLabels = {
     attempt: '尝试次数',
     task: '任务',
     itemCount: '项目数',
+    matchedAiRuleCount: '匹配 AI 规则',
+    rawAiMatchCount: 'AI 原始匹配',
+    sentenceTargetCount: '句子目标',
     index: '消息 ID',
     changedTargets: '写回目标',
     changedSwipeCount: 'Swipe 修改',
@@ -103,7 +106,7 @@ const debugResultDisplayLabels = {
     'no-changes': '候选无需修改',
 };
 const firstDebugDisplayFields = ['generationId', 'messageId', 'requestState', 'source'];
-const validationDebugDisplayFields = ['validationMode', 'validationReason', 'contentSnapshotHash'];
+const validationDebugDisplayFields = ['validationMode', 'validationReason'];
 
 function sanitizeDebugValue(value, depth = 0) {
     if (depth > 3) return '[depth-limit]';
@@ -179,24 +182,24 @@ export function recordAiRewriteDebug(stage, details = {}, level = 'info') {
         stage: String(stage || 'unknown'),
         details: sanitizedDetails,
     };
-    const stateEvents = Array.isArray(runtimeState.aiRewrite.debugEvents)
-        ? runtimeState.aiRewrite.debugEvents
+    const stateEvents = Array.isArray(aiRewriteState.debugEvents)
+        ? aiRewriteState.debugEvents
         : [];
     stateEvents.push(event);
-    runtimeState.aiRewrite.debugEvents = stateEvents.slice(-debugLogLimit);
+    aiRewriteState.debugEvents = stateEvents.slice(-debugLogLimit);
     if (criticalDebugStages.has(event.stage)) {
-        const criticalEvents = Array.isArray(runtimeState.aiRewrite.criticalDebugEvents)
-            ? runtimeState.aiRewrite.criticalDebugEvents
+        const criticalEvents = Array.isArray(aiRewriteState.criticalDebugEvents)
+            ? aiRewriteState.criticalDebugEvents
             : [];
         criticalEvents.push(event);
-        runtimeState.aiRewrite.criticalDebugEvents = criticalEvents.slice(-criticalDebugLogLimit);
+        aiRewriteState.criticalDebugEvents = criticalEvents.slice(-criticalDebugLogLimit);
         const storedCritical = readStoredCriticalDebugEvents();
         storedCritical.push(event);
         writeStoredCriticalDebugEvents(storedCritical);
     }
     const exposedEvents = mergeDebugEvents(
-        runtimeState.aiRewrite.criticalDebugEvents || [],
-        runtimeState.aiRewrite.debugEvents || [],
+        aiRewriteState.criticalDebugEvents || [],
+        aiRewriteState.debugEvents || [],
     );
     try {
         globalThis.__veridisAiRewriteLog = exposedEvents;
@@ -211,7 +214,7 @@ export function recordAiRewriteDebug(stage, details = {}, level = 'info') {
     const stored = readStoredDebugEvents();
     stored.push(event);
     writeStoredDebugEvents(stored);
-    refreshMountedDebugDisplay(runtimeState.aiRewrite.debugEvents);
+    refreshMountedDebugDisplay(aiRewriteState.debugEvents);
     let summary = '';
     try {
         summary = JSON.stringify(sanitizedDetails);
@@ -233,9 +236,9 @@ export function recordAiRewriteRuntimeDebug(stage, details = {}, level = 'info')
 function getMergedAiRewriteDebugEvents() {
     const combined = mergeDebugEvents(
         readStoredCriticalDebugEvents(),
-        runtimeState.aiRewrite.criticalDebugEvents || [],
+        aiRewriteState.criticalDebugEvents || [],
         readStoredDebugEvents(),
-        runtimeState.aiRewrite.debugEvents || [],
+        aiRewriteState.debugEvents || [],
     );
     const seen = new Set();
     const deduped = combined.filter((event) => {
@@ -244,12 +247,12 @@ function getMergedAiRewriteDebugEvents() {
         seen.add(key);
         return true;
     }).slice(-(criticalDebugLogLimit + debugLogLimit));
-    runtimeState.aiRewrite.debugEvents = deduped.slice(-debugLogLimit);
-    runtimeState.aiRewrite.criticalDebugEvents = deduped
+    aiRewriteState.debugEvents = deduped.slice(-debugLogLimit);
+    aiRewriteState.criticalDebugEvents = deduped
         .filter(event => criticalDebugStages.has(event.stage))
         .slice(-criticalDebugLogLimit);
-    writeStoredDebugEvents(runtimeState.aiRewrite.debugEvents);
-    writeStoredCriticalDebugEvents(runtimeState.aiRewrite.criticalDebugEvents);
+    writeStoredDebugEvents(aiRewriteState.debugEvents);
+    writeStoredCriticalDebugEvents(aiRewriteState.criticalDebugEvents);
     return deduped;
 }
 
@@ -307,7 +310,11 @@ function formatDebugDisplayEvents(events) {
 function refreshMountedDebugDisplay(events) {
     try {
         const element = document?.getElementById?.('blai-ai-debug-log');
-        if (element) element.textContent = formatDebugDisplayEvents(events);
+        const workspace = element?.closest?.('#blai-feedback-workspace');
+        if (workspace?.getAttribute?.('aria-hidden') === 'false'
+            && workspace?.dataset?.feedbackView === 'runtime-log') {
+            element.textContent = formatDebugDisplayEvents(events);
+        }
     } catch {
         // Ignore absent or unavailable DOM; runtime/storage logging still works.
     }
@@ -321,9 +328,13 @@ export function getAiRewriteDebugLogText() {
     return JSON.stringify(getMergedAiRewriteDebugEvents(), null, 2);
 }
 
+export function getAiRewriteRuntimeLog() {
+    return getMergedAiRewriteDebugEvents();
+}
+
 export function clearAiRewriteDebugLog() {
-    runtimeState.aiRewrite.debugEvents = [];
-    runtimeState.aiRewrite.criticalDebugEvents = [];
+    aiRewriteState.debugEvents = [];
+    aiRewriteState.criticalDebugEvents = [];
     refreshMountedDebugDisplay([]);
     try {
         localStorage.removeItem(debugLogStorageKey);
