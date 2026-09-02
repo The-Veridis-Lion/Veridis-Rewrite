@@ -245,6 +245,10 @@ export const defaultSettings = {
         digest: "",
     },
     protectPersonaDescription: false,
+    guidedTourSeen: {
+        main: false,
+        deepClean: false,
+    },
     aiRewrite: { ...defaultAiRewriteSettings },
     legacySettingsCopied: false,
 };

@@ -161,6 +161,7 @@ export function maybeCopyLegacySettings() {
     });
 
     settings.aiRewrite = { ...defaultAiRewriteSettings };
+    settings.guidedTourSeen = { main: true, deepClean: true };
     settings.legacySettingsCopied = true;
     legacySettingsCopiedThisBoot = true;
     logger.info('[屏蔽词净化助手 AI 改写版] 已复制旧版设置到独立命名空间');
@@ -195,6 +196,7 @@ export function ensureSettingsShape() {
         settings.zhVariantCompatEnabled = false;
     }
     if (settings.protectPersonaDescription === undefined) settings.protectPersonaDescription = false;
+    if (settings.guidedTourSeen === undefined) settings.guidedTourSeen = { main: true, deepClean: true };
     normalizeAiRewriteSettings(settings);
     if (settings.legacySettingsCopied === undefined) settings.legacySettingsCopied = false;
     cleanupInvalidPresetBindings();
