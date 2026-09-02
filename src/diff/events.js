@@ -10,8 +10,6 @@ import {
 } from '../chat/cleanse.js';
 import { refreshMessageDisplay } from '../chat/display.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
-import { getMessageDomNode } from '../dom/message.js';
-import { purifyDOM } from '../dom/purify.js';
 import { clearTrackedDiffEntry, diffRuntimeState, getDiffComparisonForMessage, getDiffSnippetsForMessage, getDiffStateForMessage, refreshDiffCacheIfStale, syncTrackedIndicesToLatestAssistantMessages } from './state.js';
 import { injectDiffButtons } from './view.js';
 import { escapeHtml } from './compare.js';
@@ -263,8 +261,6 @@ export function bindDiffEvents() {
         const { chat } = getAppContext();
         if (!Number.isInteger(index) || index < 0 || !Array.isArray(chat) || !msg) return;
         refreshMessageDisplay(index, { allowReloadFallback: true, emitRenderedEvent: 'auto' });
-        const messageNode = getMessageDomNode(index);
-        if (messageNode && msg.__blai_is_reverted !== true) purifyDOM(messageNode);
         injectDiffButtons([index]);
         renderDiffModalContent(index);
         queueIncrementalChatSave();

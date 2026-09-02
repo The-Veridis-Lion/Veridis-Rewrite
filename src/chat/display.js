@@ -6,7 +6,6 @@ import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { ensureMessageDiffButton } from '../diff/view.js';
 import { beginAtomicMessageDisplaySwap, getMessageDomNode } from '../dom/message.js';
-import { purifyDOM } from '../dom/purify.js';
 import { getSillyTavernContextSnapshot } from '../host/context.js';
 import { isBaiBaiToolkitInstalled } from '../integrations/baiBai.js';
 import { isLoreFrameInstalled } from '../integrations/loreFrame.js';
@@ -128,13 +127,12 @@ function schedulePostRefreshDomSettle(index) {
     const existingTimers = postRefreshDomSettleTimers.get(index);
     if (Array.isArray(existingTimers)) existingTimers.forEach((timer) => clearTimeout(timer));
 
-    const delays = isBaiBaiToolkitInstalled() ? [120, 450, 1000] : [120, 450];
+    const delays = [120, 450];
     const timers = delays.map((delay) => {
         return setTimeout(() => {
             const messageNode = getMessageDomNode(index);
             if (!messageNode) return;
             try {
-                purifyDOM(messageNode);
                 ensureMessageDiffButton(index, messageNode);
             } catch (error) {
                 logger.warn(`宿主刷新后 DOM 收敛失败 index=${index}`, error);
