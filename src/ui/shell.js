@@ -13,7 +13,7 @@ function applyTauriMobileSurface(selector, surface) {
 export function annotateTauriMobileSurfaces() {
     applyTauriMobileSurface('#blai-purifier-popup, #blai-deep-clean-workspace, #blai-feedback-workspace', 'fullscreen-window');
     applyTauriMobileSurface('.blai-modal-shell, #blai-rule-transfer-modal, #blai-diff-modal, #blai-loading-overlay', 'backdrop');
-    applyTauriMobileSurface('.blai-modal-card, .blai-transfer-content, .blai-diff-modal-card, .blai-loading-panel, .blai-scope-tag-editor-card', 'fullscreen-window');
+    applyTauriMobileSurface('.blai-modal-card:not(.blai-tour-card), .blai-transfer-content, .blai-diff-modal-card, .blai-loading-panel, .blai-scope-tag-editor-card', 'fullscreen-window');
     applyTauriMobileSurface('.blai-toast', 'free-window');
 }
 
