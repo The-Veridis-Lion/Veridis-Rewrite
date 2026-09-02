@@ -11,7 +11,6 @@ import { rulesRuntimeState } from '../rules/state.js';
 import { ensureMessageDiffButton, injectDiffButtons } from '../diff/view.js';
 import { buildDiffResultFromPair, buildDiffSnippetsFromText } from '../diff/compare.js';
 import { getMessageDomNode } from '../dom/message.js';
-import { purifyDOM } from '../dom/purify.js';
 import { commitCurrentMessageText, getMessageDiffBranchKey } from './messageBranch.js';
 import { clearAllMessageDiffMeta, getMessageDiffMeta, isMessageAiFinal, isMessageFinalizedForCurrentBranch, isMessageManualFinal, writeMessageDiffProgram } from '../diff/messageMeta.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
@@ -419,7 +418,6 @@ export function performIncrementalCleanse(payload, options = {}) {
     const displayedContentChanged = beforeDisplayText !== (msg?.extra?.display_text ?? msg?.mes);
     const messageNode = getMessageDomNode(index);
     if (messageNode) {
-        if (!options.skipPurifyDom) purifyDOM(messageNode);
         ensureMessageDiffButton(index, messageNode);
     }
 

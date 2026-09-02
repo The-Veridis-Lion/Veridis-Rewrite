@@ -1,39 +1,22 @@
 import { annotateTauriMobileSurfaces, showResponsivePage } from './shell.js';
-
-export const guidedTourStorageKey = 'ultimate_purifier_ai_rewrite_guided_tour_v1';
+import { getAppContext } from '../host/appContext.js';
+import { extensionName } from '../settings/defaults.js';
 
 let activeTour = null;
 
-function tourStorage(storage = globalThis.localStorage) {
-    if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
-        throw new Error('Veridis Rewrite 导览无法访问本地存储。');
-    }
-    return storage;
+function guidedTourSeen(kind) {
+    const { extension_settings } = getAppContext();
+    const seen = extension_settings[extensionName].guidedTourSeen;
+    return kind === 'main' ? seen.main : seen.deepClean;
 }
 
-export function getGuidedTourState(storage = globalThis.localStorage) {
-    const value = tourStorage(storage).getItem(guidedTourStorageKey);
-    if (value === null) return { mainSeen: false, deepCleanSeen: false };
-    let parsed;
-    try {
-        parsed = JSON.parse(value);
-    } catch {
-        throw new Error('Veridis Rewrite 导览本地状态格式无效。');
-    }
-    const keys = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed).sort() : [];
-    if (keys.join(',') !== 'deepCleanSeen,mainSeen' || typeof parsed.mainSeen !== 'boolean' || typeof parsed.deepCleanSeen !== 'boolean') {
-        throw new Error('Veridis Rewrite 导览本地状态结构无效。');
-    }
-    return { mainSeen: parsed.mainSeen, deepCleanSeen: parsed.deepCleanSeen };
-}
-
-export function markGuidedTourSeen(kind, storage = globalThis.localStorage) {
-    const state = getGuidedTourState(storage);
-    if (kind === 'main') state.mainSeen = true;
-    else if (kind === 'deep-clean') state.deepCleanSeen = true;
+function markGuidedTourSeen(kind) {
+    const { extension_settings, saveSettingsDebounced } = getAppContext();
+    const seen = extension_settings[extensionName].guidedTourSeen;
+    if (kind === 'main') seen.main = true;
+    else if (kind === 'deep-clean') seen.deepClean = true;
     else throw new TypeError(`Unknown Veridis Rewrite guided tour: ${kind}`);
-    tourStorage(storage).setItem(guidedTourStorageKey, JSON.stringify(state));
-    return state;
+    saveSettingsDebounced();
 }
 
 function currentMainPage() {
@@ -426,7 +409,7 @@ function onTourClick(event) {
         return;
     }
     if (action === 'finish' || action === 'skip') { finishOrSkip(); return; }
-    if (action === 'direct') { markGuidedTourSeen(activeTour.kind); closeGuidedTour(); return; }
+    if (action === 'direct') { if (activeTour?.firstUse) markGuidedTourSeen(activeTour.kind); closeGuidedTour(); return; }
 }
 
 function showWelcome(kind, launcher) {
@@ -442,8 +425,7 @@ function showWelcome(kind, launcher) {
 
 function offerFirstUse(kind) {
     try {
-        const state = getGuidedTourState();
-        if ((kind === 'main' ? state.mainSeen : state.deepCleanSeen) === true || activeTour) return;
+        if (guidedTourSeen(kind) === true || activeTour) return;
         showWelcome(kind, kind === 'main' ? document.getElementById('blai-tour-help') : document.getElementById('blai-deep-clean-tour-help'));
     } catch (error) {
         tourError(`${kind === 'main' ? 'Veridis Rewrite' : '深度净化'} 首次导览无法显示`, error);
