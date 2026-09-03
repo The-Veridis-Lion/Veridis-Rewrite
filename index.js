@@ -26,7 +26,8 @@ import { isLoreFrameInstalled } from './src/integrations/loreFrame.js';
 import { normalizeZhVariantSettings, restoreZhDictionaryPackageFromCache } from './src/zh/dictionary.js';
 import { createDefaultSettings, ensureSettingsShape, legacySettingsCopiedThisBoot, maybeCopyLegacySettings, maybeImportModifiedSettingsIntoSharedNamespace, migrateOldData, modifiedSettingsImportedThisBoot, needsCustomGlobalPromptMigrationConfirmation, resolveCustomGlobalPromptMigration } from './src/settings/migration.js';
 import { syncComposerButtonScript } from './src/aiRewrite/composerButton.js';
-import { collectInstalledEnabledExtensions } from './src/feedback/payload.js';
+import { readExtensionManifest } from './src/host/extensionManifest.js';
+import { collectInstalledEnabledExtensions, getEnabledExtensionExternalIds } from './src/feedback/payload.js';
 
 const { extension_settings, getContext: getSillyTavernContext } = extensionsModule;
 const veridisExternalId = 'third-party/Veridis-Rewrite';
@@ -67,6 +68,8 @@ async function captureVeridisCommit() {
     }
 }
 
+const readHostExtensionManifest = (externalId) => readExtensionManifest(externalId, extensionsModule.getExtensionManifest);
+
 initAppContext({
     extension_settings,
     saveSettingsDebounced,
@@ -80,7 +83,8 @@ initAppContext({
     getWorldInfoState: () => world_info,
     setWorldInfoCache: (name, data) => worldInfoCache.set(name, data),
     getCurrentPersonaIdentity: () => user_avatar,
-    getVeridisVersion: () => extensionsModule.getExtensionManifest(veridisExternalId)?.version || '',
+    veridisExternalId,
+    readExtensionManifest: readHostExtensionManifest,
     getVeridisCommit: () => veridisCommit,
     getSillyTavernVersion: () => scriptModule.CLIENT_VERSION,
     getAiRewriteDiagnosticConfig: () => {
@@ -101,13 +105,19 @@ initAppContext({
         };
     },
     getCoarsePlatform,
-    getInstalledEnabledExtensions: () => collectInstalledEnabledExtensions({
-        extensionNames: extensionsModule.extensionNames,
-        extensionTypes: extensionsModule.extensionTypes,
-        disabledExtensions: extension_settings.disabledExtensions,
-        getExtensionManifest: extensionsModule.getExtensionManifest,
-        veridisExternalId,
-    }),
+    getInstalledEnabledExtensions: async () => {
+        const externalIds = getEnabledExtensionExternalIds({
+            extensionNames: extensionsModule.extensionNames,
+            extensionTypes: extensionsModule.extensionTypes,
+            disabledExtensions: extension_settings.disabledExtensions,
+            veridisExternalId,
+        });
+        const manifestsByExternalId = Object.fromEntries(await Promise.all(externalIds.map(async (externalId) => [
+            externalId,
+            await readHostExtensionManifest(externalId),
+        ])));
+        return collectInstalledEnabledExtensions({ externalIds, manifestsByExternalId });
+    },
 });
 
 jQuery(() => {

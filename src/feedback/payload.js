@@ -42,10 +42,23 @@ function projectExtension(extension) {
 }
 
 export function collectInstalledEnabledExtensions({
+    externalIds = [],
+    manifestsByExternalId = {},
+} = {}) {
+    return (Array.isArray(externalIds) ? externalIds : []).map((externalId) => {
+        const manifest = manifestsByExternalId?.[externalId];
+        return projectExtension({
+            externalId,
+            displayName: manifest?.display_name || externalId,
+            version: manifest?.version || '',
+        });
+    });
+}
+
+export function getEnabledExtensionExternalIds({
     extensionNames = [],
     extensionTypes = {},
     disabledExtensions = [],
-    getExtensionManifest,
     veridisExternalId = '',
 } = {}) {
     const disabled = new Set(Array.isArray(disabledExtensions) ? disabledExtensions : []);
@@ -54,23 +67,14 @@ export function collectInstalledEnabledExtensions({
             (extensionTypes?.[externalId] === 'local' || extensionTypes?.[externalId] === 'global')
             && externalId !== veridisExternalId
             && !disabled.has(externalId)
-        ))
-        .map((externalId) => {
-            const manifest = typeof getExtensionManifest === 'function'
-                ? getExtensionManifest(externalId)
-                : null;
-            return projectExtension({
-                externalId,
-                displayName: manifest?.display_name || externalId,
-                version: manifest?.version || '',
-            });
-        });
+        ));
 }
 
-function defaultReaders() {
+export function getFeedbackPayloadReaders() {
     const appContext = getAppContext();
     return {
-        getVeridisVersion: appContext.getVeridisVersion,
+        veridisExternalId: appContext.veridisExternalId,
+        readExtensionManifest: appContext.readExtensionManifest,
         getVeridisCommit: appContext.getVeridisCommit,
         getSillyTavernVersion: appContext.getSillyTavernVersion,
         getAiRewriteDiagnosticConfig: appContext.getAiRewriteDiagnosticConfig,
@@ -84,7 +88,7 @@ function defaultReaders() {
     };
 }
 
-export function buildFeedbackPayload(form = {}, selected = {}, readers = defaultReaders()) {
+export function buildFeedbackPayload(form = {}, selected = {}, readers = getFeedbackPayloadReaders()) {
     const type = String(form.type || '');
     if (!feedbackTypes.includes(type)) throw new Error('Type is required.');
 

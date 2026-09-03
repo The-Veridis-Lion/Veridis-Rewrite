@@ -1,5 +1,5 @@
 // Owns feedback workspace action binding and the exact serialized preview submitted to the gateway.
-import { buildFeedbackPayload } from './payload.js';
+import { buildFeedbackPayload, getFeedbackPayloadReaders } from './payload.js';
 import { submitFeedbackPayloadJson } from './client.js';
 import {
     clearDeepCleanDiagnostics,
@@ -27,8 +27,25 @@ import { showToast } from '../ui/notifications.js';
 
 let previewPayloadJson = '';
 
-export function createFeedbackPreviewPayloadJson(form, selected, readers) {
-    previewPayloadJson = JSON.stringify(buildFeedbackPayload(form, selected, readers), null, 2);
+async function resolveFeedbackPreviewReaders(selected, readers) {
+    const unresolvedReaders = readers || getFeedbackPayloadReaders();
+    if (typeof unresolvedReaders.readExtensionManifest !== 'function') return unresolvedReaders;
+
+    const veridisManifest = await unresolvedReaders.readExtensionManifest(unresolvedReaders.veridisExternalId);
+    const resolvedReaders = {
+        ...unresolvedReaders,
+        getVeridisVersion: () => veridisManifest?.version || '',
+    };
+    if (selected.installedEnabledExtensions === true) {
+        const extensions = await unresolvedReaders.getInstalledEnabledExtensions();
+        resolvedReaders.getInstalledEnabledExtensions = () => extensions;
+    }
+    return resolvedReaders;
+}
+
+export async function createFeedbackPreviewPayloadJson(form, selected, readers) {
+    const resolvedReaders = await resolveFeedbackPreviewReaders(selected, readers);
+    previewPayloadJson = JSON.stringify(buildFeedbackPayload(form, selected, resolvedReaders), null, 2);
     return previewPayloadJson;
 }
 
@@ -92,9 +109,9 @@ export function bindFeedbackEvents() {
         showFeedbackStatus('内容已更改，请重新生成预览。', 'notice');
     });
 
-    $(document).off('click', '#blai-feedback-preview-generate').on('click', '#blai-feedback-preview-generate', () => {
+    $(document).off('click', '#blai-feedback-preview-generate').on('click', '#blai-feedback-preview-generate', async () => {
         try {
-            const payloadJson = createFeedbackPreviewPayloadJson(readFeedbackForm(), readDiagnosticSelections());
+            const payloadJson = await createFeedbackPreviewPayloadJson(readFeedbackForm(), readDiagnosticSelections());
             renderFeedbackPreview(payloadJson);
             document.getElementById('blai-feedback-preview-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             showFeedbackStatus('预览已生成。请检查完整 JSON 后确认提交。', 'success');
