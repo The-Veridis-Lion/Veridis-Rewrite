@@ -3,8 +3,8 @@ import { getAppContext } from '../host/appContext.js';
 
 // Scope Tag parsing, normalization, and protection semantics.
 
-const SCOPE_TAG_NAME_PATTERN = /^[\p{L}\p{N}_:][\p{L}\p{N}\p{M}_.:-]*$/u;
-const SCOPE_TAG_START_PATTERN = /^<([\p{L}\p{N}_:][\p{L}\p{N}\p{M}_.:-]*)>$/u;
+const SCOPE_TAG_NAME_PATTERN = /^[\p{L}\p{N}_:][\p{L}\p{N}\p{M}_.:~-]*$/u;
+const SCOPE_TAG_START_PATTERN = /^<([\p{L}\p{N}_:][\p{L}\p{N}\p{M}_.:~-]*)>$/u;
 const SCOPE_TAG_LABEL_SEPARATOR = '//';
 const DEFAULT_SCOPE_TAG_LABEL = '范围';
 export const DEFAULT_SCOPE_TAG_GROUP_ID = 'default';
@@ -103,7 +103,7 @@ export function parseScopeTagInput(input) {
         const bracketMatch = tagSource.match(/^<([^<>/\s][^<>]*)>$/);
         const rawName = bracketMatch ? bracketMatch[1].trim() : tagSource.replace(/[<>]/g, '').trim();
         if (rawName && !SCOPE_TAG_NAME_PATTERN.test(rawName)) {
-            return { ok: false, error: { message: '标签名必须以中文、字母、数字、下划线或冒号开头，可包含中文、字母、数字、冒号、下划线、短横线和点号。' } };
+            return { ok: false, error: { message: '标签名必须以中文、字母、数字、下划线或冒号开头，可包含中文、字母、数字、冒号、下划线、短横线、点号和波浪号。' } };
         }
         return { ok: false, error: { message: '请输入标签名或无属性起始标签，例如 状态、UpdateVariable、<horae>。' } };
     }
