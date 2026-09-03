@@ -30,7 +30,9 @@ import { collectInstalledEnabledExtensions } from './src/feedback/payload.js';
 
 const { extension_settings, getContext: getSillyTavernContext } = extensionsModule;
 const veridisExternalId = 'third-party/Veridis-Rewrite';
+const veridisExtensionFolderName = 'Veridis-Rewrite';
 let isBooted = false;
+let veridisCommit = '';
 
 function getCoarsePlatform() {
     const platform = String(globalThis.navigator?.userAgentData?.platform || globalThis.navigator?.platform || '').toLowerCase();
@@ -40,6 +42,29 @@ function getCoarsePlatform() {
     if (platform.includes('mac')) return 'macOS';
     if (platform.includes('linux')) return 'Linux';
     return 'Unknown';
+}
+
+async function captureVeridisCommit() {
+    const context = getSillyTavernContext();
+    const getRequestHeaders = context?.getRequestHeaders;
+    if (typeof getRequestHeaders !== 'function') return;
+
+    try {
+        const response = await fetch('/api/extensions/version', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({
+                extensionName: veridisExtensionFolderName,
+                global: extensionsModule.extensionTypes[veridisExternalId] === 'global',
+            }),
+        });
+        if (!response.ok) return;
+
+        const currentCommitHash = String((await response.json())?.currentCommitHash || '').trim();
+        if (currentCommitHash.length >= 7) veridisCommit = currentCommitHash.slice(0, 7);
+    } catch {
+        // Feedback reports an unavailable commit without affecting the running extension.
+    }
 }
 
 initAppContext({
@@ -56,6 +81,7 @@ initAppContext({
     setWorldInfoCache: (name, data) => worldInfoCache.set(name, data),
     getCurrentPersonaIdentity: () => user_avatar,
     getVeridisVersion: () => extensionsModule.getExtensionManifest(veridisExternalId)?.version || '',
+    getVeridisCommit: () => veridisCommit,
     getSillyTavernVersion: () => scriptModule.CLIENT_VERSION,
     getAiRewriteDiagnosticConfig: () => {
         const aiRewrite = extension_settings[extensionName].aiRewrite;
@@ -97,6 +123,7 @@ jQuery(() => {
         if (isBooted) return;
         isBooted = true;
         await waitForTauriTavernReady();
+        await captureVeridisCommit();
         logger.info('[屏蔽词净化助手] 启动初始化开始...');
         if (isTauriTavernHost()) logger.info('[屏蔽词净化助手] 已启用 TauriTavern 兼容层');
         if (isBaiBaiToolkitInstalled()) logger.info('[屏蔽词净化助手] 已启用柏宝箱兼容层');

@@ -13,6 +13,7 @@ const appContext = {
     setWorldInfoCache: null,
     getCurrentPersonaIdentity: null,
     getVeridisVersion: null,
+    getVeridisCommit: null,
     getSillyTavernVersion: null,
     getAiRewriteDiagnosticConfig: null,
     getCoarsePlatform: null,

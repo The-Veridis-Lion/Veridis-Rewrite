@@ -71,6 +71,7 @@ function defaultReaders() {
     const appContext = getAppContext();
     return {
         getVeridisVersion: appContext.getVeridisVersion,
+        getVeridisCommit: appContext.getVeridisCommit,
         getSillyTavernVersion: appContext.getSillyTavernVersion,
         getAiRewriteDiagnosticConfig: appContext.getAiRewriteDiagnosticConfig,
         getPlatform: appContext.getCoarsePlatform,
@@ -106,6 +107,7 @@ export function buildFeedbackPayload(form = {}, selected = {}, readers = default
         details: requiredText(form.details, 'Details'),
         environment: {
             veridisVersion: requiredReaderValue(readers.getVeridisVersion, 'Veridis version'),
+            veridisCommit: requiredReaderValue(readers.getVeridisCommit, 'Veridis commit'),
             sillyTavernVersion: requiredReaderValue(readers.getSillyTavernVersion, 'SillyTavern version'),
             runtime: requiredReaderValue(readers.getRuntime, 'Runtime'),
             platform: requiredReaderValue(readers.getPlatform, 'Platform'),
