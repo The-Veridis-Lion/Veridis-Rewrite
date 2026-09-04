@@ -28,6 +28,7 @@ import { createDefaultSettings, ensureSettingsShape, legacySettingsCopiedThisBoo
 import { syncComposerButtonScript } from './src/aiRewrite/composerButton.js';
 import { readExtensionManifest } from './src/host/extensionManifest.js';
 import { collectInstalledEnabledExtensions, getEnabledExtensionExternalIds } from './src/feedback/payload.js';
+import { bindUpdateStatusEvents, initializeUpdateStatus } from './src/update/status.js';
 
 const { extension_settings, getContext: getSillyTavernContext } = extensionsModule;
 const veridisExternalId = 'third-party/Veridis-Rewrite';
@@ -48,7 +49,7 @@ function getCoarsePlatform() {
 async function captureVeridisCommit() {
     const context = getSillyTavernContext();
     const getRequestHeaders = context?.getRequestHeaders;
-    if (typeof getRequestHeaders !== 'function') return;
+    if (typeof getRequestHeaders !== 'function') return null;
 
     try {
         const response = await fetch('/api/extensions/version', {
@@ -59,12 +60,15 @@ async function captureVeridisCommit() {
                 global: extensionsModule.extensionTypes[veridisExternalId] === 'global',
             }),
         });
-        if (!response.ok) return;
+        if (!response.ok) return null;
 
-        const currentCommitHash = String((await response.json())?.currentCommitHash || '').trim();
+        const versionInfo = await response.json();
+        const currentCommitHash = String(versionInfo?.currentCommitHash || '').trim();
         if (currentCommitHash.length >= 7) veridisCommit = currentCommitHash.slice(0, 7);
+        return versionInfo;
     } catch {
         // Feedback reports an unavailable commit without affecting the running extension.
+        return null;
     }
 }
 
@@ -133,7 +137,7 @@ jQuery(() => {
         if (isBooted) return;
         isBooted = true;
         await waitForTauriTavernReady();
-        await captureVeridisCommit();
+        const versionInfo = await captureVeridisCommit();
         logger.info('[屏蔽词净化助手] 启动初始化开始...');
         if (isTauriTavernHost()) logger.info('[屏蔽词净化助手] 已启用 TauriTavern 兼容层');
         if (isBaiBaiToolkitInstalled()) logger.info('[屏蔽词净化助手] 已启用柏宝箱兼容层');
@@ -151,6 +155,7 @@ jQuery(() => {
             setTimeout(() => showToast('已复制旧版规则与预设到 AI 改写版'), 250);
         }
         bindEvents();
+        bindUpdateStatusEvents();
         syncComposerButtonScript(extension_settings[extensionName].showComposerAiRewriteButton);
         initRealtimeInterceptor();
         updateToolbarUI();
@@ -158,6 +163,10 @@ jQuery(() => {
         restoreDiffStateFromChatMetadata();
         performGlobalChatMaintenance();
         logger.info('[屏蔽词净化助手] 启动初始化完成');
+        void initializeUpdateStatus({
+            versionInfo,
+            isGlobal: extensionsModule.extensionTypes[veridisExternalId] === 'global',
+        });
     };
 
     if (typeof eventSource !== 'undefined' && event_types.APP_READY) {

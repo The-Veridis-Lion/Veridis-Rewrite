@@ -237,6 +237,124 @@
     margin-top: 4px;
 }
 
+#blai-purifier-popup .blai-tools-version-content {
+    padding-top: 14px;
+}
+
+#blai-purifier-popup .blai-tools-version-details {
+    width: 100%;
+    display: grid;
+    gap: 10px;
+}
+
+#blai-purifier-popup .blai-tools-version-body {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: start;
+    gap: 10px;
+}
+
+#blai-purifier-popup .blai-tools-version-body > .blai-tools-version-note-list,
+#blai-purifier-popup .blai-tools-version-body > .blai-tools-version-minor-copy {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+#blai-purifier-popup .blai-tools-version-status-row {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    align-items: baseline;
+    column-gap: 16px;
+}
+
+#blai-purifier-popup .blai-tools-version-current {
+    display: inline-flex;
+    align-items: baseline;
+    grid-column: 1;
+    justify-self: start;
+    gap: 7px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+#blai-purifier-popup .blai-tools-version-label,
+#blai-purifier-popup .blai-tools-version-minor-copy,
+#blai-purifier-popup .blai-tools-version-error {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+#blai-purifier-popup .blai-tools-version-status {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+    grid-column: 3;
+    justify-self: end;
+    white-space: nowrap;
+    text-align: right;
+}
+
+#blai-purifier-popup .blai-tools-version-value {
+    color: var(--text-main);
+    font-size: 14px;
+    font-weight: 800;
+}
+
+#blai-purifier-popup .blai-tools-version-status.is-latest,
+#blai-purifier-popup .blai-tools-version-status.is-update {
+    color: var(--accent-color);
+    font-weight: 760;
+}
+
+#blai-purifier-popup .blai-tools-version-note-list {
+    margin: 2px 0 0;
+    padding-left: 18px;
+    display: grid;
+    gap: 5px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+#blai-purifier-popup .blai-tools-version-update-action {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    justify-self: end;
+    min-height: 34px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--accent-color);
+    color: var(--bg-base);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 760;
+    cursor: pointer;
+}
+
+#blai-purifier-popup .blai-tools-version-update-action:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-color) 88%, var(--text-main));
+}
+
+#blai-purifier-popup .blai-tools-version-update-action:disabled {
+    opacity: .55;
+    cursor: wait;
+}
+
+#blai-purifier-popup .blai-tools-version-error {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    color: var(--danger-color, #d45b5b);
+}
+
 #blai-purifier-popup .blai-tools-header-description {
     margin-top: 4px;
     display: flex;
@@ -787,6 +905,20 @@
     box-sizing: border-box;
 }}
 
+@media (max-width: 600px) {#blai-purifier-popup .blai-tools-version-update-action {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-tools-version-body {
+    grid-template-columns: minmax(0, 1fr);
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-tools-version-error {
+    grid-row: auto;
+}}
+
 @media (max-width: 600px) {#blai-purifier-popup .blai-tools-binding-item {
     padding: 0;
 }}
@@ -841,6 +973,10 @@
 }}
 
 @media (max-width: 600px) {#blai-purifier-popup .blai-tools-feedback-section {
+    order: 3;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-tools-version-section {
     order: 2;
 }}
 
