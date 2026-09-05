@@ -144,7 +144,7 @@ export function buildSimpleTargetPattern(target = '', useZhVariantCompat = false
     return pattern;
 }
 
-function buildTextTargetEntries(targets, replacementsMap, useZhVariantCompat = false, zhVariantOptions = {}) {
+function buildTextTargetEntries(targets, replacementsMap, rewriteModes, useZhVariantCompat = false, zhVariantOptions = {}) {
     return [...new Set(targets)]
         .sort((a, b) => b.length - a.length)
         .map((target) => {
@@ -152,6 +152,7 @@ function buildTextTargetEntries(targets, replacementsMap, useZhVariantCompat = f
             const entry = {
                 target,
                 replacements: replacementsMap[target] || [],
+                rewriteMode: rewriteModes[target] || 'program',
                 pattern,
             };
             if (useZhVariantCompat) {
@@ -189,13 +190,15 @@ function createProcessorBucket() {
     return {
         textTargets: [],
         wordToReplacements: Object.create(null),
+        textTargetRewriteModes: Object.create(null),
         processors: [],
     };
 }
 
-function addTextTargetToBucket(bucket, target, replacements) {
+function addTextTargetToBucket(bucket, target, replacements, rewriteMode) {
     bucket.textTargets.push(target);
     bucket.wordToReplacements[target] = replacements;
+    bucket.textTargetRewriteModes[target] = rewriteMode;
 }
 
 function addProcessorToBucket(bucket, processor) {
@@ -205,11 +208,18 @@ function addProcessorToBucket(bucket, processor) {
 function finalizeProcessorBucket(bucket, useZhVariantCompat, zhVariantOptions) {
     const processors = [...bucket.processors];
     if (bucket.textTargets.length > 0) {
-        const targetEntries = buildTextTargetEntries(bucket.textTargets, bucket.wordToReplacements, useZhVariantCompat, zhVariantOptions);
+        const targetEntries = buildTextTargetEntries(
+            bucket.textTargets,
+            bucket.wordToReplacements,
+            bucket.textTargetRewriteModes,
+            useZhVariantCompat,
+            zhVariantOptions,
+        );
         const textRegex = new RegExp(`(${targetEntries.map((entry) => entry.pattern).join('|')})`, 'gmu');
         processors.unshift({
             regex: textRegex,
             replacerMap: bucket.wordToReplacements,
+            targetRewriteModes: bucket.textTargetRewriteModes,
             targetEntries: useZhVariantCompat ? targetEntries : undefined,
             targetEntriesByLength: useZhVariantCompat ? groupTextTargetEntriesByLength(targetEntries) : undefined,
             kind: 'text',
@@ -243,8 +253,8 @@ export function compileProcessors(rules = [], options = {}) {
             if (mode === 'text') {
                 for (const t of targets) {
                     if (t) {
-                        if (includeInData) addTextTargetToBucket(dataBucket, t, replacements);
-                        if (includeInVisual) addTextTargetToBucket(visualBucket, t, replacements);
+                        if (includeInData) addTextTargetToBucket(dataBucket, t, replacements, rewriteMode);
+                        if (includeInVisual) addTextTargetToBucket(visualBucket, t, replacements, rewriteMode);
                     }
                 }
             } else if (mode === 'regex') {
@@ -258,6 +268,7 @@ export function compileProcessors(rules = [], options = {}) {
                         const processorBase = {
                             replacements,
                             kind: 'regex',
+                            rewriteMode,
                             domSafe: isRegexDomSafe(compiled.value.pattern),
                         };
                         if (includeInData) {
@@ -285,8 +296,8 @@ export function compileProcessors(rules = [], options = {}) {
                                 continue;
                             }
 
-                            if (includeInData) addProcessorToBucket(dataBucket, { regex: new RegExp(pattern, 'gmu'), replacements, kind: 'simple', domSafe: true });
-                            if (includeInVisual) addProcessorToBucket(visualBucket, { regex: new RegExp(pattern, 'gmu'), replacements, kind: 'simple', domSafe: true });
+                            if (includeInData) addProcessorToBucket(dataBucket, { regex: new RegExp(pattern, 'gmu'), replacements, kind: 'simple', rewriteMode, domSafe: true });
+                            if (includeInVisual) addProcessorToBucket(visualBucket, { regex: new RegExp(pattern, 'gmu'), replacements, kind: 'simple', rewriteMode, domSafe: true });
                         } catch (e) {
                             warn(`简易规则解析失败: ${t}`);
                         }
@@ -421,6 +432,30 @@ export function resolveProcessorReplacement(proc, procIndex, match, args = [], d
     return pickReplacement(reps, repKey);
 }
 
+function getProcessorReplacementCandidatesForMatch(proc, match) {
+    if (proc?.kind === 'regex' || proc?.kind === 'simple') return proc.replacements || [];
+
+    const exactReps = proc?.replacerMap?.[match];
+    if (exactReps) return exactReps;
+    return findTextTargetEntryForMatch(proc, match)?.replacements || [];
+}
+
+function getProcessorRewriteModeForMatch(proc, match) {
+    if (proc?.kind === 'regex' || proc?.kind === 'simple') return proc.rewriteMode || 'program';
+
+    if (proc?.replacerMap?.[match]) return proc.targetRewriteModes?.[match] || 'program';
+    return findTextTargetEntryForMatch(proc, match)?.rewriteMode || 'program';
+}
+
+/**
+ * Whether streaming can project this match without choosing a Program candidate.
+ * AI visual rules retain their separate deterministic presentation contract.
+ */
+export function isStreamingVisualReplacementUnambiguous(proc, match) {
+    if (getProcessorRewriteModeForMatch(proc, match) === 'ai') return true;
+    return getProcessorReplacementCandidatesForMatch(proc, match).length <= 1;
+}
+
 function projectTrackedRangesThroughReplacement(ranges, start, end, replacementLength) {
     const delta = replacementLength - (end - start);
     return ranges.map((range) => {
@@ -523,6 +558,8 @@ export function applyCompiledReplacementsWithTrackedRanges(originalText, process
         if (!proc?.regex || (options.domSafeOnly === true && proc.domSafe === false)) return;
         let priorReplacementDelta = 0;
         text = text.replace(proc.regex, (match, ...args) => {
+            if (options.deferMultiCandidateProgram === true
+                && !isStreamingVisualReplacementUnambiguous(proc, match)) return match;
             const replacement = String(resolveProcessorReplacement(proc, procIndex, match, args, deterministic) ?? '');
             const sourceStart = getReplaceCallbackOffset(args);
             if (sourceStart < 0) {

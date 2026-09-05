@@ -1,7 +1,7 @@
 import { getAppContext } from '../host/appContext.js';
 import { streamingRuntimeState } from '../host/streamingState.js';
 import { rulesRuntimeState } from '../rules/state.js';
-import { applyVisualMask, buildProcessors, collectScopedReplacementRanges, hasEnabledScopeTags, isStreamingVisualProcessorSafe, resolveProcessorReplacement } from '../rules/engine.js';
+import { applyVisualMask, buildProcessors, collectScopedReplacementRanges, hasEnabledScopeTags, isStreamingVisualProcessorSafe, isStreamingVisualReplacementUnambiguous, resolveProcessorReplacement } from '../rules/engine.js';
 import { getMessageDomNode } from './message.js';
 import { excludedMessageContentSelector, isProtectedNode, isRevertedMessageDomNode, isManualFinalMessageDomNode } from './protection.js';
 
@@ -358,6 +358,7 @@ function createStreamingSegment(nodes, runSnapshot, range) {
 function collectProcessorMatches(text, processor, processorIndex) {
     const matches = [];
     text.replace(processor.regex, (match, ...args) => {
+        if (!isStreamingVisualReplacementUnambiguous(processor, match)) return match;
         const hasNamedGroups = typeof args[args.length - 1] === 'object' && args[args.length - 1] !== null;
         const offset = Number(args[args.length - (hasNamedGroups ? 3 : 2)]);
         const replacement = String(resolveProcessorReplacement(processor, processorIndex, match, args, true) ?? '');
@@ -420,6 +421,7 @@ function applyStreamingMaskToRun(nodes, processors, scopedRanges = null) {
             const currentValue = node.nodeValue || '';
             let processorChanged = false;
             const nextValue = currentValue.replace(processor.regex, (match, ...args) => {
+                if (!isStreamingVisualReplacementUnambiguous(processor, match)) return match;
                 const replacement = String(resolveProcessorReplacement(processor, processorIndex, match, args, true) ?? '');
                 if (replacement !== match) processorChanged = true;
                 return replacement;
@@ -560,7 +562,9 @@ export function renderStreamingVisualMask(messageId, committedRawText, options =
     if (!messageNode || isRevertedMessageDomNode(messageNode) || isManualFinalMessageDomNode(messageNode)) return false;
     const surface = findTavernHelperStreamingSurface(messageNode) || messageNode.querySelector?.('.mes_text');
     const rawText = String(committedRawText || '');
-    return applyStreamingVisualMask(surface, rawText, applyVisualMask(rawText), options);
+    return applyStreamingVisualMask(surface, rawText, applyVisualMask(rawText, {
+        deferMultiCandidateProgram: true,
+    }), options);
 }
 
 export function replayStreamingVisualMask(messageId) {
