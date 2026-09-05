@@ -546,6 +546,7 @@ export function applyCompiledReplacementsWithTrackedRanges(originalText, process
 
     let text = source;
     let trackedRanges = (Array.isArray(ranges) ? ranges : []).map((range) => ({ ...range }));
+    let protectedRanges = (options.protectedRanges || []).map((range) => ({ ...range }));
     const projection = [];
     let valid = trackedRanges.every((range) => Number.isInteger(range.start)
         && Number.isInteger(range.end)
@@ -560,14 +561,16 @@ export function applyCompiledReplacementsWithTrackedRanges(originalText, process
         text = text.replace(proc.regex, (match, ...args) => {
             if (options.deferMultiCandidateProgram === true
                 && !isStreamingVisualReplacementUnambiguous(proc, match)) return match;
-            const replacement = String(resolveProcessorReplacement(proc, procIndex, match, args, deterministic) ?? '');
             const sourceStart = getReplaceCallbackOffset(args);
             if (sourceStart < 0) {
                 valid = false;
-                return replacement;
+                return String(resolveProcessorReplacement(proc, procIndex, match, args, deterministic) ?? '');
             }
             const start = sourceStart + priorReplacementDelta;
             const end = start + String(match).length;
+            if (protectedRanges.some((range) => start < range.end && range.start < end)) return match;
+            const replacement = String(resolveProcessorReplacement(proc, procIndex, match, args, deterministic) ?? '');
+            protectedRanges = projectTrackedRangesThroughReplacement(protectedRanges, start, end, replacement.length);
             projection.push([start, end, replacement.length]);
             trackedRanges = projectTrackedRangesThroughReplacement(trackedRanges, start, end, replacement.length);
             priorReplacementDelta += replacement.length - String(match).length;
@@ -872,8 +875,18 @@ export function applyScopedCompiledReplacementsWithTrackedRanges(originalText, p
             localRanges.push({ ...range, start: range.start - start, end: range.end - start });
         }
         const segment = source.slice(start, end);
+        // Keep normal full-message scope parsing; only replacement matches are protected.
+        const localOptions = options.protectedRanges ? {
+            ...options,
+            protectedRanges: options.protectedRanges
+                .filter((range) => range.start < end && start < range.end)
+                .map((range) => ({
+                    start: Math.max(range.start, start) - start,
+                    end: Math.min(range.end, end) - start,
+                })),
+        } : options;
         const result = shouldTransform
-            ? applyCompiledReplacementsWithTrackedRanges(segment, processors, deterministic, localRanges, options)
+            ? applyCompiledReplacementsWithTrackedRanges(segment, processors, deterministic, localRanges, localOptions)
             : { text: segment, ranges: localRanges, projection: [], valid: true };
         valid = valid && result.valid;
         return result;

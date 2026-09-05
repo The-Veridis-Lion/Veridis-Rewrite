@@ -6,7 +6,7 @@ import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { getLatestTrackableDiffIndices, isAssistantMessage } from '../diff/tracking.js';
-import { computeMessageSignature, diffRuntimeState, hasRealDiffCache, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, writeReadyDiffCache, clearTrackedDiffEntry } from '../diff/state.js';
+import { computeMessageSignature, diffRuntimeState, refreshDiffCacheIfStale, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, writeReadyDiffCache, clearTrackedDiffEntry } from '../diff/state.js';
 import { rulesRuntimeState } from '../rules/state.js';
 import { ensureMessageDiffButton, injectDiffButtons } from '../diff/view.js';
 import { buildDiffResultFromPair, buildDiffSnippetsFromText } from '../diff/compare.js';
@@ -78,7 +78,7 @@ export function resolveLatestTrackableMessageIndex(payload) {
 
 export function resolveMessageDiffSource(msg, explicitSource) {
     const currentMes = typeof msg?.mes === 'string' ? msg.mes : '';
-    if (isMessageAiFinal(msg)) return currentMes;
+    if (isMessageAiFinal(msg) || isMessageManualFinal(msg)) return currentMes;
     if (typeof explicitSource === 'string') return explicitSource;
 
     const diffMeta = getMessageDiffMeta(msg);
@@ -93,11 +93,11 @@ export function resolveMessageDiffSource(msg, explicitSource) {
     return currentMes;
 }
 
-export function syncMessageDiffMetadata(msg, sourceMes, cleanedMes, programProjection) {
+export function syncMessageDiffMetadata(msg, sourceMes, cleanedMes) {
     const normalizedCleanedMes = typeof cleanedMes === 'string' ? cleanedMes : '';
     const branchKey = getMessageDiffBranchKey(msg);
     const hasDiff = sourceMes !== normalizedCleanedMes;
-    const metadataChanged = writeMessageDiffProgram(msg, branchKey, sourceMes, normalizedCleanedMes, programProjection);
+    const metadataChanged = writeMessageDiffProgram(msg, branchKey, sourceMes, normalizedCleanedMes);
     const signature = computeMessageSignature(msg);
     return { signature, metadataChanged, hasDiff };
 }
@@ -231,6 +231,10 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     }
     const trackDiff = getLatestTrackableDiffIndices().includes(index);
 
+    if (options.explicitRecleanse !== true && isMessageFinalizedForCurrentBranch(msg)) {
+        if (trackDiff) refreshDiffCacheIfStale(index);
+        return false;
+    }
     if (isMessageAiFinal(msg)) return false;
     if (isMessageManualFinal(msg) && options.allowManualFinal !== true) return false;
 
@@ -259,7 +263,6 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     );
     if (!preservedProgram.valid) return false;
     const cleanedText = preservedProgram.text;
-    const programProjection = [...diffResult.programProjection, ...preservedProgram.projection];
     const committedDiff = buildDiffResultFromPair(metadataSourceMes, cleanedText);
     const mainCache = {
         snippets: Array.from(new Set(committedDiff.snippets || [])),
@@ -313,7 +316,6 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
             msg,
             metadataSourceMes,
             typeof msg.mes === 'string' ? msg.mes : '',
-            programProjection,
         );
         if (metadataChanged) changed = true;
         writeReadyDiffCache(index, signature, {
@@ -368,6 +370,7 @@ export function performIncrementalCleanse(payload, options = {}) {
         return;
     }
     if (isMessageManualFinal(msg)) {
+        refreshDiffCacheIfStale(index);
         injectDiffButtons([index]);
         return {
             index,
@@ -386,11 +389,8 @@ export function performIncrementalCleanse(payload, options = {}) {
         if (options.visualOnly) markDiffComparisonPending(index, signature);
         else {
             const previousState = diffRuntimeState.diffMessageStates.get(index);
-            const alreadyFinalizedSameSource = previousState?.status === 'ready'
-                && previousState.signature === signature
-                && isMessageFinalizedForCurrentBranch(msg);
-
-            if (alreadyFinalizedSameSource && hasRealDiffCache(index)) {
+            if (isMessageFinalizedForCurrentBranch(msg)) {
+                refreshDiffCacheIfStale(index);
                 const messageNode = getMessageDomNode(index);
                 if (messageNode) ensureMessageDiffButton(index, messageNode);
                 return {

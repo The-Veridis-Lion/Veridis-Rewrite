@@ -3,7 +3,7 @@ import { getAppContext, getCurrentChatMetadata } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
-import { clearAllMessageDiffMeta, getMessageDiffMeta } from './messageMeta.js';
+import { clearAllMessageDiffMeta, getMessageDiffMeta, isMessageManualFinal } from './messageMeta.js';
 import { extractDiffDisplayText, buildDiffResultFromPair, buildDiffResultFromStages } from './compare.js';
 
 import { isAssistantMessage, getLatestAssistantMessageIndices, getLatestTrackableDiffIndices, isTrackedDiffMessage } from './tracking.js';
@@ -416,7 +416,8 @@ export function refreshDiffCacheIfStale(index) {
         sourceMes,
         programMes,
         hasAiTrace ? aiMes : null,
-        finalSource === 'manual' ? cleanedMes : null,
+        isMessageManualFinal(msg) ? cleanedMes : null,
+        finalSource,
     );
     writeReadyDiffCache(index, signature, {
         snippets: Array.from(new Set(diffResult.snippets || [])),

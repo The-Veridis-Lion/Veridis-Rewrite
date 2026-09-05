@@ -12,7 +12,7 @@ import { computeMessageSignature, diffRuntimeState, markDiffComparisonPending, r
 import { isAssistantMessage } from '../diff/tracking.js';
 import { buildDiffSnippetsFromText } from '../diff/compare.js';
 import { getMessageSwipeIndex, setCurrentSwipeText } from '../chat/messageBranch.js';
-import { writeMessageDiffManualFinal } from '../diff/messageMeta.js';
+import { clearMessageDiffMeta, isMessageFinalizedForCurrentBranch, writeMessageDiffManualFinal } from '../diff/messageMeta.js';
 import { getCurrentChatIdentity } from './context.js';
 import { getMvuExtraModelTransaction, shouldWaitForMvuExtraModelTransaction } from '../integrations/mvu.js';
 import { adoptMvuMessageContentForAiRewrite, getActiveAiRewriteBranchKeyForMessage, handleAiRewriteGenerationStarted, hasInvalidAiRewriteTarget, isLiveAiRewriteTargetMessage, markAiRewriteFinalCleanseReady, recordAiRewriteRuntimeDebug, resetAiRewriteRuntimeState, validateAiRewriteMessageTarget, waitForAutomaticAiRewrite } from '../aiRewrite/index.js';
@@ -61,6 +61,7 @@ export function bindHostLifecycleEvents() {
         const index = resolveMessageIndexForCleansePayload(payload);
         if (index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return { index: -1, sourceMes: undefined };
 
+        if (isMessageFinalizedForCurrentBranch(chat[index])) return { index, sourceMes: undefined };
         const finalMes = typeof chat[index]?.mes === 'string' ? chat[index].mes : '';
         const finalDiff = buildCurrentRuleDifference(finalMes);
         if (finalDiff) return { index, sourceMes: finalMes, precomputedDiff: finalDiff };
@@ -158,7 +159,9 @@ export function bindHostLifecycleEvents() {
             return null;
         }
 
-        generationLifecycle.markFinalSource(resolution.generationId, source);
+        if (generationLifecycle.markFinalSource(resolution.generationId, source)) {
+            clearMessageDiffMeta(resolution.message);
+        }
         return {
             automatic: true,
             generationId: resolution.generationId,
@@ -175,6 +178,16 @@ export function bindHostLifecycleEvents() {
         const { chat } = getAppContext();
         const msg = Array.isArray(chat) ? chat[stablePayload.messageId] : null;
         if (!isAssistantMessage(msg) || typeof msg.mes !== 'string') return false;
+        if (completedMvuFinalGenerationId === stablePayload.generationId) {
+            if (context && typeof msg.mes === 'string') context.message_content = msg.mes;
+            return true;
+        }
+        if (activeMvuFinalPromise && activeMvuFinalGenerationId === stablePayload.generationId) {
+            await activeMvuFinalPromise;
+            if (context && typeof msg.mes === 'string') context.message_content = msg.mes;
+            return true;
+        }
+
         if (context && typeof context.message_content === 'string') {
             const adoption = adoptMvuMessageContentForAiRewrite(stablePayload, context.message_content);
             if (!adoption.ok) {
@@ -188,16 +201,6 @@ export function bindHostLifecycleEvents() {
             }
         }
 
-        if (completedMvuFinalGenerationId === stablePayload.generationId) {
-            if (context && typeof msg.mes === 'string') context.message_content = msg.mes;
-            return true;
-        }
-        if (activeMvuFinalPromise && activeMvuFinalGenerationId === stablePayload.generationId) {
-            await activeMvuFinalPromise;
-            if (context && typeof msg.mes === 'string') context.message_content = msg.mes;
-            return true;
-        }
-
         activeMvuFinalGenerationId = stablePayload.generationId;
         activeMvuFinalPromise = (async () => {
             streamingRuntimeState.isStreamingGeneration = false;
@@ -207,12 +210,16 @@ export function bindHostLifecycleEvents() {
                 source,
             });
 
-            runFinalStreamingCleanse(stablePayload, {
-                acknowledgeGenerationId: stablePayload.generationId,
-                acknowledgementSource: 'mvu-transaction-cleanse',
-            });
-            markAiRewriteFinalCleanseReady(stablePayload, { scheduleRequest: false });
-            await waitForAutomaticAiRewrite(stablePayload.generationId);
+            const aiOwnsFinalCommit = markAiRewriteFinalCleanseReady(stablePayload);
+            if (aiOwnsFinalCommit) {
+                markLatestMessageShujukuRewritePending(stablePayload.messageId, 'ai-finalization');
+                await waitForAutomaticAiRewrite(stablePayload.generationId);
+            } else {
+                runFinalStreamingCleanse(stablePayload, {
+                    acknowledgeGenerationId: stablePayload.generationId,
+                    acknowledgementSource: 'mvu-transaction-cleanse',
+                });
+            }
 
             streamingRuntimeState.streamingCommittedMessageCache.delete(stablePayload.messageId);
             completedMvuFinalGenerationId = stablePayload.generationId;
@@ -272,6 +279,8 @@ export function bindHostLifecycleEvents() {
             });
             return;
         }
+        // Host continuation may reuse a branch; its new Original supersedes prior stages.
+        clearMessageDiffMeta(resolution.message);
         const stablePayload = {
             automatic: true,
             generationId: resolution.generationId,
@@ -341,11 +350,11 @@ export function bindHostLifecycleEvents() {
                 delete msg.extra.display_text;
             }
             setCurrentSwipeText(msg, msg.mes);
-            const manualTraceChanged = writeMessageDiffManualFinal(msg);
+            const hasRetainedDiff = writeMessageDiffManualFinal(msg);
 
             streamingRuntimeState.streamingCommittedMessageCache.delete(index);
 
-            if (manualTraceChanged) {
+            if (hasRetainedDiff) {
                 const signature = computeMessageSignature(msg);
                 markDiffComparisonPending(index, signature, { skipPersist: true });
                 refreshDiffCacheIfStale(index);

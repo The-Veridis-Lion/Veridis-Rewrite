@@ -20,8 +20,7 @@ import {
     snapshotAiRewriteTaskSettings,
     validateAutomaticAiRewriteContent,
 } from './task.js';
-import { applyAcceptedRewrites, applyProgramFallbackRewrites, buildProgramStageForRewrite } from './apply.js';
-import { replayProgramProjection } from '../rules/engine.js';
+import { applyAcceptedRewrites, applyProgramFallbackRewrites } from './apply.js';
 import { groupRewriteItemsByPrompt, normalizeLimit, renderPrompt } from './planning.js';
 import { isAiRewriteResponseFormatError, validateAiRewriteResponse } from './response.js';
 import {
@@ -31,8 +30,6 @@ import {
     escapeRegExp,
     getAiXmlScopedRequestText,
     getAiXmlScopeTag,
-    materializeProjectedRewriteItems,
-    resolveRewriteTrackedRanges,
 } from './matching.js';
 
 // Owns normal-message AI request and pending/final-cleanse lifecycle; matching, generation-target freshness, and accepted-result application are delegated to their respective modules.
@@ -627,7 +624,7 @@ function flushPendingAiRewriteApplyForMessageKey(messageKey) {
         : Number(['applied', 'fallback-applied'].includes(result?.status));
 }
 
-export function markAiRewriteFinalCleanseReady(payload, options = {}) {
+export function markAiRewriteFinalCleanseReady(payload) {
     const { chat } = getAppContext();
     const index = getAiRewriteMessageId(payload);
     if (index < 0) {
@@ -657,13 +654,12 @@ export function markAiRewriteFinalCleanseReady(payload, options = {}) {
         branchKey,
         sequence: rewriteState.finalCleanseSequence,
         pendingApplyCount: getPendingApplyCountForMessageKey(messageKey),
-        scheduleRequest: options.scheduleRequest !== false,
         generationId: validation.session.generationId,
         chatId: validation.session.chatId,
     });
-    const flushedCount = flushPendingAiRewriteApplyForMessageKey(messageKey);
-    if (flushedCount > 0) return true;
-    if (options.scheduleRequest === false) return false;
+    const hadPendingApply = getPendingApplyCountForMessageKey(messageKey) > 0;
+    flushPendingAiRewriteApplyForMessageKey(messageKey);
+    if (hadPendingApply) return true;
 
     if (validation.session.requestState !== 'idle') {
         if (['scheduled', 'running', 'succeeded'].includes(validation.session.requestState)) {
@@ -681,7 +677,10 @@ export function markAiRewriteFinalCleanseReady(payload, options = {}) {
     const taskCheck = buildAiRewriteTaskCheck(payload);
     if (taskCheck.fallbackTask) {
         const fallbackResult = applyAiProgramFallback(taskCheck.fallbackTask, taskCheck.fallbackCode || 'not-sent');
-        return fallbackResult.applied === true;
+        if (!fallbackResult.applied) {
+            notifyAiRewriteStatus('error', 'AI 改写未写入', fallbackResult.reason || 'fallback-apply-failed');
+        }
+        return true;
     }
     const readyTask = taskCheck.task;
     if (!readyTask) {
@@ -938,19 +937,12 @@ function buildAiRewriteCandidate(payload, options = {}) {
     const currentText = typeof msg.mes === 'string' ? msg.mes : '';
     const branchKey = getMessageDiffBranchKey(msg);
     const previous = getMessageDiffMeta(msg, branchKey);
-    if (!isAutomatic && previous && !Array.isArray(previous.programProjection)) {
-        return {
-            task: null,
-            reason: '此消息缺少精确的 Program 投影来源。请先重新净化消息，再运行手动 AI 改写。',
-        };
-    }
-
     const frozenSnapshot = isAutomatic && payload && typeof payload === 'object' && typeof payload.snapshotText === 'string'
         ? payload.snapshotText
         : '';
     const sourceText = isAutomatic
         ? (frozenSnapshot || currentText)
-        : (previous?.originalMes || currentText);
+        : (previous?.originalMes ?? currentText);
     if (!sourceText.trim()) return { task: null, reason: '目标消息为空' };
 
     const taskSettings = snapshotAiRewriteTaskSettings(settings, aiSettings);
@@ -974,44 +966,6 @@ function buildAiRewriteCandidate(payload, options = {}) {
         return { task: null, reason: '命中内容没有可改写句子' };
     }
 
-    let programStage;
-    if (!isAutomatic && previous) {
-        const resolved = resolveRewriteTrackedRanges(sourceText, originalItems, taskSettings.aiSettings);
-        if (!resolved.valid) {
-            return { task: null, reason: `Original 句子目标身份无效：${resolved.failedItemId || 'unknown'}` };
-        }
-        const replayed = replayProgramProjection(sourceText, previous.programProjection, resolved.ranges);
-        if (!replayed.valid || replayed.outputLength !== previous.programMes.length) {
-            return { task: null, reason: '此消息的 Program 投影来源无效。请先重新净化消息，再运行手动 AI 改写。' };
-        }
-        const projected = materializeProjectedRewriteItems(previous.programMes, originalItems, replayed.ranges);
-        if (!projected.valid) {
-            return { task: null, reason: `Program 句子目标投影无效：${projected.failedItemId || 'unknown'}` };
-        }
-        programStage = {
-            valid: true,
-            text: previous.programMes,
-            items: projected.items,
-            projection: previous.programProjection,
-            projectionOutputLength: replayed.outputLength,
-        };
-    } else {
-        programStage = buildProgramStageForRewrite(
-            sourceText,
-            msg,
-            taskSettings.aiSettings,
-            originalItems,
-            taskSettings.settings,
-            taskSettings.programProcessors,
-        );
-        if (!programStage.valid) {
-            return { task: null, reason: `Program 句子目标投影失败：${programStage.failedItemId || 'unknown'}` };
-        }
-        if (!isAutomatic && programStage.projectionOutputLength !== programStage.text.length) {
-            return { task: null, reason: 'Program 阶段包含无法映射到 Original 的内容' };
-        }
-    }
-
     const contentIdentity = isAutomatic
         ? freezeAiRewriteContentIdentity(payload, sourceText, taskSettings.aiSettings)
         : null;
@@ -1027,10 +981,10 @@ function buildAiRewriteCandidate(payload, options = {}) {
             segmentCount: segments.length,
             rawAiMatchCount: matches.length,
             matchedAiRuleCount: countMatchedAiRules(matches),
-            sentenceTargetCount: programStage.items.length,
-            itemLengths: programStage.items.map((item) => item.text.length),
+            sentenceTargetCount: originalItems.length,
+            itemLengths: originalItems.map((item) => item.text.length),
             isStreaming: streamingRuntimeState.isStreamingGeneration === true,
-            source: !isAutomatic && previous ? 'persisted-program-stage' : 'frozen-program-stage',
+            source: !isAutomatic && previous ? 'retained-original' : 'host-original',
             rawSourceLength: currentText.length,
             sourceLength: sourceText.length,
             generationId: isAutomatic ? String(payload.generationId || '') : '',
@@ -1046,17 +1000,12 @@ function buildAiRewriteCandidate(payload, options = {}) {
             messageRef: msg,
             branchKey,
             originalText: sourceText,
-            originalItems,
-            programText: programStage.text,
-            programProjection: programStage.projection,
-            programProjectionOutputLength: programStage.projectionOutputLength,
-            snapshotText: programStage.text,
-            items: programStage.items,
+            snapshotText: sourceText,
+            items: originalItems,
             rawAiMatchCount: matches.length,
             matchedAiRuleCount: countMatchedAiRules(matches),
             claimedMessageText: currentText,
-            claimedProgramMeta: previous,
-            usesPersistedProgramStage: !isAutomatic && Boolean(previous),
+            claimedMeta: previous,
             automatic: isAutomatic,
             generationId: isAutomatic ? String(payload.generationId || '') : '',
             chatId: isAutomatic ? String(payload.chatId || '') : '',
@@ -1323,7 +1272,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
         ? options.waitForFinalCleanse
         : streamingRuntimeState.isStreamingGeneration === true || payload?.streamingSnapshot === true;
     if (waitForFinalCleanse === true) {
-        logger.info('AI 改写在 XML 闭合后提前请求，返回后等待最终净化再写回');
+        logger.info('AI 改写在 XML 闭合后提前请求，返回后等待最终原文就绪再写回');
     }
     const taskCheck = options.preparedTask
         ? { task: options.preparedTask, reason: '' }
@@ -1381,7 +1330,6 @@ async function runAiRewriteForMessage(payload, options = {}) {
     const task = {
         ...readyTask,
         branchKey,
-        snapshotText: readyTask.snapshotText || msg.mes,
         startedAtMs,
         waitForFinalCleanse,
         finalCleanseSequence: options.finalCleanseSequence ?? (Number(rewriteState.finalCleanseSequence) || 0),

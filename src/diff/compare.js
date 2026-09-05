@@ -396,8 +396,7 @@ function applyStageTransition(tokens, deletedSources, fromText, toText, source) 
     return nextTokens;
 }
 
-function restoreFinalEqualities(tokens, originalChars, deletedSources) {
-    const stageRank = { program: 1, ai: 2, manual: 3 };
+function restoreFinalEqualities(tokens, originalChars, deletedSources, stageRank) {
     const anchors = [{ tokenPosition: -1, originalIndex: -1 }];
     tokens.forEach((token, tokenPosition) => {
         if (Number.isInteger(token.originalIndex)) {
@@ -469,10 +468,11 @@ function composeStageOperations(originalText, stages) {
     const originalChars = Array.from(originalText);
     let tokens = originalChars.map((char, originalIndex) => ({ char, originalIndex, source: 'original' }));
     const deletedSources = new Array(originalChars.length);
+    const stageRank = Object.fromEntries(stages.map((stage, index) => [stage.source, index + 1]));
     let currentText = originalText;
     stages.forEach((stage) => {
         tokens = applyStageTransition(tokens, deletedSources, currentText, stage.text, stage.source);
-        restoreFinalEqualities(tokens, originalChars, deletedSources);
+        restoreFinalEqualities(tokens, originalChars, deletedSources, stageRank);
         currentText = stage.text;
     });
 
@@ -645,36 +645,40 @@ export function buildDiffResultFromPair(rawText, cleanedText) {
 }
 
 export function buildDiffResultFromChain(rawText, programText, finalText) {
-    return buildDiffResultFromStages(rawText, programText, finalText, null);
+    return buildDiffResultFromStages(rawText, programText, finalText, null, 'ai');
 }
 
-export function buildDiffResultFromStages(rawText, programText, aiText, manualText) {
+export function buildDiffResultFromStages(rawText, programText, aiText, manualText, finalSource = 'program') {
     if (typeof rawText !== 'string') return { cleanedText: rawText, snippets: [], fullDiff: "" };
-    const normalizedProgramText = typeof programText === 'string' ? programText : applyScopedReplacements(rawText);
-    const normalizedAiText = typeof aiText === 'string' ? aiText : normalizedProgramText;
-    const normalizedManualText = typeof manualText === 'string' ? manualText : normalizedAiText;
+    const hasAiStage = typeof aiText === 'string';
+    const aiBeforeProgram = hasAiStage && finalSource === 'program';
+    const normalizedProgramText = typeof programText === 'string'
+        ? programText
+        : applyScopedReplacements(aiBeforeProgram ? aiText : rawText);
+    const automaticText = hasAiStage && !aiBeforeProgram ? aiText : normalizedProgramText;
+    const finalText = typeof manualText === 'string' ? manualText : automaticText;
     const displayText = extractDiffDisplayText(rawText);
-    const programDisplayText = extractDiffDisplayText(normalizedProgramText);
-    const aiDisplayText = extractDiffDisplayText(normalizedAiText);
-    const manualDisplayText = extractDiffDisplayText(normalizedManualText);
+    const finalDisplayText = extractDiffDisplayText(finalText);
 
-    if (displayText === manualDisplayText) {
+    if (displayText === finalDisplayText) {
         return {
-            cleanedText: normalizedManualText,
+            cleanedText: finalText,
             snippets: [],
             fullDiff: buildNormalFullDiffBlocks(displayText),
         };
     }
 
-    const stages = [{ text: programDisplayText, source: 'program' }];
-    if (typeof aiText === 'string') stages.push({ text: aiDisplayText, source: 'ai' });
-    if (typeof manualText === 'string') stages.push({ text: manualDisplayText, source: 'manual' });
-    const sourceToManualOperations = composeStageOperations(displayText, stages);
+    const stages = [];
+    if (aiBeforeProgram) stages.push({ text: extractDiffDisplayText(aiText), source: 'ai' });
+    stages.push({ text: extractDiffDisplayText(normalizedProgramText), source: 'program' });
+    if (hasAiStage && !aiBeforeProgram) stages.push({ text: extractDiffDisplayText(aiText), source: 'ai' });
+    if (typeof manualText === 'string') stages.push({ text: finalDisplayText, source: 'manual' });
+    const sourceToFinalOperations = composeStageOperations(displayText, stages);
 
     return {
-        cleanedText: normalizedManualText,
-        snippets: buildDiffSnippetsFromAnnotatedOperations(sourceToManualOperations, displayText),
-        fullDiff: buildFullDiffBlocksFromOperations(sourceToManualOperations),
+        cleanedText: finalText,
+        snippets: buildDiffSnippetsFromAnnotatedOperations(sourceToFinalOperations, displayText),
+        fullDiff: buildFullDiffBlocksFromOperations(sourceToFinalOperations),
     };
 }
 
