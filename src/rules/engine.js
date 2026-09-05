@@ -338,25 +338,14 @@ export function buildProcessors(options = {}) {
 }
 
 /**
- * 从替换词列表中选择一个替换值（可选确定性模式）。
+ * 从替换词列表中选择一个替换值。
  * @param {string[]} replacements 候选替换词列表。
- * @param {string} [deterministicKey=""] 确定性模式键。
  * @returns {string} 最终替换词。
  */
-export function pickReplacement(replacements, deterministicKey = "") {
+export function pickReplacement(replacements) {
     if (!Array.isArray(replacements) || replacements.length === 0) return '';
-    if (!deterministicKey) {
-        const randIndex = Math.floor(Math.random() * replacements.length);
-        return replacements[randIndex];
-    }
-
-    let hash = 0;
-    for (let i = 0; i < deterministicKey.length; i++) {
-        hash = ((hash << 5) - hash) + deterministicKey.charCodeAt(i);
-        hash |= 0;
-    }
-    const idx = Math.abs(hash) % replacements.length;
-    return replacements[idx];
+    const randIndex = Math.floor(Math.random() * replacements.length);
+    return replacements[randIndex];
 }
 
 function extractRegexCaptures(args) {
@@ -408,52 +397,25 @@ function renderRegexReplacementTemplate(template, captures) {
     return output;
 }
 
-export function resolveProcessorReplacement(proc, procIndex, match, args = [], deterministic = false) {
+export function resolveProcessorReplacement(proc, match, args = []) {
     if (proc?.kind === 'regex') {
         const reps = proc.replacements;
         if (!reps || reps.length === 0) return '';
-        const repKey = deterministic ? `${procIndex}|${match}` : '';
-        const rep = pickReplacement(reps, repKey);
+        const rep = pickReplacement(reps);
         return renderRegexReplacementTemplate(rep, extractRegexCaptures(args));
     }
 
     if (proc?.kind === 'simple') {
         const reps = proc.replacements;
         if (!reps || reps.length === 0) return '';
-        const repKey = deterministic ? `${procIndex}|${match}` : '';
-        return String(pickReplacement(reps, repKey) ?? '');
+        return String(pickReplacement(reps) ?? '');
     }
 
     const exactReps = proc?.replacerMap?.[match];
     const targetEntry = exactReps ? null : findTextTargetEntryForMatch(proc, match);
     const reps = exactReps || targetEntry?.replacements;
     if (!reps || reps.length === 0) return '';
-    const repKey = deterministic ? `${procIndex}|${match}` : '';
-    return pickReplacement(reps, repKey);
-}
-
-function getProcessorReplacementCandidatesForMatch(proc, match) {
-    if (proc?.kind === 'regex' || proc?.kind === 'simple') return proc.replacements || [];
-
-    const exactReps = proc?.replacerMap?.[match];
-    if (exactReps) return exactReps;
-    return findTextTargetEntryForMatch(proc, match)?.replacements || [];
-}
-
-function getProcessorRewriteModeForMatch(proc, match) {
-    if (proc?.kind === 'regex' || proc?.kind === 'simple') return proc.rewriteMode || 'program';
-
-    if (proc?.replacerMap?.[match]) return proc.targetRewriteModes?.[match] || 'program';
-    return findTextTargetEntryForMatch(proc, match)?.rewriteMode || 'program';
-}
-
-/**
- * Whether streaming can project this match without choosing a Program candidate.
- * AI visual rules retain their separate deterministic presentation contract.
- */
-export function isStreamingVisualReplacementUnambiguous(proc, match) {
-    if (getProcessorRewriteModeForMatch(proc, match) === 'ai') return true;
-    return getProcessorReplacementCandidatesForMatch(proc, match).length <= 1;
+    return pickReplacement(reps);
 }
 
 function projectTrackedRangesThroughReplacement(ranges, start, end, replacementLength) {
@@ -540,7 +502,7 @@ function getReplaceCallbackOffset(args = []) {
     return Number.isInteger(offset) ? offset : -1;
 }
 
-export function applyCompiledReplacementsWithTrackedRanges(originalText, processors = [], deterministic = false, ranges = [], options = {}) {
+export function applyCompiledReplacementsWithTrackedRanges(originalText, processors = [], ranges = [], options = {}) {
     const source = String(originalText ?? '');
     if (!source) return { text: source, ranges: [...ranges], projection: [], valid: true };
 
@@ -555,21 +517,19 @@ export function applyCompiledReplacementsWithTrackedRanges(originalText, process
         && range.end <= source.length);
     if (!valid) return { text: source, ranges: trackedRanges, projection, valid: false };
 
-    (Array.isArray(processors) ? processors : []).forEach((proc, procIndex) => {
+    (Array.isArray(processors) ? processors : []).forEach((proc) => {
         if (!proc?.regex || (options.domSafeOnly === true && proc.domSafe === false)) return;
         let priorReplacementDelta = 0;
         text = text.replace(proc.regex, (match, ...args) => {
-            if (options.deferMultiCandidateProgram === true
-                && !isStreamingVisualReplacementUnambiguous(proc, match)) return match;
             const sourceStart = getReplaceCallbackOffset(args);
             if (sourceStart < 0) {
                 valid = false;
-                return String(resolveProcessorReplacement(proc, procIndex, match, args, deterministic) ?? '');
+                return String(resolveProcessorReplacement(proc, match, args) ?? '');
             }
             const start = sourceStart + priorReplacementDelta;
             const end = start + String(match).length;
             if (protectedRanges.some((range) => start < range.end && range.start < end)) return match;
-            const replacement = String(resolveProcessorReplacement(proc, procIndex, match, args, deterministic) ?? '');
+            const replacement = String(resolveProcessorReplacement(proc, match, args) ?? '');
             protectedRanges = projectTrackedRangesThroughReplacement(protectedRanges, start, end, replacement.length);
             projection.push([start, end, replacement.length]);
             trackedRanges = projectTrackedRangesThroughReplacement(trackedRanges, start, end, replacement.length);
@@ -580,20 +540,20 @@ export function applyCompiledReplacementsWithTrackedRanges(originalText, process
     return { text, ranges: trackedRanges, projection, valid };
 }
 
-export function applyCompiledReplacements(originalText, processors = [], deterministic = false, options = {}) {
-    return applyCompiledReplacementsWithTrackedRanges(originalText, processors, deterministic, [], options).text;
+export function applyCompiledReplacements(originalText, processors = [], options = {}) {
+    return applyCompiledReplacementsWithTrackedRanges(originalText, processors, [], options).text;
 }
 
 /**
  * 对文本应用规则替换。
  * @param {string} originalText 原始文本。
- * @param {{deterministic?: boolean}} [options={}] 替换选项。
+ * @param {{includeAiRewrite?: boolean}} [options={}] 替换选项。
  * @returns {string} 替换后的文本。
  */
 export function applyReplacements(originalText, options = {}) {
     if (typeof originalText !== 'string' || !originalText) return originalText;
     const processors = buildProcessors({ includeAiRewrite: options.includeAiRewrite === true });
-    return applyCompiledReplacements(originalText, processors, options.deterministic === true, options);
+    return applyCompiledReplacements(originalText, processors, options);
 }
 
 export function countProcessorMatches(originalText, processors = []) {
@@ -813,7 +773,7 @@ export function mergeProtectedScopeUpdatesIntoSource(sourceMes, previousCleanedM
  * 对消息文本应用“范围标签模式 + 规则替换”。
  * protect 模式保留标签内文本，cleanse-inside 模式仅净化标签内文本。
  * @param {string} originalText 原始文本。
- * @param {{deterministic?: boolean}} [options={}] 替换选项。
+ * @param {{includeAiRewrite?: boolean}} [options={}] 替换选项。
  * @returns {string} 替换后的文本。
  */
 export function applyScopedReplacements(originalText, options = {}) {
@@ -836,24 +796,22 @@ export function applyScopedReplacementsWithTrackedRanges(originalText, ranges = 
         originalText,
         processors,
         scopeSettings,
-        options.deterministic === true,
         ranges,
         options,
     );
 }
 
-export function applyScopedCompiledReplacements(originalText, processors = [], scopeSettings = {}, deterministic = false, options = {}) {
+export function applyScopedCompiledReplacements(originalText, processors = [], scopeSettings = {}, options = {}) {
     return applyScopedCompiledReplacementsWithTrackedRanges(
         originalText,
         processors,
         scopeSettings,
-        deterministic,
         [],
         options,
     ).text;
 }
 
-export function applyScopedCompiledReplacementsWithTrackedRanges(originalText, processors = [], scopeSettings = {}, deterministic = false, ranges = [], options = {}) {
+export function applyScopedCompiledReplacementsWithTrackedRanges(originalText, processors = [], scopeSettings = {}, ranges = [], options = {}) {
     const source = String(originalText ?? '');
     let valid = Array.isArray(ranges) && ranges.every((range) => Number.isInteger(range?.start)
         && Number.isInteger(range?.end)
@@ -886,7 +844,7 @@ export function applyScopedCompiledReplacementsWithTrackedRanges(originalText, p
                 })),
         } : options;
         const result = shouldTransform
-            ? applyCompiledReplacementsWithTrackedRanges(segment, processors, deterministic, localRanges, localOptions)
+            ? applyCompiledReplacementsWithTrackedRanges(segment, processors, localRanges, localOptions)
             : { text: segment, ranges: localRanges, projection: [], valid: true };
         valid = valid && result.valid;
         return result;
@@ -958,5 +916,5 @@ export function applyScopedCompiledReplacementsWithTrackedRanges(originalText, p
  */
 export function applyVisualMask(originalText, options = {}) {
     if (typeof originalText !== 'string' || !originalText) return originalText;
-    return applyScopedReplacements(originalText, { deterministic: true, includeAiRewrite: true, ...options });
+    return applyScopedReplacements(originalText, { includeAiRewrite: true, ...options });
 }

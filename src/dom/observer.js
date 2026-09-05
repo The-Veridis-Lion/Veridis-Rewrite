@@ -84,7 +84,7 @@ export function initDomObserver({ injectDiffButtons }) {
         buildProcessors();
         if (rulesRuntimeState.activeProcessors.length === 0) return;
         const originalVal = el.value || '';
-        const cleanedVal = applyScopedReplacements(originalVal, { deterministic: true });
+        const cleanedVal = applyScopedReplacements(originalVal);
         if (originalVal !== cleanedVal) {
             const start = el.selectionStart;
             isPurifying = true;

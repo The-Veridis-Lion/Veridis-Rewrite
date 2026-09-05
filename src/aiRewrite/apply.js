@@ -175,7 +175,6 @@ function applyRewritePlan(task, selectedReplacements, mode) {
         composition.text,
         task.programProcessors,
         task.settings,
-        false,
         [],
         {
             protectedRanges: task.aiSettings?.protectXmlComments === true

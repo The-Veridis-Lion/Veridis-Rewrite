@@ -306,7 +306,6 @@ function getAiProgramFallbackReplacement(match, sourceText = '') {
     const replacements = Array.isArray(match?.replacements) ? match.replacements : [];
     if (replacements.length === 0) return '';
 
-    const key = `${match.ruleIndex}:${match.subRuleIndex}:${match.mode}:${match.target}:${match.matchedText}`;
     if (match.mode === 'regex') {
         const args = [
             ...(Array.isArray(match.captures) ? match.captures : []),
@@ -314,10 +313,10 @@ function getAiProgramFallbackReplacement(match, sourceText = '') {
             String(sourceText || ''),
         ];
         if (match.groups && typeof match.groups === 'object') args.push(match.groups);
-        return resolveProcessorReplacement({ kind: 'regex', replacements }, key, String(match.matchedText || ''), args, true);
+        return resolveProcessorReplacement({ kind: 'regex', replacements }, String(match.matchedText || ''), args);
     }
 
-    return String(pickReplacement(replacements, key) ?? '');
+    return String(pickReplacement(replacements) ?? '');
 }
 
 export function applyAiProgramFallbackMatches(text, matches = []) {

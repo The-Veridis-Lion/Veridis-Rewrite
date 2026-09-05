@@ -25,7 +25,6 @@ export function buildDeepCleanProgramExecution(input, item, compiledSemantics, s
         String(sourceText || ''),
         compiledSemantics.programProcessors,
         getProgramScopeSettings(input),
-        false,
         ranges,
     );
 }

@@ -1,7 +1,7 @@
 import { getAppContext } from '../host/appContext.js';
 import { streamingRuntimeState } from '../host/streamingState.js';
 import { rulesRuntimeState } from '../rules/state.js';
-import { applyVisualMask, buildProcessors, collectScopedReplacementRanges, hasEnabledScopeTags, isStreamingVisualProcessorSafe, isStreamingVisualReplacementUnambiguous, resolveProcessorReplacement } from '../rules/engine.js';
+import { applyVisualMask, buildProcessors, collectScopedReplacementRanges, hasEnabledScopeTags, isStreamingVisualProcessorSafe, resolveProcessorReplacement } from '../rules/engine.js';
 import { getMessageDomNode } from './message.js';
 import { excludedMessageContentSelector, isProtectedNode, isRevertedMessageDomNode, isManualFinalMessageDomNode } from './protection.js';
 
@@ -355,13 +355,12 @@ function createStreamingSegment(nodes, runSnapshot, range) {
     };
 }
 
-function collectProcessorMatches(text, processor, processorIndex) {
+function collectProcessorMatches(text, processor) {
     const matches = [];
     text.replace(processor.regex, (match, ...args) => {
-        if (!isStreamingVisualReplacementUnambiguous(processor, match)) return match;
         const hasNamedGroups = typeof args[args.length - 1] === 'object' && args[args.length - 1] !== null;
         const offset = Number(args[args.length - (hasNamedGroups ? 3 : 2)]);
-        const replacement = String(resolveProcessorReplacement(processor, processorIndex, match, args, true) ?? '');
+        const replacement = String(resolveProcessorReplacement(processor, match, args) ?? '');
         if (replacement === match) return match;
         matches.push({
             start: offset,
@@ -417,12 +416,11 @@ function applyStreamingMaskToRun(nodes, processors, scopedRanges = null) {
         const node = nodes[0];
         let changed = false;
 
-        processors.forEach((processor, processorIndex) => {
+        processors.forEach((processor) => {
             const currentValue = node.nodeValue || '';
             let processorChanged = false;
             const nextValue = currentValue.replace(processor.regex, (match, ...args) => {
-                if (!isStreamingVisualReplacementUnambiguous(processor, match)) return match;
-                const replacement = String(resolveProcessorReplacement(processor, processorIndex, match, args, true) ?? '');
+                const replacement = String(resolveProcessorReplacement(processor, match, args) ?? '');
                 if (replacement !== match) processorChanged = true;
                 return replacement;
             });
@@ -442,7 +440,7 @@ function applyStreamingMaskToRun(nodes, processors, scopedRanges = null) {
     let changed = false;
 
     for (const segment of segments) {
-        processors.forEach((processor, processorIndex) => {
+        processors.forEach((processor) => {
             const snapshot = buildNodeRangeSnapshot(
                 segment.nodes,
                 segment.startNode,
@@ -450,7 +448,7 @@ function applyStreamingMaskToRun(nodes, processors, scopedRanges = null) {
                 segment.endNode,
                 segment.endOffset,
             );
-            const matches = collectProcessorMatches(snapshot.text, processor, processorIndex);
+            const matches = collectProcessorMatches(snapshot.text, processor);
             if (matches.length === 0) return;
             const nodeValues = segment.nodes.map((node) => node?.nodeValue || '');
             for (let index = matches.length - 1; index >= 0; index--) {
@@ -562,9 +560,7 @@ export function renderStreamingVisualMask(messageId, committedRawText, options =
     if (!messageNode || isRevertedMessageDomNode(messageNode) || isManualFinalMessageDomNode(messageNode)) return false;
     const surface = findTavernHelperStreamingSurface(messageNode) || messageNode.querySelector?.('.mes_text');
     const rawText = String(committedRawText || '');
-    return applyStreamingVisualMask(surface, rawText, applyVisualMask(rawText, {
-        deferMultiCandidateProgram: true,
-    }), options);
+    return applyStreamingVisualMask(surface, rawText, applyVisualMask(rawText), options);
 }
 
 export function replayStreamingVisualMask(messageId) {
