@@ -27,8 +27,8 @@ function projectEnabledGlobalScript(script) {
 function collectEnabledGlobalScripts(scriptTrees) {
     return (Array.isArray(scriptTrees) ? scriptTrees : []).flatMap((entry) => {
         if (entry?.type === 'script') return entry.enabled === true ? [projectEnabledGlobalScript(entry)] : [];
-        if (entry?.type !== 'folder' || entry.enabled !== true || !Array.isArray(entry.children)) return [];
-        return entry.children
+        if (entry?.type !== 'folder' || entry.enabled !== true || !Array.isArray(entry.scripts)) return [];
+        return entry.scripts
             .filter((script) => script?.type === 'script' && script.enabled === true)
             .map(projectEnabledGlobalScript);
     });

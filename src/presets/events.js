@@ -336,7 +336,6 @@ export function bindPresetEvents() {
             if (!settings.characterBindings) settings.characterBindings = {};
             settings.characterBindings[context.key] = activePreset;
             presetsRuntimeState.lastPresetBindingSignature = '';
-            applyPresetByName(activePreset, { skipRender: true });
             saveSettingsDebounced();
             refreshCharacterBindingUI();
             $('#blai-bind-menu').prop('hidden', true);
@@ -357,7 +356,6 @@ export function bindPresetEvents() {
             if (!settings.chatCompletionPresetBindings || typeof settings.chatCompletionPresetBindings !== 'object') settings.chatCompletionPresetBindings = {};
             settings.chatCompletionPresetBindings[chatCompletionPresetName] = activePreset;
             presetsRuntimeState.lastPresetBindingSignature = '';
-            applyPresetByName(activePreset, { skipRender: true });
             saveSettingsDebounced();
             refreshCharacterBindingUI();
             $('#blai-bind-menu').prop('hidden', true);

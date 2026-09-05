@@ -137,7 +137,6 @@ jQuery(() => {
         if (isBooted) return;
         isBooted = true;
         await waitForTauriTavernReady();
-        const versionInfo = await captureVeridisCommit();
         logger.info('[屏蔽词净化助手] 启动初始化开始...');
         if (isTauriTavernHost()) logger.info('[屏蔽词净化助手] 已启用 TauriTavern 兼容层');
         if (isBaiBaiToolkitInstalled()) logger.info('[屏蔽词净化助手] 已启用柏宝箱兼容层');
@@ -163,10 +162,13 @@ jQuery(() => {
         restoreDiffStateFromChatMetadata();
         performGlobalChatMaintenance();
         logger.info('[屏蔽词净化助手] 启动初始化完成');
-        void initializeUpdateStatus({
-            versionInfo,
-            isGlobal: extensionsModule.extensionTypes[veridisExternalId] === 'global',
-        });
+        void (async () => {
+            const versionInfo = await captureVeridisCommit();
+            await initializeUpdateStatus({
+                versionInfo,
+                isGlobal: extensionsModule.extensionTypes[veridisExternalId] === 'global',
+            });
+        })();
     };
 
     if (typeof eventSource !== 'undefined' && event_types.APP_READY) {

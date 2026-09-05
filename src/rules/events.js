@@ -733,7 +733,7 @@ export function bindRuleEvents() {
                 $('#blai-rule-edit-modal').hide();
                 clearRuleSearchEditFlow();
                 if (isDirectSearchFlow) openRuleSearchModal();
-                else if (diffRuntimeState.currentDiffIndex !== undefined) renderDiffModalContent(diffRuntimeState.currentDiffIndex);
+                else if (diffRuntimeState.currentDiffIndex !== undefined) diffRuntimeState.diffModalRefresh(diffRuntimeState.currentDiffIndex);
             });
             return;
         }
