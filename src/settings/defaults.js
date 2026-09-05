@@ -5,7 +5,7 @@ export const modifiedExtensionName = "ultimate_purifier_ai_rewrite_modified";
 export const minTrackedDiffMessages = 1;
 export const defaultTrackedDiffMessages = 3;
 export const maxTrackedDiffMessages = 20;
-export const aiRewritePromptProtocolVersion = 5;
+export const aiRewritePromptProtocolVersion = 6;
 
 export const previousDefaultAiRewritePrompt = `身份确认: 你是文本改写助手。你需要严格按照以下的要求修改指定的文本。
 
@@ -80,7 +80,7 @@ export const tongYong13AiRewritePrompt = `身份确认: 你是文本改写助手
 输出示例:
 {"hit-1":"改写结果1","hit-2":"改写结果2"}`;
 
-export const defaultAiRewritePrompt = `身份确认: 你是文本改写助手。你需要严格按照以下要求修改指定文本。
+export const tongYong14AiRewritePrompt = `身份确认: 你是文本改写助手。你需要严格按照以下要求修改指定文本。
 
 【任务说明】\x20
 <task>
@@ -116,6 +116,42 @@ export const defaultAiRewritePrompt = `身份确认: 你是文本改写助手。
 严格输出一个 JSON 对象。键必须恰好为所有 <rewrite_target> 的 id，值必须是对应目标改写后的完整结果；不得遗漏、增加或重复 id，不得返回标签外文本。
 {"hit-1":"改写后的完整句子","hit-2":"改写后的完整句子"}`;
 
+export const defaultAiRewritePrompt = `身份确认: 你是文本改写助手。你需要严格按照以下要求修改指定文本。
+
+【任务说明】\x20
+<task>
+核心要求:
+* 只能改写 <rewrite_target> 标签中的文本。
+* 每个 <rewrite_target> 只适用其 rules 属性引用的 <rewrite_rules>，按照对应规则的改写要求处理。
+* 同一目标绑定多个规则时，需要同时考虑所有适用规则。
+* 处理规则命中后，根据 <source> 中已有的前后文对整个目标句进行自然润色，使语法、措辞、指代、语气、节奏和衔接自然。
+* 不要只机械删除或替换命中词后原样返回剩余文本；可以在不改变原意的前提下重新组织整个目标句。
+* 保持原意、人物关系、人设、叙事视角和文风，不得无依据扩写剧情、动作、心理、事实或新的修辞内容。
+* <rewrite_target> 标签外文本仅用于理解上下文和文风，不得修改、复制或返回。
+
+对话标点:
+* 当目标句包含对话时，保留原有对话引号以及必要的冒号或逗号，除非对应规则本身要求修改相关内容。
+
+输出要求:
+* 每个结果必须是对应 <rewrite_target> 改写后的完整句子。
+* 如果对应规则允许删除整个目标句，可以返回空字符串。
+* 必须严格输出 JSON 对象，禁止重复内容、markdown、解释、分析或额外文字。
+\x20 </task>
+
+【本次触发的改写规则】
+<rewrite_rules>
+{{rewriteRulesJson}}
+</rewrite_rules>
+
+【原文与改写对象】
+<source>
+{{annotatedSource}}\x20
+</source>
+
+【输出格式】
+严格输出一个 JSON 对象。键必须恰好为所有 <rewrite_target> 的 id，值必须是对应目标改写后的完整结果；不得遗漏、增加或重复 id，不得返回标签外文本。
+{"hit-1":"改写后的完整句子","hit-2":"改写后的完整句子"}`;
+
 export function normalizeAiRewritePromptForComparison(promptTemplate) {
     return String(promptTemplate || '')
         .replace(/\r\n?/gu, '\n')
@@ -128,7 +164,8 @@ export function normalizeAiRewritePromptForComparison(promptTemplate) {
 export function isKnownBuiltInAiRewritePrompt(promptTemplate) {
     const normalized = normalizeAiRewritePromptForComparison(promptTemplate);
     return normalized === normalizeAiRewritePromptForComparison(previousDefaultAiRewritePrompt)
-        || normalized === normalizeAiRewritePromptForComparison(tongYong13AiRewritePrompt);
+        || normalized === normalizeAiRewritePromptForComparison(tongYong13AiRewritePrompt)
+        || normalized === normalizeAiRewritePromptForComparison(tongYong14AiRewritePrompt);
 }
 
 export function migrateKnownAiRewritePrompt(promptTemplate) {

@@ -21,6 +21,88 @@ function rangesOverlap(left, right) {
     return left.start < right.end && right.start < left.end;
 }
 
+// These are the dialogue quote pairs named by the existing AI rewrite prompt.
+const supportedDialogueQuotePairs = [
+    { open: '“', close: '”' },
+    { open: '「', close: '」' },
+];
+const quotePairByOpen = new Map(supportedDialogueQuotePairs.map((pair) => [pair.open, pair]));
+const quotePairByClose = new Map(supportedDialogueQuotePairs.map((pair) => [pair.close, pair]));
+
+function getParagraphBounds(text, offset) {
+    const source = String(text || '');
+    const position = Math.max(0, Math.min(source.length, Number(offset) || 0));
+    const start = source.lastIndexOf('\n', Math.max(0, position - 1)) + 1;
+    const nextBreak = source.indexOf('\n', position);
+    return { start, end: nextBreak === -1 ? source.length : nextBreak };
+}
+
+function scanDialogueQuoteState(text, start, end, initialStack = []) {
+    const stack = [...initialStack];
+    for (let index = start; index < end; index += 1) {
+        const character = text[index];
+        const openingPair = quotePairByOpen.get(character);
+        if (openingPair) {
+            stack.push(openingPair);
+            continue;
+        }
+        const closingPair = quotePairByClose.get(character);
+        if (!closingPair) continue;
+        const expectedPair = stack.at(-1);
+        if (expectedPair !== closingPair) return null;
+        stack.pop();
+    }
+    return stack;
+}
+
+function quoteStatesEqual(left, right) {
+    return left.length === right.length && left.every((pair, index) => pair === right[index]);
+}
+
+function getExpectedTargetQuoteState(programText, range) {
+    const source = String(programText || '');
+    const paragraph = getParagraphBounds(source, range.start);
+    const paragraphState = scanDialogueQuoteState(source, paragraph.start, paragraph.end);
+    if (!paragraphState || paragraphState.length !== 0) return null;
+
+    const initialState = scanDialogueQuoteState(source, paragraph.start, range.start);
+    if (!initialState) return null;
+    const expectedState = scanDialogueQuoteState(source, range.start, range.end, initialState);
+    if (!expectedState) return null;
+    return { initialState, expectedState };
+}
+
+function removeSurplusBoundaryQuotes(programText, range, replacement) {
+    const source = String(programText || '');
+    const start = Number(range?.start);
+    const end = Number(range?.end);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > source.length) {
+        return String(replacement ?? '');
+    }
+
+    const quoteState = getExpectedTargetQuoteState(source, { start, end });
+    const rewritten = String(replacement ?? '');
+    if (!quoteState) return rewritten;
+
+    const replacementState = scanDialogueQuoteState(rewritten, 0, rewritten.length, quoteState.initialState);
+    if (replacementState && quoteStatesEqual(replacementState, quoteState.expectedState)) return rewritten;
+
+    const candidates = [];
+    if (quotePairByOpen.has(rewritten[0]) || quotePairByClose.has(rewritten[0])) {
+        candidates.push(rewritten.slice(1));
+    }
+    const lastCharacter = rewritten.at(-1);
+    if (quotePairByOpen.has(lastCharacter) || quotePairByClose.has(lastCharacter)) {
+        candidates.push(rewritten.slice(0, -1));
+    }
+
+    const restored = [...new Set(candidates)].filter((candidate) => {
+        const candidateState = scanDialogueQuoteState(candidate, 0, candidate.length, quoteState.initialState);
+        return candidateState && quoteStatesEqual(candidateState, quoteState.expectedState);
+    });
+    return restored.length === 1 ? restored[0] : rewritten;
+}
+
 function applyResolvedReplacements(text, replacements) {
     let output = String(text ?? '');
     const appliedRanges = [];
@@ -165,7 +247,11 @@ function applyRewritePlan(task, selectedReplacements, mode) {
             start: range.start,
             end: range.end,
             rewritten: mode === 'ai'
-                ? String(selectedReplacements.get(range.itemId) ?? '')
+                ? removeSurplusBoundaryQuotes(
+                    originalText,
+                    range,
+                    selectedReplacements.get(range.itemId),
+                )
                 : String(task.items.find((item) => item.id === range.itemId)
                     .matches[range.occurrenceIndex].programFallbackText ?? ''),
             strategy: mode === 'ai' ? 'sentence' : 'raw-occurrence-fallback',
