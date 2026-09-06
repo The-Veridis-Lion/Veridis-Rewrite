@@ -250,7 +250,7 @@ export function markDiffComparisonPending(index, signature = '', options = {}) {
     return true;
 }
 
-export function writeReadyDiffCache(index, signature, cacheData = {}, options = {}) {
+function writeReadyDiffCache(index, signature, cacheData = {}, options = {}) {
     if (!Number.isInteger(index) || index < 0) return false;
     const { chat } = getAppContext();
     if (!Array.isArray(chat) || !isAssistantMessage(chat[index])) return false;
@@ -343,11 +343,11 @@ function hasCompleteRenderedDiff(cache = {}) {
 }
 
 
-function resolveDiffCachePair(msg) {
+function resolveDiffCachePair(msg, includeUnchanged = false) {
     const diffMeta = getMessageDiffMeta(msg);
     const finalMes = typeof msg?.mes === 'string' ? msg.mes : '';
 
-    if (diffMeta && diffMeta.originalMes !== finalMes) {
+    if (diffMeta && (includeUnchanged || diffMeta.originalMes !== finalMes)) {
         return {
             sourceMes: diffMeta.originalMes,
             cleanedMes: finalMes,
@@ -374,7 +374,14 @@ export function getDiffComparisonForMessage(index) {
     };
 }
 
-export function refreshDiffCacheIfStale(index) {
+/**
+ * Rebuilds rendered cache only from authoritative text and retained stage provenance.
+ * Finalization also publishes ready state, preserving normal Program's pair rendering,
+ * empty no-diff cache and conditional persistence, versus AI's stage rendering and save.
+ * @param {number} index
+ * @param {{finalization?: 'program'|'ai', dataChanged?: boolean}} options
+ */
+export function refreshDiffCacheIfStale(index, options = {}) {
     const { chat } = getAppContext();
     if (!Number.isInteger(index) || index < 0 || !Array.isArray(chat)) return false;
 
@@ -384,47 +391,50 @@ export function refreshDiffCacheIfStale(index) {
     const signature = computeMessageSignature(msg);
     const state = diffRuntimeState.diffMessageStates.get(index);
     const cache = sanitizeCacheEntry(diffRuntimeState.diffSnippetsCache.get(index));
-    const pair = resolveDiffCachePair(msg);
+    const isFinalizing = options.finalization === 'program' || options.finalization === 'ai';
+    const pair = resolveDiffCachePair(msg, isFinalizing);
     if (!pair) {
         const cacheHasDiff = hasRenderedSnippetDiff(cache?.snippets) || hasRenderedFullDiff(cache?.fullDiff);
-        if (state?.status === 'ready'
+        if (!isFinalizing && state?.status === 'ready'
             && state.signature === signature
             && cache?.signature === signature
             && !cacheHasDiff) {
             return false;
         }
-        writeReadyDiffCache(index, signature, {
-            snippets: [],
-            fullDiff: '',
-            signature,
-        }, {
-            persist: false,
-        });
-        return true;
+    } else {
+        const shouldHaveCurrentDiff = extractDiffDisplayText(pair.sourceMes) !== extractDiffDisplayText(pair.cleanedMes);
+        if (!isFinalizing && state?.status === 'ready'
+            && state.signature === signature
+            && cache?.signature === signature
+            && (!shouldHaveCurrentDiff || hasCompleteRenderedDiff(cache))) {
+            return false;
+        }
     }
 
-    const { sourceMes, cleanedMes, programMes, aiMes, hasAiTrace, finalSource } = pair;
-    const shouldHaveCurrentDiff = extractDiffDisplayText(sourceMes) !== extractDiffDisplayText(cleanedMes);
-    if (state?.status === 'ready'
-        && state.signature === signature
-        && cache?.signature === signature
-        && (!shouldHaveCurrentDiff || hasCompleteRenderedDiff(cache))) {
-        return false;
+    let diffResult = { snippets: [], fullDiff: '' };
+    if (pair) {
+        const { sourceMes, cleanedMes, programMes, aiMes, hasAiTrace, finalSource } = pair;
+        diffResult = options.finalization === 'program'
+            ? buildDiffResultFromPair(sourceMes, cleanedMes)
+            : buildDiffResultFromStages(
+                sourceMes,
+                programMes,
+                hasAiTrace ? aiMes : null,
+                isMessageManualFinal(msg) ? cleanedMes : null,
+                finalSource,
+            );
     }
-
-    const diffResult = buildDiffResultFromStages(
-        sourceMes,
-        programMes,
-        hasAiTrace ? aiMes : null,
-        isMessageManualFinal(msg) ? cleanedMes : null,
-        finalSource,
-    );
+    const snippets = Array.from(new Set(diffResult.snippets || []));
+    const fullDiff = diffResult.fullDiff || '';
+    const hasDiff = snippets.length > 0 || hasRenderedFullDiff(fullDiff);
+    const emptyProgramCache = options.finalization === 'program' && !hasDiff;
     writeReadyDiffCache(index, signature, {
-        snippets: Array.from(new Set(diffResult.snippets || [])),
-        fullDiff: diffResult.fullDiff || '',
+        snippets: emptyProgramCache ? [] : snippets,
+        fullDiff: emptyProgramCache ? '' : fullDiff,
         signature,
     }, {
-        persist: false,
+        persist: options.finalization === 'ai'
+            || (options.finalization === 'program' && (hasDiff || options.dataChanged === true)),
     });
     return true;
 }

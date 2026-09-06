@@ -1,4 +1,4 @@
-import { defaultAiRewriteSettings, normalizeAiSamplingSettings } from '../settings/defaults.js';
+import { defaultAiRewriteSettings } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { streamingRuntimeState } from '../host/streamingState.js';
 import { aiRewriteState } from './state.js';
@@ -9,11 +9,14 @@ import { getMessageDiffBranchKey, setMessageTextForMvuTransaction } from '../cha
 import { getCurrentChatIdentity } from '../host/context.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
 import { showToast } from '../ui/notifications.js';
-import { buildAiRewriteGenerateRawConfig, callTavernHelperGenerateRaw, getTavernHelperGenerationApi } from './generation.js';
-import { recordAiCommunicationFailure, recordAiCommunicationSuccess, snapshotAiCommunicationRequest } from './communicationMonitor.js';
+import { AiRewriteRequestFormatError, isAiRewriteRequestFormatError, isBadRequestError, requestAiRewrite } from './generation.js';
 import { recordAiRewriteDebug } from './debug.js';
 import {
     getAiSettings,
+    getAiConfigIssue,
+    getAiRewriteMessageId,
+    isSameAiRewriteTask,
+    validateAiRewriteFinalization,
     getSettings,
     getTaskFreshnessIssue,
     isTaskStillFresh,
@@ -22,30 +25,25 @@ import {
 } from './task.js';
 import { applyAcceptedRewrites, applyProgramFallbackRewrites } from './apply.js';
 import { groupRewriteItemsByPrompt, normalizeLimit, renderPrompt } from './planning.js';
-import { isAiRewriteResponseFormatError, validateAiRewriteResponse } from './response.js';
+import { isAiRewriteResponseFormatError, parseAiResponse } from './response.js';
 import {
     buildRewriteItems,
+    countMatchedAiRules,
+    extractCurrentAiRewriteScope,
     collectAiMatches,
     collectAiXmlScopeSegments,
     escapeRegExp,
-    getAiXmlScopedRequestText,
     getAiXmlScopeTag,
 } from './matching.js';
 
-// Owns normal-message AI request and pending/final-cleanse lifecycle; matching, generation-target freshness, and accepted-result application are delegated to their respective modules.
+// Owns normal-message readiness/scheduling, request orchestration, pending/final-cleanse,
+// retry/cancellation, status UI, and accepted/fallback routing; task checks, matching,
+// single-request transport, response parsing, and final composition/commit are delegated.
 
 let automaticRunGenerationId = '';
 let automaticRunPromise = null;
 const streamingXmlTailLookbackChars = 64;
 const streamingXmlScanByMessageId = new Map();
-
-function getAiRewriteMessageId(payload) {
-    if (Number.isInteger(payload) && payload >= 0) return payload;
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return -1;
-    return Number.isInteger(payload.messageId) && payload.messageId >= 0
-        ? payload.messageId
-        : -1;
-}
 
 function getAiRetryCount(aiSettings) {
     return normalizeLimit(aiSettings?.maxRetries, 2, 0, 5);
@@ -220,10 +218,6 @@ function notifyAiRewriteStatus(type, title, message, options = {}) {
     showToast(`${safeTitle}${safeMessage ? `：${stripStatusText(safeMessage)}` : ''}`);
 }
 
-function countMatchedAiRules(matches = []) {
-    return new Set(matches.map(match => `${match.ruleIndex}:${match.subRuleIndex}`)).size;
-}
-
 function isLatestTrackableMessageIndex(index) {
     const { chat } = getAppContext();
     if (!Array.isArray(chat) || !Number.isInteger(index) || index < 0) return false;
@@ -232,35 +226,6 @@ function isLatestTrackableMessageIndex(index) {
         return i === index;
     }
     return false;
-}
-
-function getAiConfigIssue(aiSettings) {
-    if (aiSettings?.enabled !== true) {
-        return {
-            code: 'disabled',
-            reason: 'AI改写未启用',
-        };
-    }
-
-    const missingConfig = [];
-    if (!String(aiSettings.baseUrl || '').trim()) missingConfig.push('Base URL');
-    if (!String(aiSettings.apiKey || '')) missingConfig.push('API Key');
-    if (!String(aiSettings.model || '').trim()) missingConfig.push('模型');
-    if (missingConfig.length > 0) {
-        return {
-            code: 'incomplete-config',
-            reason: `AI API配置不完整：缺少 ${missingConfig.join('、')}`,
-        };
-    }
-
-    if (!getTavernHelperApi()) {
-        return {
-            code: 'tavern-helper-unavailable',
-            reason: 'TavernHelper.generateRaw 不可用',
-        };
-    }
-
-    return null;
 }
 
 function formatAiRewriteProgress(task, current, total, attempt = 1, maxAttempts = 1) {
@@ -291,21 +256,6 @@ function getAiRewriteMessageKey(index, branchKey = 'main') {
 
 function getTaskMessageKey(task) {
     return getAiRewriteMessageKey(task.index, task.branchKey);
-}
-
-function extractCurrentAiRewriteScope(text, aiSettings) {
-    const source = String(text || '');
-    const segments = collectAiXmlScopeSegments(source, aiSettings);
-    if (segments.length === 0) {
-        return { ok: false, text: '', tailLength: source.length, reason: 'content-scope-missing' };
-    }
-    const scopedText = getAiXmlScopedRequestText(source, aiSettings);
-    return {
-        ok: true,
-        text: scopedText,
-        tailLength: Math.max(0, source.length - scopedText.length),
-        reason: '',
-    };
 }
 
 function freezeAiRewriteContentIdentity(payload, snapshotText, aiSettings) {
@@ -384,48 +334,8 @@ function hasFinalCleanseAfterTaskStart(task) {
     return readySequence > (Number(task.finalCleanseSequence) || 0);
 }
 
-function getTavernHelperApi() {
-    return getTavernHelperGenerationApi();
-}
-
-
-class AiRewriteRequestFormatError extends Error {
-    constructor(message, cause = null) {
-        super(message);
-        this.name = 'AiRewriteRequestFormatError';
-        if (cause) this.cause = cause;
-    }
-}
-
-
-function isAiRewriteRequestFormatError(error) {
-    return error instanceof AiRewriteRequestFormatError
-        || error?.name === 'AiRewriteRequestFormatError';
-}
-
-function isBadRequestError(error) {
-    const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
-    if (status === 400) return true;
-    return /(?:bad request|http\s*400)/i.test(String(error?.message || ''));
-}
-
 function isNonRetryableAiRewriteError(error) {
     return isAiRewriteResponseFormatError(error) || isAiRewriteRequestFormatError(error);
-}
-
-function parseAiResponse(rawText, itemById) {
-    try {
-        const accepted = validateAiRewriteResponse(rawText, itemById);
-        recordAiRewriteDebug('parse-result', {
-            returnedCount: itemById.size,
-            acceptedCount: accepted.size,
-            rejectedCount: 0,
-        });
-        return accepted;
-    } catch (error) {
-        if (error?.diagnostic) recordAiRewriteDebug('parse-failed', error.diagnostic, 'warn');
-        throw error;
-    }
 }
 
 function applyAiProgramFallback(taskLike, reason = '') {
@@ -534,18 +444,6 @@ function finishAiRewriteApply(task, accepted) {
     });
     notifyAiRewriteStatus('success', 'AI 改写成功', formatAiRewriteCompletionMessage(task, '没有新的文本变更需要写入'), { timeOut: 5000 });
     return { status: 'no-change', applyResult };
-}
-
-function isSameAiRewriteTask(left, right) {
-    if (!left || !right) return false;
-    if (left.automatic === true || right.automatic === true) {
-        return left.automatic === true
-            && right.automatic === true
-            && String(left.generationId || '') !== ''
-            && String(left.generationId || '') === String(right.generationId || '');
-    }
-    return left.messageRef === right.messageRef
-        && String(left.branchKey || '') === String(right.branchKey || '');
 }
 
 function deferAiRewriteApplyUntilFinalCleanse(task, accepted) {
@@ -696,93 +594,6 @@ export function markAiRewriteFinalCleanseReady(payload) {
     return scheduleAiRewriteForMessage(payload, { delayMs: 0, preparedTask: readyTask });
 }
 
-export async function requestAiRewrite(prompt, aiSettings, signal, task = null) {
-    const tavernHelper = getTavernHelperApi();
-    if (!tavernHelper) throw new Error('TavernHelper.generateRaw 不可用');
-    const requestStartedAt = Date.now();
-    const helperGenerationId = task?.automatic === true
-        ? `veridis-ai-rewrite-${task.generationId}-${requestStartedAt}`
-        : `veridis-ai-rewrite-manual-${Number.isInteger(task?.index) ? task.index : 'message'}-${requestStartedAt}`;
-    const requestConfig = buildAiRewriteGenerateRawConfig(prompt, aiSettings, helperGenerationId);
-    const sampling = normalizeAiSamplingSettings(aiSettings);
-    const startedAt = requestStartedAt;
-    recordAiRewriteDebug('fetch-start', {
-        endpoint: 'TavernHelper.generateRaw',
-        helperGenerationId,
-        model: aiSettings.model,
-        apiSource: 'custom',
-        responseFormat: 'json_object',
-        sampling: {
-            temperature: sampling.temperature,
-            topP: sampling.topP,
-            topK: sampling.topK,
-            frequencyPenalty: sampling.frequencyPenalty,
-            presencePenalty: sampling.presencePenalty,
-            repetitionPenalty: sampling.repetitionPenalty,
-            maxTokens: sampling.maxTokens,
-        },
-        promptLength: String(prompt || '').length,
-        timeoutMs: aiSettings.timeoutMs,
-        generationId: task?.generationId || '',
-        chatId: task?.chatId || '',
-        index: Number.isInteger(task?.index) ? task.index : null,
-        source: task?.scheduleSource || '',
-    });
-    const stopGeneration = () => {
-        try {
-            tavernHelper.stopGenerationById?.(helperGenerationId);
-        } catch (error) {
-            logger.warn('停止酒馆助手自定义 API 改写请求失败', error);
-        }
-    };
-    signal?.addEventListener?.('abort', stopGeneration, { once: true });
-    try {
-        const requestJson = snapshotAiCommunicationRequest(requestConfig);
-        const communicationStartedAt = Date.now();
-        let response;
-        try {
-            response = await callTavernHelperGenerateRaw(requestConfig);
-        } catch (error) {
-            recordAiCommunicationFailure({
-                startedAt: communicationStartedAt,
-                endedAt: Date.now(),
-                requestJson,
-                error,
-            });
-            throw error;
-        }
-        recordAiCommunicationSuccess({
-            startedAt: communicationStartedAt,
-            endedAt: Date.now(),
-            requestJson,
-            response,
-        });
-        if (signal?.aborted) {
-            const abortError = new Error('请求已取消');
-            abortError.name = 'AbortError';
-            throw abortError;
-        }
-        const content = typeof response === 'string' ? response : String(response ?? '');
-        if (!content) throw new Error('酒馆助手自定义 API 返回空响应');
-        recordAiRewriteDebug('fetch-response', {
-            endpoint: 'TavernHelper.generateRaw',
-            ok: true,
-            elapsedMs: Date.now() - startedAt,
-            responseLength: content.length,
-            generationId: task?.generationId || '',
-            chatId: task?.chatId || '',
-            index: Number.isInteger(task?.index) ? task.index : null,
-        });
-        recordAiRewriteDebug('response-content', {
-            contentLength: content.length,
-            transport: 'tavern-helper-custom-api',
-        });
-        return content;
-    } finally {
-        signal?.removeEventListener?.('abort', stopGeneration);
-    }
-}
-
 export function cancelAiRewriteTask(reason = 'cancelled') {
     const state = aiRewriteState;
     if (state?.activeController) {
@@ -819,23 +630,6 @@ function finishAutomaticTaskBeforeRun(payload, reason, state = 'stale') {
         reason: String(reason || state),
         source: String(payload?.source || ''),
     }, 'warn');
-}
-
-export function validateAiRewriteFinalization(payload) {
-    const generationId = String(payload?.generationId || '');
-    const session = generationLifecycle.getSession(generationId);
-    if (!session?.contentIdentity) {
-        return generationLifecycle.validate(generationId, {
-            chatId: getCurrentChatIdentity(),
-            chat: getAppContext().chat,
-        });
-    }
-    return validateAutomaticAiRewriteContent({
-        generationId,
-        chatId: String(payload?.chatId || ''),
-        index: getAiRewriteMessageId(payload),
-        scheduleSource: String(payload?.source || 'finalization'),
-    }, { source: 'finalization' });
 }
 
 export function validateAiRewriteMessageTarget(payload) {

@@ -632,3 +632,22 @@ export function materializeProjectedRewriteItems(programText, items, projectedRa
 
     return { valid: true, items: materialized, failedItemId: '' };
 }
+
+export function countMatchedAiRules(matches = []) {
+    return new Set(matches.map(match => `${match.ruleIndex}:${match.subRuleIndex}`)).size;
+}
+
+export function extractCurrentAiRewriteScope(text, aiSettings) {
+    const source = String(text || '');
+    const segments = collectAiXmlScopeSegments(source, aiSettings);
+    if (segments.length === 0) {
+        return { ok: false, text: '', tailLength: source.length, reason: 'content-scope-missing' };
+    }
+    const scopedText = getAiXmlScopedRequestText(source, aiSettings);
+    return {
+        ok: true,
+        text: scopedText,
+        tailLength: Math.max(0, source.length - scopedText.length),
+        reason: '',
+    };
+}

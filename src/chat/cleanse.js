@@ -6,10 +6,9 @@ import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { getLatestTrackableDiffIndices, isAssistantMessage } from '../diff/tracking.js';
-import { computeMessageSignature, diffRuntimeState, refreshDiffCacheIfStale, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, writeReadyDiffCache, clearTrackedDiffEntry } from '../diff/state.js';
+import { computeMessageSignature, diffRuntimeState, refreshDiffCacheIfStale, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, clearTrackedDiffEntry } from '../diff/state.js';
 import { rulesRuntimeState } from '../rules/state.js';
 import { ensureMessageDiffButton, injectDiffButtons } from '../diff/view.js';
-import { buildDiffResultFromPair } from '../diff/compare.js';
 import { getMessageDomNode } from '../dom/message.js';
 import { commitCurrentMessageText, getMessageDiffBranchKey } from './messageBranch.js';
 import { clearAllMessageDiffMeta, isMessageAiFinal, isMessageFinalizedForCurrentBranch, isMessageManualFinal, writeMessageDiffProgram } from '../diff/messageMeta.js';
@@ -79,10 +78,8 @@ export function resolveLatestTrackableMessageIndex(payload) {
 export function syncMessageDiffMetadata(msg, sourceMes, cleanedMes) {
     const normalizedCleanedMes = typeof cleanedMes === 'string' ? cleanedMes : '';
     const branchKey = getMessageDiffBranchKey(msg);
-    const hasDiff = sourceMes !== normalizedCleanedMes;
     const metadataChanged = writeMessageDiffProgram(msg, branchKey, sourceMes, normalizedCleanedMes);
-    const signature = computeMessageSignature(msg);
-    return { signature, metadataChanged, hasDiff };
+    return { metadataChanged };
 }
 
 function hasMvuStatusPlaceholder(text) {
@@ -164,12 +161,6 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     const cleanedText = streamingFrame
         ? streamingFrame.programText
         : preserveMvuStatusPlaceholder(applyScopedReplacements(sourceMes), msg, [currentMes, sourceMes]);
-    const committedDiff = buildDiffResultFromPair(sourceMes, cleanedText);
-    const mainCache = {
-        snippets: Array.from(new Set(committedDiff.snippets || [])),
-        fullDiff: committedDiff.fullDiff || '',
-    };
-    const hasMainDiff = mainCache.snippets.length > 0 || mainCache.fullDiff.includes('blai-diff-full-modified');
 
     if (typeof msg.mes === 'string') {
         const currentSwipeIndex = Array.isArray(msg.swipes) ? Number(msg.swipe_id) : -1;
@@ -214,19 +205,13 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     }
 
     if (trackDiff) {
-        const { signature, metadataChanged } = syncMessageDiffMetadata(
+        const { metadataChanged } = syncMessageDiffMetadata(
             msg,
             sourceMes,
             typeof msg.mes === 'string' ? msg.mes : '',
         );
         if (metadataChanged) changed = true;
-        writeReadyDiffCache(index, signature, {
-            snippets: hasMainDiff ? mainCache.snippets : [],
-            fullDiff: hasMainDiff ? mainCache.fullDiff : '',
-            signature,
-        }, {
-            persist: hasMainDiff || changed,
-        });
+        refreshDiffCacheIfStale(index, { finalization: 'program', dataChanged: changed });
     } else {
         if (clearAllMessageDiffMeta(msg)) changed = true;
         clearTrackedDiffEntry(index, { persist: false });

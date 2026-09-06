@@ -4,8 +4,7 @@ import { refreshMessageDisplay } from '../chat/display.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
 import { applyScopedCompiledReplacements } from '../rules/engine.js';
-import { computeMessageSignature, writeReadyDiffCache } from '../diff/state.js';
-import { buildDiffResultFromStages } from '../diff/compare.js';
+import { refreshDiffCacheIfStale } from '../diff/state.js';
 import { getMessageDiffMeta, writeMessageDiffAiStage, writeMessageDiffProgram } from '../diff/messageMeta.js';
 import { beginAtomicMessageDisplaySwap } from '../dom/message.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
@@ -85,20 +84,7 @@ function commitRewriteText(taskLike, prepared, mode) {
         const metadataChanged = mode === 'ai'
             ? writeMessageDiffAiStage(msg, branchKey, originalText, aiText, programText)
             : writeMessageDiffProgram(msg, branchKey, originalText, programText);
-        const signature = computeMessageSignature(msg);
-        const diffResult = buildDiffResultFromStages(
-            originalText,
-            programText,
-            aiText,
-            null,
-        );
-        writeReadyDiffCache(index, signature, {
-            snippets: Array.from(new Set(diffResult.snippets || [])),
-            fullDiff: diffResult.fullDiff || '',
-            signature,
-        }, {
-            persist: true,
-        });
+        refreshDiffCacheIfStale(index, { finalization: 'ai' });
 
         if (textChanged || metadataChanged) {
             markHostChatDirtyFromIndex(index);
@@ -116,7 +102,7 @@ function commitRewriteText(taskLike, prepared, mode) {
             afterLength: programText.length,
             mode,
         });
-        return { committed: true, reason: '', signature };
+        return { committed: true, reason: '' };
     } catch (error) {
         atomicSwap?.release();
         throw error;
