@@ -134,35 +134,15 @@ function installStreamingProcessorProgram(finalizeCommittedMessage) {
     return true;
 }
 
-export function bindStreamingHostEvents({ eventSource, event_types, finalizeCommittedMessage }) {
-    if (event_types.STREAM_TOKEN_RECEIVED) {
-        const onStreamTokenReceived = () => {
-            streamingRuntimeState.isStreamingGeneration = true;
-            try {
-                installStreamingProcessorProgram(finalizeCommittedMessage);
-            } catch (error) {
-                if (!streamProcessorInstallFailureLogged) {
-                    streamProcessorInstallFailureLogged = true;
-                    recordAiRewriteRuntimeDebug('streaming-processor-install-failed', {
-                        reason: error?.message || String(error || 'unknown'),
-                    }, 'warn');
-                }
-            }
-        };
-        if (typeof eventSource.makeFirst === 'function') eventSource.makeFirst(event_types.STREAM_TOKEN_RECEIVED, onStreamTokenReceived);
-        else eventSource.on(event_types.STREAM_TOKEN_RECEIVED, onStreamTokenReceived);
+export function handleStreamingToken(finalizeCommittedMessage) {
+    try {
+        installStreamingProcessorProgram(finalizeCommittedMessage);
+    } catch (error) {
+        if (!streamProcessorInstallFailureLogged) {
+            streamProcessorInstallFailureLogged = true;
+            recordAiRewriteRuntimeDebug('streaming-processor-install-failed', {
+                reason: error?.message || String(error || 'unknown'),
+            }, 'warn');
+        }
     }
-    if (event_types.GENERATION_ENDED) eventSource.on(event_types.GENERATION_ENDED, (postOperationChatLength) => {
-        streamingRuntimeState.isStreamingGeneration = false;
-        recordAiRewriteRuntimeDebug('generation-ended-observed', {
-            postOperationChatLength: Number.isInteger(postOperationChatLength) ? postOperationChatLength : null,
-            generationId: generationLifecycle.getActive()?.generationId || '',
-        });
-    });
-    if (event_types.GENERATION_STOPPED) eventSource.on(event_types.GENERATION_STOPPED, () => {
-        streamingRuntimeState.isStreamingGeneration = false;
-        recordAiRewriteRuntimeDebug('generation-stopped-observed', {
-            generationId: generationLifecycle.getActive()?.generationId || '',
-        });
-    });
 }

@@ -16,7 +16,7 @@ import { getCurrentChatIdentity } from './context.js';
 import { getMvuExtraModelTransaction, shouldWaitForMvuExtraModelTransaction } from '../integrations/mvu.js';
 import { adoptMvuMessageContentForAiRewrite, getActiveAiRewriteBranchKeyForMessage, handleAiRewriteGenerationStarted, hasInvalidAiRewriteTarget, isLiveAiRewriteTargetMessage, markAiRewriteFinalCleanseReady, recordAiRewriteRuntimeDebug, resetAiRewriteRuntimeState, validateAiRewriteMessageTarget, waitForAutomaticAiRewrite } from '../aiRewrite/index.js';
 import { classifyHostGenerationStart, generationLifecycle } from './generationLifecycle.js';
-import { bindStreamingHostEvents, injectDiffButtonsStreamingSafe, resetStreamingProcessorInstallFailureState } from './streaming.js';
+import { handleStreamingToken, injectDiffButtonsStreamingSafe, resetStreamingProcessorInstallFailureState } from './streaming.js';
 import { initDomObserver, initPersonaProtectionObserver } from '../dom/observer.js';
 import { clearPendingShujukuRewrite, markLatestMessageShujukuRewritePending } from '../shujuku/realtime.js';
 
@@ -373,10 +373,27 @@ export function bindHostLifecycleEvents() {
         completedMvuFinalGenerationId = '';
         handleAiRewriteGenerationStarted(session);
     });
-    bindStreamingHostEvents({
-        eventSource,
-        event_types,
-        finalizeCommittedMessage: finalizeGenerationMessage,
+    if (event_types.STREAM_TOKEN_RECEIVED) {
+        const onStreamTokenReceived = () => {
+            // A start excluded from automatic tracking can still produce host stream tokens.
+            streamingRuntimeState.isStreamingGeneration = true;
+            handleStreamingToken(finalizeGenerationMessage);
+        };
+        if (typeof eventSource.makeFirst === 'function') eventSource.makeFirst(event_types.STREAM_TOKEN_RECEIVED, onStreamTokenReceived);
+        else eventSource.on(event_types.STREAM_TOKEN_RECEIVED, onStreamTokenReceived);
+    }
+    if (event_types.GENERATION_ENDED) eventSource.on(event_types.GENERATION_ENDED, (postOperationChatLength) => {
+        streamingRuntimeState.isStreamingGeneration = false;
+        recordAiRewriteRuntimeDebug('generation-ended-observed', {
+            postOperationChatLength: Number.isInteger(postOperationChatLength) ? postOperationChatLength : null,
+            generationId: generationLifecycle.getActive()?.generationId || '',
+        });
+    });
+    if (event_types.GENERATION_STOPPED) eventSource.on(event_types.GENERATION_STOPPED, () => {
+        streamingRuntimeState.isStreamingGeneration = false;
+        recordAiRewriteRuntimeDebug('generation-stopped-observed', {
+            generationId: generationLifecycle.getActive()?.generationId || '',
+        });
     });
     if (event_types.MESSAGE_RECEIVED) eventSource.on(event_types.MESSAGE_RECEIVED, (messageId, hostGenerationType) => {
         const { chat } = getAppContext();
