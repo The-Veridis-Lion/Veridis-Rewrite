@@ -1,5 +1,5 @@
 import { getAppContext } from '../host/appContext.js';
-import { preserveMvuStatusPlaceholder } from '../chat/cleanse.js';
+import { preserveMvuStatusPlaceholder } from '../integrations/mvu.js';
 import { refreshMessageDisplay } from '../chat/display.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';

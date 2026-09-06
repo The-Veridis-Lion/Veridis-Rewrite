@@ -12,13 +12,12 @@ import { getMessageDomNode } from '../dom/message.js';
 import { commitCurrentMessageText, getMessageDiffBranchKey } from './messageBranch.js';
 import { clearAllMessageDiffMeta, isMessageAiFinal, isMessageFinalizedForCurrentBranch, isMessageManualFinal, writeMessageDiffProgram } from '../diff/messageMeta.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
+import { preserveMvuStatusPlaceholder } from '../integrations/mvu.js';
 import { applyScopedReplacements, buildProcessors } from '../rules/engine.js';
 import { queueIncrementalChatSave } from './persistence.js';
 import { markLatestMessageShujukuRewritePending } from '../shujuku/realtime.js';
 import { recordAiRewriteDebug } from '../aiRewrite/debug.js';
 import { refreshMessageDisplay } from './display.js';
-
-const mvuStatusPlaceholder = '<StatusPlaceHolderImpl/>';
 
 /**
  * 从事件负载中解析消息索引。
@@ -79,43 +78,6 @@ export function syncMessageDiffMetadata(msg, sourceMes, cleanedMes) {
     const branchKey = getMessageDiffBranchKey(msg);
     const metadataChanged = writeMessageDiffProgram(msg, branchKey, sourceMes, normalizedCleanedMes);
     return { metadataChanged };
-}
-
-function hasMvuStatusPlaceholder(text) {
-    return String(text || '').includes(mvuStatusPlaceholder);
-}
-
-function hasMvuUpdatePayload(text) {
-    return String(text || '').includes('<UpdateVariable>');
-}
-
-function stripMvuStatusPlaceholders(text) {
-    return String(text ?? '')
-        .split(mvuStatusPlaceholder)
-        .join('')
-        .replace(/\n{3,}/g, '\n\n')
-        .trimEnd();
-}
-
-function getCurrentSwipeVariables(msg) {
-    const swipeId = Number.isInteger(Number(msg?.swipe_id)) ? Number(msg.swipe_id) : 0;
-    return msg?.variables?.[swipeId];
-}
-
-function hasCurrentSwipeMvuState(msg) {
-    const variables = getCurrentSwipeVariables(msg);
-    return !!(variables && typeof variables === 'object' && (variables.stat_data || variables.schema || variables.display_data));
-}
-
-export function preserveMvuStatusPlaceholder(text, msg, sources = []) {
-    const nextText = typeof text === 'string' ? text : String(text ?? '');
-    if (!nextText || !isAssistantMessage(msg)) return nextText;
-    const sourceTexts = [nextText, msg?.mes, ...sources].map(value => String(value || ''));
-    const hadPlaceholder = sourceTexts.some(hasMvuStatusPlaceholder);
-    const hasMvuPayload = sourceTexts.some(hasMvuUpdatePayload);
-    if (!hadPlaceholder && !(hasMvuPayload && hasCurrentSwipeMvuState(msg))) return nextText;
-    const normalizedText = stripMvuStatusPlaceholders(nextText);
-    return normalizedText ? `${normalizedText}\n\n${mvuStatusPlaceholder}` : mvuStatusPlaceholder;
 }
 
 /**
