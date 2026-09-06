@@ -1,7 +1,6 @@
 /**
  * Owns Diff text comparison and HTML/cache-result construction only; it does not own tracked-message runtime state, persistence, message mutation, or live DOM projection.
  */
-import { applyScopedReplacements, applyScopedReplacementsWithTrackedRanges } from '../rules/engine.js';
 
 /**
  * 将原始文本进行 HTML 转义，避免差异片段注入标签。
@@ -630,7 +629,8 @@ export function extractDiffDisplayText(rawText = '') {
 
 export function buildDiffResultFromPair(rawText, cleanedText) {
     if (typeof rawText !== 'string') return { cleanedText: rawText, snippets: [], fullDiff: "" };
-    const normalizedCleanedText = typeof cleanedText === 'string' ? cleanedText : applyScopedReplacements(rawText);
+    if (typeof cleanedText !== 'string') throw new TypeError('Difference requires a stored Program string');
+    const normalizedCleanedText = cleanedText;
     const displayText = extractDiffDisplayText(rawText);
     const cleanedDisplayText = extractDiffDisplayText(normalizedCleanedText);
     const displayOperations = getTextDiffOperations(displayText, cleanedDisplayText);
@@ -652,9 +652,8 @@ export function buildDiffResultFromStages(rawText, programText, aiText, manualTe
     if (typeof rawText !== 'string') return { cleanedText: rawText, snippets: [], fullDiff: "" };
     const hasAiStage = typeof aiText === 'string';
     const aiBeforeProgram = hasAiStage && finalSource === 'program';
-    const normalizedProgramText = typeof programText === 'string'
-        ? programText
-        : applyScopedReplacements(aiBeforeProgram ? aiText : rawText);
+    if (typeof programText !== 'string') throw new TypeError('Difference requires a stored Program string');
+    const normalizedProgramText = programText;
     const automaticText = hasAiStage && !aiBeforeProgram ? aiText : normalizedProgramText;
     const finalText = typeof manualText === 'string' ? manualText : automaticText;
     const displayText = extractDiffDisplayText(rawText);
@@ -679,15 +678,6 @@ export function buildDiffResultFromStages(rawText, programText, aiText, manualTe
         cleanedText: finalText,
         snippets: buildDiffSnippetsFromAnnotatedOperations(sourceToFinalOperations, displayText),
         fullDiff: buildFullDiffBlocksFromOperations(sourceToFinalOperations),
-    };
-}
-
-function buildDiffResultFromSource(rawText) {
-    if (typeof rawText !== 'string') return { cleanedText: rawText, snippets: [], fullDiff: "", programProjection: [] };
-    const programResult = applyScopedReplacementsWithTrackedRanges(rawText);
-    return {
-        ...buildDiffResultFromPair(rawText, programResult.text),
-        programProjection: programResult.projection,
     };
 }
 
@@ -756,12 +746,4 @@ function buildFullDiffHtml(originalText, cleanedText) {
     if (originalText === cleanedText) return buildNormalFullDiffBlocks(originalText);
     const operations = applyDefaultSource(annotateDiffOperations(getTextDiffOperations(originalText, cleanedText)));
     return buildFullDiffBlocksFromOperations(operations);
-}
-/**
- * 从原始消息文本构建净化结果与差异缓存。
- * @param {string} rawText 原始消息文本。
- * @returns {{cleanedText: string, snippets: string[], fullDiff: string, programProjection: number[][]}} 净化文本、片段差异、全文差异和同次 Program 执行产生的投影轨迹。
- */
-export function buildDiffSnippetsFromText(rawText) {
-    return buildDiffResultFromSource(rawText);
 }

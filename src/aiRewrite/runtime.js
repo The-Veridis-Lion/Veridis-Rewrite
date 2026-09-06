@@ -498,6 +498,7 @@ function finishAiRewriteApply(task, accepted) {
             reason: freshnessIssue,
         }, 'warn');
         notifyAiRewriteStatus('error', 'AI 改写失败', '消息状态已变化，未写回', { timeOut: 8000, extendedTimeOut: 16000 });
+        if (task.automatic === true) generationLifecycle.clearStreamingProgram(task.generationId);
         return { status: 'stale' };
     }
 
@@ -518,6 +519,7 @@ function finishAiRewriteApply(task, accepted) {
         }, 'warn');
         const fallbackResult = applyAiProgramFallback(task, applyResult.reason || 'apply-failed');
         if (fallbackResult.applied) return { status: 'fallback-applied', applyResult, fallbackResult };
+        if (task.automatic === true) generationLifecycle.clearStreamingProgram(task.generationId);
         notifyAiRewriteStatus('error', 'AI 改写未写入', `改写结果未覆盖聊天数据：${applyResult.reason || fallbackResult.reason || 'apply-failed'}`, {
             timeOut: 8000,
             extendedTimeOut: 16000,
@@ -961,6 +963,7 @@ function buildAiRewriteCandidate(payload, options = {}) {
         matches,
         taskSettings.settings,
         taskSettings.aiSettings,
+        { includeProgramFallback: !isAutomatic },
     );
     if (originalItems.length === 0) {
         return { task: null, reason: '命中内容没有可改写句子' };
@@ -1446,6 +1449,7 @@ export function adoptMvuMessageContentForAiRewrite(payload, messageContent) {
         return acknowledgement;
     }
 
+    generationLifecycle.clearStreamingProgram(generationId);
     recordAiRewriteDebug('mvu-message-content-adopted', {
         generationId,
         chatId: String(payload?.chatId || ''),

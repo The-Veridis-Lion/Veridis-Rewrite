@@ -10,14 +10,13 @@ import {
 } from '../chat/cleanse.js';
 import { computeMessageSignature, diffRuntimeState, markDiffComparisonPending, refreshDiffCacheIfStale, resetDiffRuntimeState, restoreDiffStateFromChatMetadata } from '../diff/state.js';
 import { isAssistantMessage } from '../diff/tracking.js';
-import { buildDiffSnippetsFromText } from '../diff/compare.js';
 import { getMessageSwipeIndex, setCurrentSwipeText } from '../chat/messageBranch.js';
-import { clearMessageDiffMeta, isMessageFinalizedForCurrentBranch, writeMessageDiffManualFinal } from '../diff/messageMeta.js';
+import { clearMessageDiffMeta, writeMessageDiffManualFinal } from '../diff/messageMeta.js';
 import { getCurrentChatIdentity } from './context.js';
 import { getMvuExtraModelTransaction, shouldWaitForMvuExtraModelTransaction } from '../integrations/mvu.js';
 import { adoptMvuMessageContentForAiRewrite, getActiveAiRewriteBranchKeyForMessage, handleAiRewriteGenerationStarted, hasInvalidAiRewriteTarget, isLiveAiRewriteTargetMessage, markAiRewriteFinalCleanseReady, recordAiRewriteRuntimeDebug, resetAiRewriteRuntimeState, validateAiRewriteMessageTarget, waitForAutomaticAiRewrite } from '../aiRewrite/index.js';
 import { classifyHostGenerationStart, generationLifecycle } from './generationLifecycle.js';
-import { bindStreamingHostEvents, injectDiffButtonsStreamingSafe, initStreamingVisualReplay, resetStreamingProcessorInstallFailureState } from './streaming.js';
+import { bindStreamingHostEvents, injectDiffButtonsStreamingSafe, resetStreamingProcessorInstallFailureState } from './streaming.js';
 import { initDomObserver, initPersonaProtectionObserver } from '../dom/observer.js';
 import { clearPendingShujukuRewrite, markLatestMessageShujukuRewritePending } from '../shujuku/realtime.js';
 
@@ -28,7 +27,6 @@ export function initRealtimeInterceptor() {
         onLog: (stage, details) => recordAiRewriteRuntimeDebug(stage, details),
     });
     initPersonaProtectionObserver();
-    initStreamingVisualReplay();
     initDomObserver({
         injectDiffButtons: injectDiffButtonsStreamingSafe,
     });
@@ -45,41 +43,6 @@ export function bindHostLifecycleEvents() {
         injectDiffButtonsStreamingSafe([index]);
     };
 
-    const buildCurrentRuleDifference = (sourceMes) => {
-        if (typeof sourceMes !== 'string' || !sourceMes) return null;
-        const result = buildDiffSnippetsFromText(sourceMes);
-        if (typeof result.cleanedText !== 'string' || result.cleanedText === sourceMes) return null;
-        return { sourceMes, result };
-    };
-
-    const resolveMessageIndexForCleansePayload = (payload) => {
-        return getMessageIndexFromEvent(payload);
-    };
-
-    const resolveFinalCleanseSourceForPayload = (payload) => {
-        const { chat } = getAppContext();
-        const index = resolveMessageIndexForCleansePayload(payload);
-        if (index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return { index: -1, sourceMes: undefined };
-
-        if (isMessageFinalizedForCurrentBranch(chat[index])) return { index, sourceMes: undefined };
-        const finalMes = typeof chat[index]?.mes === 'string' ? chat[index].mes : '';
-        const finalDiff = buildCurrentRuleDifference(finalMes);
-        if (finalDiff) return { index, sourceMes: finalMes, precomputedDiff: finalDiff };
-
-        const streamingCommittedMes = streamingRuntimeState.streamingCommittedMessageCache.get(index);
-        if (typeof streamingCommittedMes === 'string' && streamingCommittedMes !== finalMes) {
-            const streamingCommittedDiff = buildCurrentRuleDifference(streamingCommittedMes);
-            if (streamingCommittedDiff) {
-                return { index, sourceMes: streamingCommittedMes, precomputedDiff: streamingCommittedDiff };
-            }
-        }
-
-        return {
-            index,
-            sourceMes: undefined,
-        };
-    };
-
     const runFinalStreamingCleanse = (payload, options = {}) => {
         if (options.acknowledgeGenerationId) {
             const targetValidation = validateAiRewriteMessageTarget(payload);
@@ -92,11 +55,14 @@ export function bindHostLifecycleEvents() {
                 return;
             }
         }
-        const { index, sourceMes, precomputedDiff } = resolveFinalCleanseSourceForPayload(payload);
+        const index = getMessageIndexFromEvent(payload);
+        const session = generationLifecycle.getSession(String(payload?.generationId || ''));
+        const frame = session?.messageId === index ? session.streamingFrame : null;
+        const currentText = getAppContext().chat?.[index]?.mes;
         const cleanseResult = performIncrementalCleanse(payload, {
             visualOnly: false,
-            diffSourceMes: sourceMes,
-            precomputedDiff,
+            diffSourceMes: currentText,
+            streamingFrame: frame,
         });
         if (options.acknowledgeGenerationId
             && cleanseResult?.dataChanged === true
@@ -119,9 +85,7 @@ export function bindHostLifecycleEvents() {
                 }, 'warn');
             }
         }
-        if (options.clearRawSource === true && index >= 0) {
-            streamingRuntimeState.streamingCommittedMessageCache.delete(index);
-        }
+        if (options.acknowledgeGenerationId) generationLifecycle.clearStreamingProgram(options.acknowledgeGenerationId);
         return cleanseResult;
     };
 
@@ -221,7 +185,7 @@ export function bindHostLifecycleEvents() {
                 });
             }
 
-            streamingRuntimeState.streamingCommittedMessageCache.delete(stablePayload.messageId);
+            generationLifecycle.clearStreamingProgram(stablePayload.generationId);
             completedMvuFinalGenerationId = stablePayload.generationId;
             pendingMvuFinalPayload = null;
             recordAiRewriteRuntimeDebug('mvu-transaction-complete', {
@@ -315,7 +279,6 @@ export function bindHostLifecycleEvents() {
         const aiOwnsFinalCommit = markAiRewriteFinalCleanseReady(stablePayload);
         if (!aiOwnsFinalCommit) {
             runFinalStreamingCleanse(stablePayload, {
-                clearRawSource: true,
                 acknowledgeGenerationId: resolution.generationId,
                 acknowledgementSource: 'direct-final-cleanse',
             });
@@ -323,7 +286,6 @@ export function bindHostLifecycleEvents() {
         }
 
         markLatestMessageShujukuRewritePending(resolution.messageIndex, 'ai-finalization');
-        streamingRuntimeState.streamingCommittedMessageCache.delete(resolution.messageIndex);
         recordAiRewriteRuntimeDebug('final-cleanse-deferred-to-ai', {
             generationId: resolution.generationId,
             index: resolution.messageIndex,
@@ -352,7 +314,8 @@ export function bindHostLifecycleEvents() {
             setCurrentSwipeText(msg, msg.mes);
             const hasRetainedDiff = writeMessageDiffManualFinal(msg);
 
-            streamingRuntimeState.streamingCommittedMessageCache.delete(index);
+            const session = generationLifecycle.getActive();
+            if (session?.messageId === index) generationLifecycle.clearStreamingProgram(session.generationId);
 
             if (hasRetainedDiff) {
                 const signature = computeMessageSignature(msg);
@@ -403,7 +366,6 @@ export function bindHostLifecycleEvents() {
             mode: generationStart.mode,
         });
         streamingRuntimeState.isStreamingGeneration = true;
-        streamingRuntimeState.streamingCommittedMessageCache.clear();
         resetStreamingProcessorInstallFailureState();
         pendingMvuFinalPayload = null;
         activeMvuFinalPromise = null;
@@ -461,10 +423,9 @@ export function bindHostLifecycleEvents() {
                 reason: activeSession.messageRef ? 'other-message-swiped' : 'generation-target-not-bound',
             });
         }
-        streamingRuntimeState.streamingCommittedMessageCache.delete(index);
 
         const hasMaterializedSwipe = getMessageSwipeIndex(msg) >= 0;
-        if (hasMaterializedSwipe) runFinalStreamingCleanse(index, { clearRawSource: true });
+        if (hasMaterializedSwipe) runFinalStreamingCleanse(index);
     });
     if (event_types.MESSAGE_SWIPE_DELETED) eventSource.on(event_types.MESSAGE_SWIPE_DELETED, (payload) => {
         const messageId = Number.isInteger(payload?.messageId) && payload.messageId >= 0 ? payload.messageId : -1;
@@ -521,7 +482,6 @@ export function bindHostLifecycleEvents() {
             activeMvuFinalGenerationId = '';
             completedMvuFinalGenerationId = '';
             resetDiffRuntimeState();
-            streamingRuntimeState.streamingCommittedMessageCache.clear();
             resetStreamingProcessorInstallFailureState();
             diffRuntimeState.currentDiffIndex = undefined;
             $('#blai-diff-modal').hide();

@@ -1,5 +1,4 @@
-// Owns the shared runtime identity of the active streaming generation and its committed-message source cache.
+// Owns whether host generation is currently streaming. Frame data belongs to the generation.
 export const streamingRuntimeState = {
     isStreamingGeneration: false,
-    streamingCommittedMessageCache: new Map(),
 };

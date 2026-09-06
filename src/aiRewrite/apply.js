@@ -3,7 +3,7 @@ import { preserveMvuStatusPlaceholder } from '../chat/cleanse.js';
 import { refreshMessageDisplay } from '../chat/display.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
-import { applyScopedCompiledReplacementsWithTrackedRanges } from '../rules/engine.js';
+import { applyScopedCompiledReplacements } from '../rules/engine.js';
 import { computeMessageSignature, writeReadyDiffCache } from '../diff/state.js';
 import { buildDiffResultFromStages } from '../diff/compare.js';
 import { getMessageDiffMeta, writeMessageDiffAiStage, writeMessageDiffProgram } from '../diff/messageMeta.js';
@@ -13,94 +13,13 @@ import { collectXmlCommentRanges } from './commentProtection.js';
 import { resolveRewriteTrackedRanges } from './matching.js';
 import { getTaskFreshnessIssue } from './task.js';
 import { recordAiRewriteDebug } from './debug.js';
+import { generationLifecycle } from '../host/generationLifecycle.js';
 
 // Owns Original-based AI/fallback composition, the final normal Program pass,
 // and the atomic message/Swipe + branch-provenance commit boundary.
 
 function rangesOverlap(left, right) {
     return left.start < right.end && right.start < left.end;
-}
-
-// These are the dialogue quote pairs named by the existing AI rewrite prompt.
-const supportedDialogueQuotePairs = [
-    { open: '“', close: '”' },
-    { open: '「', close: '」' },
-];
-const quotePairByOpen = new Map(supportedDialogueQuotePairs.map((pair) => [pair.open, pair]));
-const quotePairByClose = new Map(supportedDialogueQuotePairs.map((pair) => [pair.close, pair]));
-
-function getParagraphBounds(text, offset) {
-    const source = String(text || '');
-    const position = Math.max(0, Math.min(source.length, Number(offset) || 0));
-    const start = source.lastIndexOf('\n', Math.max(0, position - 1)) + 1;
-    const nextBreak = source.indexOf('\n', position);
-    return { start, end: nextBreak === -1 ? source.length : nextBreak };
-}
-
-function scanDialogueQuoteState(text, start, end, initialStack = []) {
-    const stack = [...initialStack];
-    for (let index = start; index < end; index += 1) {
-        const character = text[index];
-        const openingPair = quotePairByOpen.get(character);
-        if (openingPair) {
-            stack.push(openingPair);
-            continue;
-        }
-        const closingPair = quotePairByClose.get(character);
-        if (!closingPair) continue;
-        const expectedPair = stack.at(-1);
-        if (expectedPair !== closingPair) return null;
-        stack.pop();
-    }
-    return stack;
-}
-
-function quoteStatesEqual(left, right) {
-    return left.length === right.length && left.every((pair, index) => pair === right[index]);
-}
-
-function getExpectedTargetQuoteState(programText, range) {
-    const source = String(programText || '');
-    const paragraph = getParagraphBounds(source, range.start);
-    const paragraphState = scanDialogueQuoteState(source, paragraph.start, paragraph.end);
-    if (!paragraphState || paragraphState.length !== 0) return null;
-
-    const initialState = scanDialogueQuoteState(source, paragraph.start, range.start);
-    if (!initialState) return null;
-    const expectedState = scanDialogueQuoteState(source, range.start, range.end, initialState);
-    if (!expectedState) return null;
-    return { initialState, expectedState };
-}
-
-function removeSurplusBoundaryQuotes(programText, range, replacement) {
-    const source = String(programText || '');
-    const start = Number(range?.start);
-    const end = Number(range?.end);
-    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || end > source.length) {
-        return String(replacement ?? '');
-    }
-
-    const quoteState = getExpectedTargetQuoteState(source, { start, end });
-    const rewritten = String(replacement ?? '');
-    if (!quoteState) return rewritten;
-
-    const replacementState = scanDialogueQuoteState(rewritten, 0, rewritten.length, quoteState.initialState);
-    if (replacementState && quoteStatesEqual(replacementState, quoteState.expectedState)) return rewritten;
-
-    const candidates = [];
-    if (quotePairByOpen.has(rewritten[0]) || quotePairByClose.has(rewritten[0])) {
-        candidates.push(rewritten.slice(1));
-    }
-    const lastCharacter = rewritten.at(-1);
-    if (quotePairByOpen.has(lastCharacter) || quotePairByClose.has(lastCharacter)) {
-        candidates.push(rewritten.slice(0, -1));
-    }
-
-    const restored = [...new Set(candidates)].filter((candidate) => {
-        const candidateState = scanDialogueQuoteState(candidate, 0, candidate.length, quoteState.initialState);
-        return candidateState && quoteStatesEqual(candidateState, quoteState.expectedState);
-    });
-    return restored.length === 1 ? restored[0] : rewritten;
 }
 
 function applyResolvedReplacements(text, replacements) {
@@ -221,61 +140,61 @@ function applyRewritePlan(task, selectedReplacements, mode) {
     const msg = chat[task.index];
     const currentText = String(msg?.mes ?? '');
     const previous = getMessageDiffMeta(msg, task.branchKey);
+    // Final provenance already owns this automatic branch. Only an explicit
+    // manual request may start another rewrite from its retained Original.
+    if (task.automatic === true && previous) {
+        return { appliedCount: 0, reason: 'no-text-change' };
+    }
     if (task.automatic !== true && !messageStagesEqual(previous, task.claimedMeta || null)) {
         return { appliedCount: 0, reason: 'message-stage-changed' };
     }
     // Host/MVU owns the complete automatic Original; manual runs use the retained Original.
     const originalText = task.automatic === true ? currentText : task.originalText;
-    const resolved = resolveRewriteTrackedRanges(originalText, task.items, task.aiSettings);
-    if (!resolved.valid) {
-        recordAiRewriteDebug('apply-skip', {
-            reason: 'item-locate-failed',
-            generationId: task.generationId || '',
-            itemId: resolved.failedItemId,
-        }, 'warn');
-        return { appliedCount: 0, reason: 'item-locate-failed' };
-    }
-
+    const session = task.automatic === true ? generationLifecycle.getSession(task.generationId) : null;
+    const streamingFrame = mode === 'program' && session?.streamingFrame?.originalText === originalText
+        ? session.streamingFrame
+        : null;
     const selectedItems = mode === 'ai'
         ? task.items.filter((item) => selectedReplacements.has(item.id))
         : task.items;
-    const replacements = resolved.ranges
-        .filter((range) => mode === 'ai'
-            ? range.rangeType === 'sentence' && selectedReplacements.has(range.itemId)
-            : range.rangeType === 'occurrence')
-        .map((range) => ({
-            start: range.start,
-            end: range.end,
-            rewritten: mode === 'ai'
-                ? removeSurplusBoundaryQuotes(
-                    originalText,
-                    range,
-                    selectedReplacements.get(range.itemId),
-                )
-                : String(task.items.find((item) => item.id === range.itemId)
-                    .matches[range.occurrenceIndex].programFallbackText ?? ''),
-            strategy: mode === 'ai' ? 'sentence' : 'raw-occurrence-fallback',
-        }));
-    const composition = applyResolvedReplacements(originalText, replacements);
-    const programResult = applyScopedCompiledReplacementsWithTrackedRanges(
-        composition.text,
-        task.programProcessors,
-        task.settings,
-        [],
-        {
-            protectedRanges: task.aiSettings?.protectXmlComments === true
-                ? collectXmlCommentRanges(composition.text)
-                : [],
-        },
-    );
-    if (!programResult.valid) {
-        return { appliedCount: 0, reason: 'program-transform-invalid' };
+    let replacements = [];
+    let composition = { text: originalText };
+    // Automatic failure/no-send uses the completed streaming stage, or one normal
+    // Program pass on the new authoritative Original. Manual fallback retains its contract.
+    if (mode === 'ai' || task.automatic !== true) {
+        const resolved = resolveRewriteTrackedRanges(originalText, task.items, task.aiSettings);
+        if (!resolved.valid) return { appliedCount: 0, reason: 'item-locate-failed' };
+        replacements = resolved.ranges
+            .filter((range) => mode === 'ai'
+                ? range.rangeType === 'sentence' && selectedReplacements.has(range.itemId)
+                : range.rangeType === 'occurrence')
+            .map((range) => ({
+                start: range.start,
+                end: range.end,
+                rewritten: mode === 'ai'
+                    ? String(selectedReplacements.get(range.itemId) ?? '')
+                    : String(task.items.find((item) => item.id === range.itemId)
+                        .matches[range.occurrenceIndex].programFallbackText ?? ''),
+                strategy: mode === 'ai' ? 'sentence' : 'raw-occurrence-fallback',
+            }));
+        composition = applyResolvedReplacements(originalText, replacements);
     }
-    const programText = preserveMvuStatusPlaceholder(
-        programResult.text,
-        msg,
-        [originalText, composition.text],
-    );
+    let programText;
+    if (streamingFrame) {
+        programText = streamingFrame.programText;
+    } else {
+        const transformedText = applyScopedCompiledReplacements(
+            composition.text,
+            task.programProcessors,
+            task.settings,
+            {
+                protectedRanges: task.automatic !== true
+                    ? (task.aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(composition.text) : [])
+                    : [],
+            },
+        );
+        programText = preserveMvuStatusPlaceholder(transformedText, msg, [originalText, composition.text]);
+    }
     const desiredStage = {
         originalMes: originalText,
         aiMes: mode === 'ai' ? composition.text : '',
@@ -284,6 +203,7 @@ function applyRewritePlan(task, selectedReplacements, mode) {
         finalSource: 'program',
     };
     if (programText === currentText && messageStagesEqual(previous, desiredStage)) {
+        if (task.automatic === true) generationLifecycle.clearStreamingProgram(task.generationId);
         recordAiRewriteDebug('apply-skip', { reason: 'no-text-change', generationId: task.generationId || '' }, 'warn');
         return { appliedCount: 0, reason: 'no-text-change' };
     }
@@ -298,6 +218,8 @@ function applyRewritePlan(task, selectedReplacements, mode) {
         recordAiRewriteDebug('apply-skip', { reason: commitResult.reason, generationId: task.generationId || '' }, 'warn');
         return { appliedCount: 0, reason: commitResult.reason };
     }
+
+    if (task.automatic === true) generationLifecycle.clearStreamingProgram(task.generationId);
 
     recordAiRewriteDebug('apply-success', {
         generationId: task.generationId || '',
