@@ -7,7 +7,6 @@ import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { getLatestTrackableDiffIndices, isAssistantMessage } from '../diff/tracking.js';
 import { computeMessageSignature, diffRuntimeState, refreshDiffCacheIfStale, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, clearTrackedDiffEntry } from '../diff/state.js';
-import { rulesRuntimeState } from '../rules/state.js';
 import { ensureMessageDiffButton, injectDiffButtons } from '../diff/view.js';
 import { getMessageDomNode } from '../dom/message.js';
 import { commitCurrentMessageText, getMessageDiffBranchKey } from './messageBranch.js';

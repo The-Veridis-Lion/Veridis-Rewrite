@@ -1,6 +1,6 @@
 import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
-import { rulesRuntimeState } from './state.js';
+import { programRuntimeState } from './state.js';
 import { logger } from '../log.js';
 import { buildSimpleWildcardPattern, compileRegexTarget } from './regex.js';
 import { mergeScopeTagsWithBuiltins } from '../scope/model.js';
@@ -218,8 +218,8 @@ export function compileProcessors(rules = [], options = {}) {
 }
 
 export function buildProcessors() {
-    if (!rulesRuntimeState.isRegexDirty) {
-        return rulesRuntimeState.activeProcessors;
+    if (!programRuntimeState.isRegexDirty) {
+        return programRuntimeState.activeProcessors;
     }
     const { extension_settings } = getAppContext();
     const settings = extension_settings[extensionName] || {};
@@ -229,12 +229,12 @@ export function buildProcessors() {
         warn: (message) => logger.warn(message),
     });
 
-    rulesRuntimeState.activeProcessors = compiled.dataProcessors;
-    rulesRuntimeState.isRegexDirty = false;
-    const regexProcessorCount = rulesRuntimeState.activeProcessors.filter((processor) => processor.kind === 'regex').length;
-    const simpleProcessorCount = rulesRuntimeState.activeProcessors.filter((processor) => processor.kind === 'simple').length;
-    logger.info(`规则处理器构建完成，共 ${rulesRuntimeState.activeProcessors.length} 个数据处理器（文本:${compiled.textTargetCount} | 正则:${regexProcessorCount} | 简易:${simpleProcessorCount}）`);
-    return rulesRuntimeState.activeProcessors;
+    programRuntimeState.activeProcessors = compiled.dataProcessors;
+    programRuntimeState.isRegexDirty = false;
+    const regexProcessorCount = programRuntimeState.activeProcessors.filter((processor) => processor.kind === 'regex').length;
+    const simpleProcessorCount = programRuntimeState.activeProcessors.filter((processor) => processor.kind === 'simple').length;
+    logger.info(`规则处理器构建完成，共 ${programRuntimeState.activeProcessors.length} 个数据处理器（文本:${compiled.textTargetCount} | 正则:${regexProcessorCount} | 简易:${simpleProcessorCount}）`);
+    return programRuntimeState.activeProcessors;
 }
 
 /**

@@ -4,7 +4,7 @@
  */
 import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
-import { rulesRuntimeState, markRulesUiDirty } from './state.js';
+import { rulesUiState, markRulesUiDirty } from './state.js';
 import { isRuleActivationWarningEnabled, parseInputToWords } from './model.js';
 import { safeHtml } from '../ui/html.js';
 
@@ -159,23 +159,23 @@ function syncRegexReplacementInputState() {
 }
 
 export function clearRuleSearchEditFlow() {
-    rulesRuntimeState.searchEditFlow.active = false;
-    rulesRuntimeState.searchEditFlow.returnMode = '';
-    rulesRuntimeState.searchEditFlow.ruleIndex = -1;
-    rulesRuntimeState.searchEditFlow.subRuleIndex = -1;
+    rulesUiState.searchEditFlow.active = false;
+    rulesUiState.searchEditFlow.returnMode = '';
+    rulesUiState.searchEditFlow.ruleIndex = -1;
+    rulesUiState.searchEditFlow.subRuleIndex = -1;
 }
 
 export function resetRuleSearchState() {
-    rulesRuntimeState.ruleSearchKeyword = '';
-    rulesRuntimeState.ruleSearchDraftKeyword = '';
-    rulesRuntimeState.ruleSearchHasSearched = false;
-    rulesRuntimeState.ruleSearchExpandedMenuKey = '';
+    rulesUiState.ruleSearchKeyword = '';
+    rulesUiState.ruleSearchDraftKeyword = '';
+    rulesUiState.ruleSearchHasSearched = false;
+    rulesUiState.ruleSearchExpandedMenuKey = '';
     clearRuleSearchEditFlow();
 }
 
 export function syncRuleSearchInputUi(options = {}) {
     const { syncValue = false } = options;
-    const draftKeyword = String(rulesRuntimeState.ruleSearchDraftKeyword || '');
+    const draftKeyword = String(rulesUiState.ruleSearchDraftKeyword || '');
     const $input = $('#blai-rule-search-input');
     const $field = $input.closest('.blai-rule-search-field');
     const $clear = $('#blai-rule-search-clear');
@@ -189,10 +189,10 @@ export function renderRuleSearchModal() {
     const $body = $('#blai-rule-search-body');
     if (!$body.length) return;
 
-    const keyword = String(rulesRuntimeState.ruleSearchKeyword || '').trim();
+    const keyword = String(rulesUiState.ruleSearchKeyword || '').trim();
     syncRuleSearchInputUi();
 
-    if (!rulesRuntimeState.ruleSearchHasSearched || !keyword) {
+    if (!rulesUiState.ruleSearchHasSearched || !keyword) {
         $body.html(`
             <div class="blai-rule-search-empty">
                 <div class="blai-rule-search-empty-icon"><i class="fas fa-magnifying-glass"></i></div>
@@ -216,7 +216,7 @@ export function renderRuleSearchModal() {
     }
 
     const html = results.map((item) => {
-        const menuHtml = rulesRuntimeState.ruleSearchExpandedMenuKey === item.key
+        const menuHtml = rulesUiState.ruleSearchExpandedMenuKey === item.key
             ? `
                 <div class="blai-rule-search-menu">
                     <button type="button" class="blai-rule-search-menu-item" data-action="group" data-rule-index="${item.ruleIndex}" data-subrule-index="${item.subRuleIndex}">
@@ -398,7 +398,7 @@ export function getSingleRuleReplacementValues(mode) {
 export function renderTags() {
     const container = $('#blai-home-rule-grid');
     if (!container.length) return;
-    if (!rulesRuntimeState.rulesUiDirty && container.children().length > 0) return;
+    if (!rulesUiState.rulesUiDirty && container.children().length > 0) return;
 
     const { extension_settings } = getAppContext();
     const rules = extension_settings[extensionName]?.rules || [];
@@ -490,18 +490,18 @@ export function renderTags() {
 export function renderSubrulesToModal() {
     const container = $('#blai-edit-subrules-container');
     if (!container.length) return;
-    if (rulesRuntimeState.currentEditingSubrules.length === 0) {
+    if (rulesUiState.currentEditingSubrules.length === 0) {
         container.html('<div class="blai-subrule-empty">当前合集没有映射规则，请点击下方按钮添加。</div>');
         return;
     }
 
-    const html = rulesRuntimeState.currentEditingSubrules.map((sub, i) => {
+    const html = rulesUiState.currentEditingSubrules.map((sub, i) => {
         const mode = sub.mode || 'text';
         const remark = sub.remark ? sub.remark.trim() : '';
         const subEnabled = sub.enabled !== false;
         const checkedAttr = subEnabled ? 'checked' : '';
         const moveUpDisabled = i === 0 ? 'disabled' : '';
-        const moveDownDisabled = i === rulesRuntimeState.currentEditingSubrules.length - 1 ? 'disabled' : '';
+        const moveDownDisabled = i === rulesUiState.currentEditingSubrules.length - 1 ? 'disabled' : '';
 
         const badgeText = mode === 'regex' ? '正则' : mode === 'simple' ? '简易' : '普通';
         const badgeHTML = `<span class="blai-mapping-badge">${badgeText}</span>`;
@@ -554,7 +554,7 @@ export function renderSubrulesToModal() {
 }
 
 export function openSingleRuleModal(index, options = {}) {
-    rulesRuntimeState.currentSubruleEditIndex = index;
+    rulesUiState.currentSubruleEditIndex = index;
     let mode = 'simple';
     let tStr = '';
     let replacements = [];
@@ -562,8 +562,8 @@ export function openSingleRuleModal(index, options = {}) {
     let rewriteMode = 'program';
     let aiPromptTemplate = '';
 
-    if (index >= 0 && rulesRuntimeState.currentEditingSubrules[index]) {
-        const sub = rulesRuntimeState.currentEditingSubrules[index];
+    if (index >= 0 && rulesUiState.currentEditingSubrules[index]) {
+        const sub = rulesUiState.currentEditingSubrules[index];
         mode = sub.mode || 'simple';
         tStr = (sub.targets || []).join(mode === 'text' ? ', ' : '\n');
         replacements = Array.isArray(sub.replacements) ? sub.replacements : [];
@@ -597,7 +597,7 @@ export function openTransferModal(ruleIndexOrIndexes) {
     }
 
     const indexes = Array.isArray(ruleIndexOrIndexes) ? ruleIndexOrIndexes : [ruleIndexOrIndexes];
-    rulesRuntimeState.currentTransferRuleIndexes = indexes
+    rulesUiState.currentTransferRuleIndexes = indexes
         .map((v) => Number(v))
         .filter((v) => Number.isInteger(v) && v >= 0);
     const $select = $('#blai-transfer-target');
@@ -606,7 +606,7 @@ export function openTransferModal(ruleIndexOrIndexes) {
 }
 
 export function closeTransferModal() {
-    rulesRuntimeState.currentTransferRuleIndexes = [];
+    rulesUiState.currentTransferRuleIndexes = [];
     $('#blai-rule-transfer-modal').hide();
 }
 
@@ -614,12 +614,12 @@ export function openEditModal(index = -1, options = {}) {
     const { extension_settings } = getAppContext();
     const settings = extension_settings[extensionName];
     const { source = 'main', returnMode = 'group', subRuleIndex = -1 } = options;
-    rulesRuntimeState.currentEditingIndex = index;
+    rulesUiState.currentEditingIndex = index;
     if (source === 'search') {
-        rulesRuntimeState.searchEditFlow.active = true;
-        rulesRuntimeState.searchEditFlow.returnMode = returnMode;
-        rulesRuntimeState.searchEditFlow.ruleIndex = index;
-        rulesRuntimeState.searchEditFlow.subRuleIndex = subRuleIndex;
+        rulesUiState.searchEditFlow.active = true;
+        rulesUiState.searchEditFlow.returnMode = returnMode;
+        rulesUiState.searchEditFlow.ruleIndex = index;
+        rulesUiState.searchEditFlow.subRuleIndex = subRuleIndex;
     } else {
         clearRuleSearchEditFlow();
     }
@@ -628,13 +628,13 @@ export function openEditModal(index = -1, options = {}) {
     if (index === -1) {
         $('#blai-edit-modal-title').html('<i class="fas fa-folder-plus"></i> 新增规则合集');
         $('#blai-edit-name').val('');
-        rulesRuntimeState.currentEditingSubrules = [{ targets: [], replacements: [], mode: 'simple', enabled: true, isEditing: false }];
+        rulesUiState.currentEditingSubrules = [{ targets: [], replacements: [], mode: 'simple', enabled: true, isEditing: false }];
     } else {
         const rule = settings.rules[index];
         $('#blai-edit-modal-title').html('<i class="fas fa-pen"></i> 编辑规则合集');
         $('#blai-edit-name').val(rule.name || '');
-        rulesRuntimeState.currentEditingSubrules = JSON.parse(JSON.stringify(rule.subRules || []));
-        rulesRuntimeState.currentEditingSubrules.forEach(sub => {
+        rulesUiState.currentEditingSubrules = JSON.parse(JSON.stringify(rule.subRules || []));
+        rulesUiState.currentEditingSubrules.forEach(sub => {
             if (sub.enabled === undefined) sub.enabled = true;
             sub.isEditing = false;
         });

@@ -5,7 +5,7 @@
 import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { diffRuntimeState } from '../diff/state.js';
-import { markRulesDataDirty, rulesRuntimeState } from './state.js';
+import { markRulesDataDirty, rulesUiState } from './state.js';
 import { buildRuleActivationConfirmMessage, getRuleActivationWarning, isRuleActivationWarningEnabled, normalizeRuleActivationSafety, parseInputToWords } from './model.js';
 import { validateRegexTargetInput } from './regex.js';
 import { buildPresetEntry, deepClone, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetRules } from '../presets/model.js';
@@ -49,17 +49,17 @@ function getRuleIdsByIndexes(rules, indexes) {
 }
 
 function getSelectedIndexesFromState(rules) {
-    const selectedSet = new Set(rulesRuntimeState.batchSelectedRuleIds || []);
+    const selectedSet = new Set(rulesUiState.batchSelectedRuleIds || []);
     return rules.map((rule, idx) => (selectedSet.has(ensureRuleObjectId(rule)) ? idx : -1)).filter((idx) => idx >= 0);
 }
 
 function syncBatchSelectionStateFromDom(rules) {
     const indexes = $('.batch-item-checkbox:checked').map(function() { return Number($(this).data('index')); }).get().filter((idx) => Number.isInteger(idx) && idx >= 0 && idx < rules.length);
-    rulesRuntimeState.batchSelectedRuleIds = getRuleIdsByIndexes(rules, indexes);
+    rulesUiState.batchSelectedRuleIds = getRuleIdsByIndexes(rules, indexes);
 }
 
 function applyBatchSelectionStateToDom(rules) {
-    const selectedSet = new Set(rulesRuntimeState.batchSelectedRuleIds || []);
+    const selectedSet = new Set(rulesUiState.batchSelectedRuleIds || []);
     $('.batch-item-checkbox').each(function() {
         const idx = Number($(this).data('index'));
         const rule = rules[idx];
@@ -86,7 +86,7 @@ function deleteSingleRule(rules, index) {
     if (!deletingRule) return false;
     const deletingId = ensureRuleObjectId(deletingRule);
     rules.splice(index, 1);
-    rulesRuntimeState.batchSelectedRuleIds = (rulesRuntimeState.batchSelectedRuleIds || []).filter((id) => id !== deletingId);
+    rulesUiState.batchSelectedRuleIds = (rulesUiState.batchSelectedRuleIds || []).filter((id) => id !== deletingId);
     return true;
 }
 
@@ -96,7 +96,7 @@ function deleteSelectedRules(rules, selectedIndexes) {
     const deletingIds = new Set(getRuleIdsByIndexes(rules, selectedIndexes));
     const nextRules = rules.filter((_, idx) => !deletingSet.has(idx));
     rules.splice(0, rules.length, ...nextRules);
-    rulesRuntimeState.batchSelectedRuleIds = (rulesRuntimeState.batchSelectedRuleIds || []).filter((id) => !deletingIds.has(id));
+    rulesUiState.batchSelectedRuleIds = (rulesUiState.batchSelectedRuleIds || []).filter((id) => !deletingIds.has(id));
     return true;
 }
 
@@ -161,30 +161,30 @@ function batchMoveRules(rules, selectedIndexes, direction) {
 }
 
 function isSearchGroupEditFlow() {
-    return rulesRuntimeState.searchEditFlow.active === true && rulesRuntimeState.searchEditFlow.returnMode === 'group';
+    return rulesUiState.searchEditFlow.active === true && rulesUiState.searchEditFlow.returnMode === 'group';
 }
 
 function isSearchDirectSubruleFlow() {
-    return rulesRuntimeState.searchEditFlow.active === true && rulesRuntimeState.searchEditFlow.returnMode === 'subrule';
+    return rulesUiState.searchEditFlow.active === true && rulesUiState.searchEditFlow.returnMode === 'subrule';
 }
 
 function isRelatedDirectSubruleFlow() {
-    return rulesRuntimeState.searchEditFlow.active === true && rulesRuntimeState.searchEditFlow.returnMode === 'related';
+    return rulesUiState.searchEditFlow.active === true && rulesUiState.searchEditFlow.returnMode === 'related';
 }
 
 function resetRuleSearchQueryState() {
-    rulesRuntimeState.ruleSearchKeyword = '';
-    rulesRuntimeState.ruleSearchDraftKeyword = '';
-    rulesRuntimeState.ruleSearchHasSearched = false;
-    rulesRuntimeState.ruleSearchExpandedMenuKey = '';
+    rulesUiState.ruleSearchKeyword = '';
+    rulesUiState.ruleSearchDraftKeyword = '';
+    rulesUiState.ruleSearchHasSearched = false;
+    rulesUiState.ruleSearchExpandedMenuKey = '';
     clearRuleSearchEditFlow();
 }
 
 function submitRuleSearch() {
-    rulesRuntimeState.ruleSearchDraftKeyword = String($('#blai-rule-search-input').val() || '');
-    rulesRuntimeState.ruleSearchKeyword = rulesRuntimeState.ruleSearchDraftKeyword.trim();
-    rulesRuntimeState.ruleSearchHasSearched = rulesRuntimeState.ruleSearchKeyword.length > 0;
-    rulesRuntimeState.ruleSearchExpandedMenuKey = '';
+    rulesUiState.ruleSearchDraftKeyword = String($('#blai-rule-search-input').val() || '');
+    rulesUiState.ruleSearchKeyword = rulesUiState.ruleSearchDraftKeyword.trim();
+    rulesUiState.ruleSearchHasSearched = rulesUiState.ruleSearchKeyword.length > 0;
+    rulesUiState.ruleSearchExpandedMenuKey = '';
     renderRuleSearchModal();
 }
 
@@ -195,22 +195,22 @@ function saveCurrentEditingRule(options = {}) {
     } = options;
     const { extension_settings, saveSettingsDebounced } = getAppContext();
     const rules = extension_settings[extensionName].rules || [];
-    const isCreatingNewRule = rulesRuntimeState.currentEditingIndex === -1;
+    const isCreatingNewRule = rulesUiState.currentEditingIndex === -1;
     const nameVal = String($('#blai-edit-name').val() || '').trim();
-    const validSubrules = rulesRuntimeState.currentEditingSubrules.filter(sub => sub.targets && sub.targets.length > 0);
+    const validSubrules = rulesUiState.currentEditingSubrules.filter(sub => sub.targets && sub.targets.length > 0);
 
     if (validSubrules.length === 0) {
         showToast('合集内至少需要保留一组有效映射！');
         return { ok: false };
     }
 
-    const previousRule = rulesRuntimeState.currentEditingIndex !== -1 ? rules[rulesRuntimeState.currentEditingIndex] : null;
+    const previousRule = rulesUiState.currentEditingIndex !== -1 ? rules[rulesUiState.currentEditingIndex] : null;
     const isEnabled = previousRule?.enabled !== false;
     const activationWarning = getRuleActivationWarning(previousRule);
     const activationWarningEnabled = isRuleActivationWarningEnabled(previousRule);
 
-    const fallbackName = rulesRuntimeState.currentEditingIndex !== -1
-        ? (rules[rulesRuntimeState.currentEditingIndex]?.name || `合集 ${rulesRuntimeState.currentEditingIndex + 1}`)
+    const fallbackName = rulesUiState.currentEditingIndex !== -1
+        ? (rules[rulesUiState.currentEditingIndex]?.name || `合集 ${rulesUiState.currentEditingIndex + 1}`)
         : `合集 ${rules.length + 1}`;
     const newRule = normalizeRuleActivationSafety({
         name: nameVal || fallbackName,
@@ -220,8 +220,8 @@ function saveCurrentEditingRule(options = {}) {
         enabled: activationWarningEnabled ? false : isEnabled,
     });
 
-    if (rulesRuntimeState.currentEditingIndex === -1) rules.push(newRule);
-    else rules[rulesRuntimeState.currentEditingIndex] = newRule;
+    if (rulesUiState.currentEditingIndex === -1) rules.push(newRule);
+    else rules[rulesUiState.currentEditingIndex] = newRule;
 
     markRulesDataDirty();
     saveSettingsDebounced();
@@ -336,7 +336,7 @@ function runRuleTransfer(isMove) {
     const settings = extension_settings[extensionName];
     const targetPreset = String($('#blai-transfer-target').val() || '');
     const sourcePreset = String(settings.activePreset || '');
-    const transferIndexes = rulesRuntimeState.currentTransferRuleIndexes;
+    const transferIndexes = rulesUiState.currentTransferRuleIndexes;
     const validIndexes = transferIndexes
         .map((v) => Number(v))
         .filter((v) => Number.isInteger(v) && v >= 0);
@@ -369,7 +369,7 @@ function runRuleTransfer(isMove) {
         for (let i = uniqueIndexes.length - 1; i >= 0; i--) {
             sourceRules.splice(uniqueIndexes[i], 1);
         }
-        rulesRuntimeState.batchSelectedRuleIds = [];
+        rulesUiState.batchSelectedRuleIds = [];
         markRulesDataDirty();
     }
 
@@ -400,12 +400,12 @@ export function bindRuleEvents() {
     });
 
     $(document).off('input', '#blai-rule-search-input').on('input', '#blai-rule-search-input', function() {
-        rulesRuntimeState.ruleSearchDraftKeyword = String($(this).val() || '');
+        rulesUiState.ruleSearchDraftKeyword = String($(this).val() || '');
         syncRuleSearchInputUi();
-        if (rulesRuntimeState.ruleSearchDraftKeyword.trim() !== '') return;
-        rulesRuntimeState.ruleSearchKeyword = '';
-        rulesRuntimeState.ruleSearchHasSearched = false;
-        rulesRuntimeState.ruleSearchExpandedMenuKey = '';
+        if (rulesUiState.ruleSearchDraftKeyword.trim() !== '') return;
+        rulesUiState.ruleSearchKeyword = '';
+        rulesUiState.ruleSearchHasSearched = false;
+        rulesUiState.ruleSearchExpandedMenuKey = '';
         renderRuleSearchModal();
     });
 
@@ -430,7 +430,7 @@ export function bindRuleEvents() {
         e.preventDefault();
         e.stopPropagation();
         const nextKey = String($(this).data('key') || '');
-        rulesRuntimeState.ruleSearchExpandedMenuKey = rulesRuntimeState.ruleSearchExpandedMenuKey === nextKey ? '' : nextKey;
+        rulesUiState.ruleSearchExpandedMenuKey = rulesUiState.ruleSearchExpandedMenuKey === nextKey ? '' : nextKey;
         renderRuleSearchModal();
     });
 
@@ -444,7 +444,7 @@ export function bindRuleEvents() {
         if (!Number.isInteger(ruleIndex) || ruleIndex < 0 || ruleIndex >= rules.length) return;
         if (!Number.isInteger(subRuleIndex) || subRuleIndex < 0 || subRuleIndex >= (rules[ruleIndex]?.subRules || []).length) return;
 
-        rulesRuntimeState.ruleSearchExpandedMenuKey = '';
+        rulesUiState.ruleSearchExpandedMenuKey = '';
         closeRuleSearchModal();
 
         if (action === 'group') {
@@ -460,8 +460,8 @@ export function bindRuleEvents() {
 
     $(document).off('click', '#blai-rule-search-modal').on('click', '#blai-rule-search-modal', function(e) {
         if ($(e.target).closest('.blai-rule-search-menu-wrap').length > 0) return;
-        if (!rulesRuntimeState.ruleSearchExpandedMenuKey) return;
-        rulesRuntimeState.ruleSearchExpandedMenuKey = '';
+        if (!rulesUiState.ruleSearchExpandedMenuKey) return;
+        rulesUiState.ruleSearchExpandedMenuKey = '';
         renderRuleSearchModal();
     });
 
@@ -474,7 +474,7 @@ export function bindRuleEvents() {
             .attr('aria-expanded', String(isBatchMode));
         if (!isBatchMode) {
             $('.batch-item-checkbox').prop('checked', false);
-            rulesRuntimeState.batchSelectedRuleIds = [];
+            rulesUiState.batchSelectedRuleIds = [];
         }
     });
 
@@ -594,30 +594,30 @@ export function bindRuleEvents() {
 
     $(document).off('change', '.blai-subrule-toggle').on('change', '.blai-subrule-toggle', function() {
         const index = Number($(this).data('index'));
-        if (!Number.isInteger(index) || index < 0 || index >= rulesRuntimeState.currentEditingSubrules.length) return;
-        rulesRuntimeState.currentEditingSubrules[index].enabled = $(this).prop('checked');
+        if (!Number.isInteger(index) || index < 0 || index >= rulesUiState.currentEditingSubrules.length) return;
+        rulesUiState.currentEditingSubrules[index].enabled = $(this).prop('checked');
         renderSubrulesToModal();
     });
 
     $(document).off('click', '.blai-move-subrule-up-btn').on('click', '.blai-move-subrule-up-btn', function() {
         const index = Number($(this).data('index'));
-        if (index <= 0 || index >= rulesRuntimeState.currentEditingSubrules.length) return;
-        [rulesRuntimeState.currentEditingSubrules[index - 1], rulesRuntimeState.currentEditingSubrules[index]] = [rulesRuntimeState.currentEditingSubrules[index], rulesRuntimeState.currentEditingSubrules[index - 1]];
+        if (index <= 0 || index >= rulesUiState.currentEditingSubrules.length) return;
+        [rulesUiState.currentEditingSubrules[index - 1], rulesUiState.currentEditingSubrules[index]] = [rulesUiState.currentEditingSubrules[index], rulesUiState.currentEditingSubrules[index - 1]];
         renderSubrulesToModal();
     });
 
     $(document).off('click', '.blai-move-subrule-down-btn').on('click', '.blai-move-subrule-down-btn', function() {
         const index = Number($(this).data('index'));
-        if (index < 0 || index >= rulesRuntimeState.currentEditingSubrules.length - 1) return;
-        [rulesRuntimeState.currentEditingSubrules[index], rulesRuntimeState.currentEditingSubrules[index + 1]] = [rulesRuntimeState.currentEditingSubrules[index + 1], rulesRuntimeState.currentEditingSubrules[index]];
+        if (index < 0 || index >= rulesUiState.currentEditingSubrules.length - 1) return;
+        [rulesUiState.currentEditingSubrules[index], rulesUiState.currentEditingSubrules[index + 1]] = [rulesUiState.currentEditingSubrules[index + 1], rulesUiState.currentEditingSubrules[index]];
         renderSubrulesToModal();
     });
 
     $(document).off('click', '.blai-del-subrule-btn').on('click', '.blai-del-subrule-btn', function() {
         const index = Number($(this).data('index'));
-        if (!Number.isInteger(index) || index < 0 || index >= rulesRuntimeState.currentEditingSubrules.length) return;
+        if (!Number.isInteger(index) || index < 0 || index >= rulesUiState.currentEditingSubrules.length) return;
         if (!confirm('确定要删除该映射规则吗？')) return;
-        rulesRuntimeState.currentEditingSubrules.splice(index, 1);
+        rulesUiState.currentEditingSubrules.splice(index, 1);
         renderSubrulesToModal();
         showToast('词条删除成功');
     });
@@ -629,7 +629,7 @@ export function bindRuleEvents() {
     $(document).off('click', '.blai-remark-subrule-btn').on('click', '.blai-remark-subrule-btn', function(e) {
         e.preventDefault();
         const index = $(this).data('index');
-        const sub = rulesRuntimeState.currentEditingSubrules[index];
+        const sub = rulesUiState.currentEditingSubrules[index];
         const newRemark = prompt("📝 快捷修改规则备注：\n(若不需要备注，请直接清空并点击确定)", sub.remark || '');
 
         if (newRemark !== null) {
@@ -706,8 +706,8 @@ export function bindRuleEvents() {
             return;
         }
 
-        const previousSubRule = rulesRuntimeState.currentSubruleEditIndex >= 0
-            ? rulesRuntimeState.currentEditingSubrules[rulesRuntimeState.currentSubruleEditIndex]
+        const previousSubRule = rulesUiState.currentSubruleEditIndex >= 0
+            ? rulesUiState.currentEditingSubrules[rulesUiState.currentSubruleEditIndex]
             : null;
         const subRule = {
             targets,
@@ -719,10 +719,10 @@ export function bindRuleEvents() {
             enabled: previousSubRule?.enabled !== false,
         };
 
-        if (rulesRuntimeState.currentSubruleEditIndex === -1) {
-            rulesRuntimeState.currentEditingSubrules.push(subRule);
+        if (rulesUiState.currentSubruleEditIndex === -1) {
+            rulesUiState.currentEditingSubrules.push(subRule);
         } else {
-            rulesRuntimeState.currentEditingSubrules[rulesRuntimeState.currentSubruleEditIndex] = subRule;
+            rulesUiState.currentEditingSubrules[rulesUiState.currentSubruleEditIndex] = subRule;
         }
 
         clearRegexTargetValidationState();
@@ -741,7 +741,7 @@ export function bindRuleEvents() {
         $('#blai-subrule-edit-modal').fadeOut(150);
         renderSubrulesToModal();
 
-        if (rulesRuntimeState.currentSubruleEditIndex === -1) {
+        if (rulesUiState.currentSubruleEditIndex === -1) {
             const container = $('#blai-edit-subrules-container');
             container.scrollTop(container[0].scrollHeight);
         }
