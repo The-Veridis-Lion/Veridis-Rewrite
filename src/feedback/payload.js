@@ -111,7 +111,7 @@ export function buildFeedbackPayload(form = {}, selected = {}, readers = getFeed
         details: requiredText(form.details, 'Details'),
         environment: {
             veridisVersion: requiredReaderValue(readers.getVeridisVersion, 'Veridis version'),
-            veridisCommit: requiredReaderValue(readers.getVeridisCommit, 'Veridis commit'),
+            veridisCommit: typeof readers.getVeridisCommit === 'function' ? String(readers.getVeridisCommit() || '').trim() : '',
             sillyTavernVersion: requiredReaderValue(readers.getSillyTavernVersion, 'SillyTavern version'),
             runtime: requiredReaderValue(readers.getRuntime, 'Runtime'),
             platform: requiredReaderValue(readers.getPlatform, 'Platform'),

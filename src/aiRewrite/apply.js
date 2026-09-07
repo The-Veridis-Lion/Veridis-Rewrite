@@ -137,7 +137,9 @@ function applyRewritePlan(task, selectedReplacements, mode) {
     // Host/MVU owns the complete automatic Original; manual runs use the retained Original.
     const originalText = task.automatic === true ? currentText : task.originalText;
     const session = task.automatic === true ? generationLifecycle.getSession(task.generationId) : null;
-    const streamingFrame = mode === 'program' && session?.streamingFrame?.originalText === originalText
+    const streamingFrame = mode === 'program'
+        && task.aiSettings?.protectXmlComments !== true
+        && session?.streamingFrame?.originalText === originalText
         ? session.streamingFrame
         : null;
     const selectedItems = mode === 'ai'
@@ -145,8 +147,8 @@ function applyRewritePlan(task, selectedReplacements, mode) {
         : task.items;
     let replacements = [];
     let composition = { text: originalText };
-    // Automatic failure/no-send uses the completed streaming stage, or one normal
-    // Program pass on the new authoritative Original. Manual fallback retains its contract.
+    // Automatic failure/no-send reuses streaming Program only without comment protection;
+    // otherwise it runs normal protected Program on Original. Manual fallback retains its contract.
     if (mode === 'ai' || task.automatic !== true) {
         const resolved = resolveRewriteTrackedRanges(originalText, task.items, task.aiSettings);
         if (!resolved.valid) return { appliedCount: 0, reason: 'item-locate-failed' };
@@ -174,8 +176,8 @@ function applyRewritePlan(task, selectedReplacements, mode) {
             task.programProcessors,
             task.settings,
             {
-                protectedRanges: task.automatic !== true
-                    ? (task.aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(composition.text) : [])
+                protectedRanges: task.aiSettings?.protectXmlComments === true
+                    ? collectXmlCommentRanges(composition.text)
                     : [],
             },
         );
