@@ -1,6 +1,7 @@
 /**
- * Owns the persisted Original -> Program -> optional AI stage chain for each
- * retained message branch. A Manual final uses the branch's current msg.mes.
+ * Owns Original -> optional AI -> Program for newly written message branches.
+ * finalSource retains the last automatic stage; msg.mes owns later Manual edits.
+ * Existing finalSource='ai'/'manual' entries retain their Program-before-AI order.
  */
 
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
@@ -26,31 +27,6 @@ function getBranchMetaContainer(msg, create = false) {
     return msg[branchMetaKey];
 }
 
-function normalizeProgramProjection(value) {
-    if (!Array.isArray(value)) return undefined;
-    const projection = [];
-    for (const tuple of value) {
-        if (!Array.isArray(tuple)
-            || tuple.length !== 3
-            || !Number.isInteger(tuple[0])
-            || !Number.isInteger(tuple[1])
-            || !Number.isInteger(tuple[2])
-            || tuple[0] < 0
-            || tuple[1] < tuple[0]
-            || tuple[2] < 0) {
-            return undefined;
-        }
-        projection.push([...tuple]);
-    }
-    return projection;
-}
-
-function projectionsEqual(left, right) {
-    if (left === undefined || right === undefined) return left === right;
-    return left.length === right.length
-        && left.every((tuple, index) => tuple.every((value, tupleIndex) => value === right[index][tupleIndex]));
-}
-
 function normalizeBranchMeta(entry) {
     if (!isObject(entry)
         || typeof entry.originalMes !== 'string'
@@ -67,8 +43,6 @@ function normalizeBranchMeta(entry) {
             ? 'manual'
             : (hasAiTrace && entry.finalSource === 'ai' ? 'ai' : 'program'),
     };
-    const programProjection = normalizeProgramProjection(entry.programProjection);
-    if (programProjection !== undefined) normalized.programProjection = programProjection;
     return normalized;
 }
 
@@ -76,7 +50,7 @@ export function getMessageDiffMeta(msg, branchKey = getMessageDiffBranchKey(msg)
     return normalizeBranchMeta(getBranchMetaContainer(msg)?.[branchKey]);
 }
 
-export function writeMessageDiffProgram(msg, branchKey, originalMes, programMes, programProjection) {
+export function writeMessageDiffProgram(msg, branchKey, originalMes, programMes) {
     if (!isObject(msg)) return false;
     const normalizedBranchKey = branchKey || getMessageDiffBranchKey(msg);
     const nextMeta = {
@@ -86,14 +60,11 @@ export function writeMessageDiffProgram(msg, branchKey, originalMes, programMes,
         hasAiTrace: false,
         finalSource: 'program',
     };
-    const normalizedProjection = normalizeProgramProjection(programProjection);
-    if (normalizedProjection !== undefined) nextMeta.programProjection = normalizedProjection;
     const container = getBranchMetaContainer(msg, true);
     const previous = normalizeBranchMeta(container[normalizedBranchKey]);
     if (previous
         && previous.originalMes === nextMeta.originalMes
         && previous.programMes === nextMeta.programMes
-        && projectionsEqual(previous.programProjection, nextMeta.programProjection)
         && previous.hasAiTrace === false
         && previous.finalSource === 'program') {
         return false;
@@ -102,46 +73,34 @@ export function writeMessageDiffProgram(msg, branchKey, originalMes, programMes,
     return true;
 }
 
-export function writeMessageDiffAiStage(msg, branchKey, aiMes) {
+export function writeMessageDiffAiStage(msg, branchKey, originalMes, aiMes, programMes) {
     if (!isObject(msg)) return false;
     const normalizedBranchKey = branchKey || getMessageDiffBranchKey(msg);
-    const container = getBranchMetaContainer(msg);
-    const previous = normalizeBranchMeta(container?.[normalizedBranchKey]);
-    if (!previous) return false;
-
-    const nextAiMes = String(aiMes ?? '');
-    if (previous.hasAiTrace
-        && previous.aiMes === nextAiMes
-        && previous.finalSource === 'ai') {
-        return false;
-    }
-    container[normalizedBranchKey] = {
-        ...previous,
-        aiMes: nextAiMes,
+    const container = getBranchMetaContainer(msg, true);
+    const previous = normalizeBranchMeta(container[normalizedBranchKey]);
+    const nextMeta = {
+        originalMes: String(originalMes ?? ''),
+        aiMes: String(aiMes ?? ''),
+        programMes: String(programMes ?? ''),
         hasAiTrace: true,
-        finalSource: 'ai',
+        finalSource: 'program',
     };
+    if (previous?.hasAiTrace
+        && previous.originalMes === nextMeta.originalMes
+        && previous.aiMes === nextMeta.aiMes
+        && previous.programMes === nextMeta.programMes
+        && previous.finalSource === 'program') return false;
+    container[normalizedBranchKey] = nextMeta;
     return true;
 }
 
 /**
- * Marks the current branch text as Manual while retaining the already-owned
- * Original, Program, and optional accepted AI stages.
+ * Manual text is already persisted in msg.mes. Leave automatic provenance intact;
+ * return whether the edit has retained provenance whose presentation must refresh,
+ * including edits that return exactly to the automatic result.
  */
 export function writeMessageDiffManualFinal(msg, branchKey = getMessageDiffBranchKey(msg)) {
-    if (!isObject(msg) || typeof msg.mes !== 'string') return false;
-    const normalizedBranchKey = branchKey || getMessageDiffBranchKey(msg);
-    const container = getBranchMetaContainer(msg);
-    const previous = normalizeBranchMeta(container?.[normalizedBranchKey]);
-    if (!previous) return false;
-    if (previous.finalSource === 'program' && msg.mes === previous.programMes) return false;
-    if (previous.finalSource === 'ai' && msg.mes === previous.aiMes) return false;
-    if (previous.finalSource === 'manual') return true;
-    container[normalizedBranchKey] = {
-        ...previous,
-        finalSource: 'manual',
-    };
-    return true;
+    return typeof msg?.mes === 'string' && getMessageDiffMeta(msg, branchKey) !== null;
 }
 
 export function clearMessageDiffMeta(msg, branchKey = getMessageDiffBranchKey(msg)) {
@@ -176,11 +135,8 @@ export function getCurrentMessageOriginalMes(msg) {
 }
 
 export function isMessageFinalizedForCurrentBranch(msg) {
-    const meta = getMessageDiffMeta(msg);
-    if (!meta || typeof msg?.mes !== 'string') return false;
-    if (meta.finalSource === 'manual') return true;
-    if (meta.finalSource === 'ai') return msg.mes === meta.aiMes;
-    return msg.mes === meta.programMes;
+    // A retained branch owns an automatic result; any later different text is Manual.
+    return typeof msg?.mes === 'string' && getMessageDiffMeta(msg) !== null;
 }
 
 export function isMessageAiFinal(msg) {
@@ -191,13 +147,16 @@ export function isMessageAiFinalForBranch(msg, branchKey, messageText) {
     const meta = getMessageDiffMeta(msg, branchKey);
     return !!(
         meta?.hasAiTrace
-        && meta.finalSource === 'ai'
+        && meta.finalSource !== 'manual'
         && msg?.__blai_is_reverted !== true
         && typeof messageText === 'string'
-        && messageText === meta.aiMes
+        && messageText === (meta.finalSource === 'ai' ? meta.aiMes : meta.programMes)
     );
 }
 
 export function isMessageManualFinal(msg) {
-    return getMessageDiffMeta(msg)?.finalSource === 'manual';
+    const meta = getMessageDiffMeta(msg);
+    if (!meta || typeof msg?.mes !== 'string') return false;
+    if (meta.finalSource === 'manual') return true;
+    return msg.mes !== (meta.finalSource === 'ai' ? meta.aiMes : meta.programMes);
 }

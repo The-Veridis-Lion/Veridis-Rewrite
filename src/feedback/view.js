@@ -2,6 +2,7 @@
 import { feedbackAreas, feedbackTypes } from './payload.js';
 import { getAiRewriteDebugDisplayText } from '../aiRewrite/debug.js';
 import { formatAiCommunicationRecords } from '../aiRewrite/communicationMonitor.js';
+import { projectFeedbackUpdateWarning } from '../update/status.js';
 
 const feedbackAreaLabels = Object.freeze({
     'Deep Clean': '深度净化',
@@ -125,6 +126,7 @@ export function renderFeedbackForm(slots = {}) {
             </section>
         </form>
     `;
+    projectFeedbackUpdateWarning();
     updateFeedbackAreaSummary();
 }
 

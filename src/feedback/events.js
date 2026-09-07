@@ -1,5 +1,5 @@
 // Owns feedback workspace action binding and the exact serialized preview submitted to the gateway.
-import { buildFeedbackPayload } from './payload.js';
+import { buildFeedbackPayload, getFeedbackPayloadReaders } from './payload.js';
 import { submitFeedbackPayloadJson } from './client.js';
 import {
     clearDeepCleanDiagnostics,
@@ -27,9 +27,25 @@ import { showToast } from '../ui/notifications.js';
 
 let previewPayloadJson = '';
 
-export function createFeedbackPreviewPayloadJson(form, selected, readers) {
-    previewPayloadJson = JSON.stringify(buildFeedbackPayload(form, selected, readers), null, 2);
-    return previewPayloadJson;
+async function resolveFeedbackPreviewReaders(selected, readers) {
+    const unresolvedReaders = readers || getFeedbackPayloadReaders();
+    if (typeof unresolvedReaders.readExtensionManifest !== 'function') return unresolvedReaders;
+
+    const veridisManifest = await unresolvedReaders.readExtensionManifest(unresolvedReaders.veridisExternalId);
+    const resolvedReaders = {
+        ...unresolvedReaders,
+        getVeridisVersion: () => veridisManifest?.version || '',
+    };
+    if (selected.installedEnabledExtensions === true) {
+        const extensions = await unresolvedReaders.getInstalledEnabledExtensions();
+        resolvedReaders.getInstalledEnabledExtensions = () => extensions;
+    }
+    return resolvedReaders;
+}
+
+export async function createFeedbackPreviewPayloadJson(form, selected, readers) {
+    const resolvedReaders = await resolveFeedbackPreviewReaders(selected, readers);
+    return JSON.stringify(buildFeedbackPayload(form, selected, resolvedReaders), null, 2);
 }
 
 export function invalidateFeedbackPreview() {
@@ -46,17 +62,17 @@ export function submitCurrentFeedbackPreview(fetchImpl) {
     return submitFeedbackPayloadJson(previewPayloadJson, fetchImpl);
 }
 
-function readFeedbackForm() {
+function readFeedbackForm(form) {
     return {
-        type: document.querySelector('[name="feedbackType"]')?.value || '',
-        area: [...document.querySelectorAll('input[name="feedbackArea"]:checked')].map((input) => input.value),
-        title: document.getElementById('blai-feedback-title')?.value || '',
-        details: document.getElementById('blai-feedback-details')?.value || '',
+        type: form.querySelector('[name="feedbackType"]')?.value || '',
+        area: [...form.querySelectorAll('input[name="feedbackArea"]:checked')].map((input) => input.value),
+        title: form.querySelector('#blai-feedback-title')?.value || '',
+        details: form.querySelector('#blai-feedback-details')?.value || '',
     };
 }
 
-function readDiagnosticSelections() {
-    const checked = (name) => document.querySelector(`input[name="${name}"]`)?.checked === true;
+function readDiagnosticSelections(form) {
+    const checked = (name) => form.querySelector(`input[name="${name}"]`)?.checked === true;
     return {
         installedEnabledExtensions: checked('installedEnabledExtensions'),
         runtimeLog: checked('runtimeLog'),
@@ -64,6 +80,32 @@ function readDiagnosticSelections() {
         deepCleanPreviousFailure: checked('deepCleanPreviousFailure'),
         deepCleanLastSuccess: checked('deepCleanLastSuccess'),
     };
+}
+
+function haveSameValues(left, right) {
+    return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function isCurrentVisibleFeedbackForm(form) {
+    const workspace = document.getElementById('blai-feedback-workspace');
+    return document.getElementById('blai-feedback-form') === form
+        && workspace?.getAttribute('aria-hidden') === 'false'
+        && workspace?.dataset.feedbackView === 'feedback';
+}
+
+function feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics) {
+    if (!isCurrentVisibleFeedbackForm(form)) return false;
+    const currentForm = readFeedbackForm(form);
+    const currentDiagnostics = readDiagnosticSelections(form);
+    return currentForm.type === capturedForm.type
+        && currentForm.title === capturedForm.title
+        && currentForm.details === capturedForm.details
+        && haveSameValues(currentForm.area, capturedForm.area)
+        && currentDiagnostics.installedEnabledExtensions === capturedDiagnostics.installedEnabledExtensions
+        && currentDiagnostics.runtimeLog === capturedDiagnostics.runtimeLog
+        && currentDiagnostics.deepCleanLatestFailure === capturedDiagnostics.deepCleanLatestFailure
+        && currentDiagnostics.deepCleanPreviousFailure === capturedDiagnostics.deepCleanPreviousFailure
+        && currentDiagnostics.deepCleanLastSuccess === capturedDiagnostics.deepCleanLastSuccess;
 }
 
 function showWorkspaceView(view) {
@@ -84,7 +126,7 @@ export function bindFeedbackEvents() {
         showWorkspaceView(String($(this).attr('data-feedback-view') || 'runtime-log'));
     });
 
-    $(document).off('input change', '#blai-feedback-form input, #blai-feedback-form textarea').on('input change', '#blai-feedback-form input, #blai-feedback-form textarea', function() {
+    $(document).off('input change', '#blai-feedback-form input, #blai-feedback-form textarea, #blai-feedback-form select').on('input change', '#blai-feedback-form input, #blai-feedback-form textarea, #blai-feedback-form select', function() {
         if (this.id === 'blai-feedback-confirm') return;
         if (this.name === 'feedbackArea') updateFeedbackAreaSummary();
         invalidateFeedbackPreview();
@@ -92,16 +134,28 @@ export function bindFeedbackEvents() {
         showFeedbackStatus('内容已更改，请重新生成预览。', 'notice');
     });
 
-    $(document).off('click', '#blai-feedback-preview-generate').on('click', '#blai-feedback-preview-generate', () => {
+    $(document).off('click', '#blai-feedback-preview-generate').on('click', '#blai-feedback-preview-generate', async function() {
+        const form = document.getElementById('blai-feedback-form');
+        if (!form || this.disabled) return;
+        const capturedForm = readFeedbackForm(form);
+        const capturedDiagnostics = readDiagnosticSelections(form);
+        invalidateFeedbackPreview();
+        clearRenderedFeedbackPreview();
+        this.disabled = true;
         try {
-            const payloadJson = createFeedbackPreviewPayloadJson(readFeedbackForm(), readDiagnosticSelections());
+            const payloadJson = await createFeedbackPreviewPayloadJson(capturedForm, capturedDiagnostics);
+            if (!feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics)) return;
+            previewPayloadJson = payloadJson;
             renderFeedbackPreview(payloadJson);
             document.getElementById('blai-feedback-preview-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             showFeedbackStatus('预览已生成。请检查完整 JSON 后确认提交。', 'success');
         } catch (error) {
+            if (!feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics)) return;
             invalidateFeedbackPreview();
             clearRenderedFeedbackPreview();
             showFeedbackStatus(`无法生成预览：${error instanceof Error ? error.message : String(error)}`, 'error');
+        } finally {
+            if (document.getElementById('blai-feedback-form') === form && this.form === form) this.disabled = false;
         }
     });
 

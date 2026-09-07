@@ -60,6 +60,8 @@ export class GenerationLifecycleRegistry {
             requestState: 'idle',
             requestSource: '',
             contentIdentity: null,
+            streamingFrame: null,
+            streamingChoices: [],
             cancelReason: '',
         };
         this.active = session;
@@ -353,6 +355,14 @@ export class GenerationLifecycleRegistry {
         return true;
     }
 
+    clearStreamingProgram(generationId) {
+        const session = this.getSession(generationId);
+        if (!session) return false;
+        session.streamingFrame = null;
+        session.streamingChoices.length = 0;
+        return true;
+    }
+
     cancelActive(reason = 'cancelled') {
         const normalizedReason = String(reason || 'cancelled');
         if (normalizedReason === 'chat-changed' || normalizedReason === 'page-unload') {
@@ -362,6 +372,7 @@ export class GenerationLifecycleRegistry {
         if (!session) return false;
         session.phase = 'cancelled';
         session.cancelReason = normalizedReason;
+        this.clearStreamingProgram(session.generationId);
         session.requestState = session.cancelReason === 'superseded-by-new-generation' ? 'superseded' : 'cancelled';
         this.log('task-cancelled', session, { reason: session.cancelReason });
         this.active = null;

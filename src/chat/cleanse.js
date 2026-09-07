@@ -6,21 +6,18 @@ import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { getLatestTrackableDiffIndices, isAssistantMessage } from '../diff/tracking.js';
-import { computeMessageSignature, diffRuntimeState, hasRealDiffCache, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, writeReadyDiffCache, clearTrackedDiffEntry } from '../diff/state.js';
-import { rulesRuntimeState } from '../rules/state.js';
+import { computeMessageSignature, diffRuntimeState, refreshDiffCacheIfStale, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, clearTrackedDiffEntry } from '../diff/state.js';
 import { ensureMessageDiffButton, injectDiffButtons } from '../diff/view.js';
-import { buildDiffResultFromPair, buildDiffSnippetsFromText } from '../diff/compare.js';
 import { getMessageDomNode } from '../dom/message.js';
 import { commitCurrentMessageText, getMessageDiffBranchKey } from './messageBranch.js';
-import { clearAllMessageDiffMeta, getMessageDiffMeta, isMessageAiFinal, isMessageFinalizedForCurrentBranch, isMessageManualFinal, writeMessageDiffProgram } from '../diff/messageMeta.js';
+import { clearAllMessageDiffMeta, isMessageAiFinal, isMessageFinalizedForCurrentBranch, isMessageManualFinal, writeMessageDiffProgram } from '../diff/messageMeta.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
-import { applyTextReplacementWithTrackedRanges, buildProcessors, mergeProtectedScopeUpdatesIntoSource, replayProgramProjection } from '../rules/engine.js';
+import { preserveMvuStatusPlaceholder } from '../integrations/mvu.js';
+import { applyScopedReplacements, buildProcessors } from '../rules/engine.js';
 import { queueIncrementalChatSave } from './persistence.js';
 import { markLatestMessageShujukuRewritePending } from '../shujuku/realtime.js';
 import { recordAiRewriteDebug } from '../aiRewrite/debug.js';
 import { refreshMessageDisplay } from './display.js';
-
-const mvuStatusPlaceholder = '<StatusPlaceHolderImpl/>';
 
 /**
  * 从事件负载中解析消息索引。
@@ -76,140 +73,11 @@ export function resolveLatestTrackableMessageIndex(payload) {
     return -1;
 }
 
-export function resolveMessageDiffSource(msg, explicitSource) {
-    const currentMes = typeof msg?.mes === 'string' ? msg.mes : '';
-    if (isMessageAiFinal(msg)) return currentMes;
-    if (typeof explicitSource === 'string') return explicitSource;
-
-    const diffMeta = getMessageDiffMeta(msg);
-    if (diffMeta?.programMes && currentMes === diffMeta.programMes) {
-        return diffMeta.originalMes;
-    }
-    if (diffMeta?.originalMes && diffMeta?.programMes) {
-        const sourceWithScopeUpdates = mergeProtectedScopeUpdatesIntoSource(diffMeta.originalMes, diffMeta.programMes, currentMes);
-        if (sourceWithScopeUpdates) return sourceWithScopeUpdates;
-    }
-
-    return currentMes;
-}
-
-export function syncMessageDiffMetadata(msg, sourceMes, cleanedMes, programProjection) {
+export function syncMessageDiffMetadata(msg, sourceMes, cleanedMes) {
     const normalizedCleanedMes = typeof cleanedMes === 'string' ? cleanedMes : '';
     const branchKey = getMessageDiffBranchKey(msg);
-    const hasDiff = sourceMes !== normalizedCleanedMes;
-    const metadataChanged = writeMessageDiffProgram(msg, branchKey, sourceMes, normalizedCleanedMes, programProjection);
-    const signature = computeMessageSignature(msg);
-    return { signature, metadataChanged, hasDiff };
-}
-
-function hasMvuStatusPlaceholder(text) {
-    return String(text || '').includes(mvuStatusPlaceholder);
-}
-
-function hasMvuUpdatePayload(text) {
-    return String(text || '').includes('<UpdateVariable>');
-}
-
-function stripMvuStatusPlaceholders(text) {
-    return String(text ?? '')
-        .split(mvuStatusPlaceholder)
-        .join('')
-        .replace(/\n{3,}/g, '\n\n')
-        .trimEnd();
-}
-
-function getCurrentSwipeVariables(msg) {
-    const swipeId = Number.isInteger(Number(msg?.swipe_id)) ? Number(msg.swipe_id) : 0;
-    return msg?.variables?.[swipeId];
-}
-
-function hasCurrentSwipeMvuState(msg) {
-    const variables = getCurrentSwipeVariables(msg);
-    return !!(variables && typeof variables === 'object' && (variables.stat_data || variables.schema || variables.display_data));
-}
-
-export function preserveMvuStatusPlaceholder(text, msg, sources = []) {
-    return preserveMvuStatusPlaceholderWithTrackedRanges(text, msg, sources).text;
-}
-
-export function preserveMvuStatusPlaceholderWithTrackedRanges(text, msg, sources = [], ranges = []) {
-    const nextText = typeof text === 'string' ? text : String(text ?? '');
-    const initial = replayProgramProjection(nextText, [], ranges);
-    const unchanged = () => ({
-        text: nextText,
-        ranges: initial.ranges,
-        projection: [],
-        valid: initial.valid,
-    });
-    if (!initial.valid) return unchanged();
-    if (!nextText || !isAssistantMessage(msg)) return unchanged();
-
-    const sourceTexts = [nextText, msg?.mes, ...sources].map(value => String(value || ''));
-    const hadPlaceholder = sourceTexts.some(hasMvuStatusPlaceholder);
-    const hasMvuPayload = sourceTexts.some(hasMvuUpdatePayload);
-    if (!hadPlaceholder && !(hasMvuPayload && hasCurrentSwipeMvuState(msg))) return unchanged();
-
-    const normalizedText = stripMvuStatusPlaceholders(nextText);
-    const preservedText = normalizedText ? `${normalizedText}\n\n${mvuStatusPlaceholder}` : mvuStatusPlaceholder;
-    if (preservedText === nextText) return unchanged();
-
-    let state = unchanged();
-    const applyReplacement = (start, end, replacement) => {
-        if (!state.valid) return;
-        const result = applyTextReplacementWithTrackedRanges(
-            state.text,
-            start,
-            end,
-            replacement,
-            state.ranges,
-        );
-        state = {
-            text: result.text,
-            ranges: result.ranges,
-            projection: [...state.projection, ...result.projection],
-            valid: result.valid,
-        };
-    };
-
-    let placeholderIndex = state.text.indexOf(mvuStatusPlaceholder);
-    while (placeholderIndex >= 0) {
-        applyReplacement(placeholderIndex, placeholderIndex + mvuStatusPlaceholder.length, '');
-        placeholderIndex = state.text.indexOf(mvuStatusPlaceholder);
-    }
-
-    let excessNewlines = /\n{3,}/u.exec(state.text);
-    while (excessNewlines) {
-        applyReplacement(excessNewlines.index, excessNewlines.index + excessNewlines[0].length, '\n\n');
-        excessNewlines = /\n{3,}/u.exec(state.text);
-    }
-
-    const trimmedText = state.text.trimEnd();
-    if (trimmedText.length !== state.text.length) {
-        applyReplacement(trimmedText.length, state.text.length, '');
-    }
-    applyReplacement(state.text.length, state.text.length, state.text ? `\n\n${mvuStatusPlaceholder}` : mvuStatusPlaceholder);
-
-    return {
-        ...state,
-        valid: state.valid && state.text === preservedText,
-    };
-}
-
-function getPostSourceAddition(sourceMes, cleanedSourceMes, currentMes, hasExplicitSource) {
-    if (hasExplicitSource !== true) return '';
-
-    const sourceText = String(sourceMes ?? '');
-    const cleanedText = String(cleanedSourceMes ?? '');
-    const currentText = String(currentMes ?? '');
-    if (!sourceText || !currentText || currentText === sourceText) return '';
-
-    if (currentText.startsWith(sourceText)) {
-        return currentText.slice(sourceText.length);
-    }
-    if (currentText.startsWith(cleanedText)) {
-        return currentText.slice(cleanedText.length);
-    }
-    return '';
+    const metadataChanged = writeMessageDiffProgram(msg, branchKey, sourceMes, normalizedCleanedMes);
+    return { metadataChanged };
 }
 
 /**
@@ -231,43 +99,31 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     }
     const trackDiff = getLatestTrackableDiffIndices().includes(index);
 
+    if (options.explicitRecleanse !== true && isMessageFinalizedForCurrentBranch(msg)) {
+        if (trackDiff) refreshDiffCacheIfStale(index);
+        return false;
+    }
     if (isMessageAiFinal(msg)) return false;
     if (isMessageManualFinal(msg) && options.allowManualFinal !== true) return false;
 
     const currentMes = typeof msg.mes === 'string' ? msg.mes : '';
-    const hasExplicitSource = typeof options.diffSourceMes === 'string';
-    const sourceMes = resolveMessageDiffSource(msg, options.diffSourceMes);
+    const sourceMes = typeof options.diffSourceMes === 'string' ? options.diffSourceMes : currentMes;
 
     let changed = false;
     let changedTargets = 0;
     let changedSwipeCount = 0;
     let activeTextChanged = false;
 
-    const canReusePrecomputedDiff = options.explicitRecleanse !== true
-        && options.precomputedDiff?.sourceMes === sourceMes
-        && options.precomputedDiff?.result;
-    const diffResult = canReusePrecomputedDiff
-        ? options.precomputedDiff.result
-        : buildDiffSnippetsFromText(sourceMes);
-    if (!Array.isArray(diffResult.programProjection)) return false;
-    const postSourceAddition = getPostSourceAddition(sourceMes, diffResult.cleanedText, currentMes, hasExplicitSource);
-    const metadataSourceMes = `${sourceMes}${postSourceAddition}`;
-    const preservedProgram = preserveMvuStatusPlaceholderWithTrackedRanges(
-        `${diffResult.cleanedText}${postSourceAddition}`,
-        msg,
-        [currentMes, sourceMes],
-    );
-    if (!preservedProgram.valid) return false;
-    const cleanedText = preservedProgram.text;
-    const programProjection = [...diffResult.programProjection, ...preservedProgram.projection];
-    const committedDiff = buildDiffResultFromPair(metadataSourceMes, cleanedText);
-    const mainCache = {
-        snippets: Array.from(new Set(committedDiff.snippets || [])),
-        fullDiff: committedDiff.fullDiff || '',
-    };
-    const hasMainDiff = mainCache.snippets.length > 0 || mainCache.fullDiff.includes('blai-diff-full-modified');
+    const streamingFrame = options.explicitRecleanse !== true
+        && options.streamingFrame?.originalText === sourceMes
+        ? options.streamingFrame
+        : null;
+    // The final streamed Program is already a completed stage, including an unchanged result.
+    const cleanedText = streamingFrame
+        ? streamingFrame.programText
+        : preserveMvuStatusPlaceholder(applyScopedReplacements(sourceMes), msg, [currentMes, sourceMes]);
 
-    if (typeof msg.mes === 'string' && cleanedText !== currentMes) {
+    if (typeof msg.mes === 'string') {
         const currentSwipeIndex = Array.isArray(msg.swipes) ? Number(msg.swipe_id) : -1;
         const currentSwipe = Array.isArray(msg.swipes) && Number.isInteger(currentSwipeIndex) && currentSwipeIndex >= 0
             ? msg.swipes[currentSwipeIndex]
@@ -288,8 +144,9 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
 
     if (options.cleanAllSwipes === true && Array.isArray(msg.swipes)) {
         for (let i = 0; i < msg.swipes.length; i++) {
+            if (`swipe:${i}` === getMessageDiffBranchKey(msg)) continue;
             if (typeof msg.swipes[i] === 'string') {
-                const { cleanedText } = buildDiffSnippetsFromText(msg.swipes[i]);
+                const cleanedText = applyScopedReplacements(msg.swipes[i]);
                 if (cleanedText !== msg.swipes[i]) {
                     msg.swipes[i] = cleanedText;
                     changed = true;
@@ -297,7 +154,7 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
                     changedSwipeCount++;
                 }
             } else if (msg.swipes[i] && typeof msg.swipes[i] === 'object' && typeof msg.swipes[i].mes === 'string') {
-                const { cleanedText } = buildDiffSnippetsFromText(msg.swipes[i].mes);
+                const cleanedText = applyScopedReplacements(msg.swipes[i].mes);
                 if (cleanedText !== msg.swipes[i].mes) {
                     msg.swipes[i].mes = cleanedText;
                     changed = true;
@@ -309,20 +166,13 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     }
 
     if (trackDiff) {
-        const { signature, metadataChanged } = syncMessageDiffMetadata(
+        const { metadataChanged } = syncMessageDiffMetadata(
             msg,
-            metadataSourceMes,
+            sourceMes,
             typeof msg.mes === 'string' ? msg.mes : '',
-            programProjection,
         );
         if (metadataChanged) changed = true;
-        writeReadyDiffCache(index, signature, {
-            snippets: hasMainDiff ? mainCache.snippets : [],
-            fullDiff: hasMainDiff ? mainCache.fullDiff : '',
-            signature,
-        }, {
-            persist: hasMainDiff || changed,
-        });
+        refreshDiffCacheIfStale(index, { finalization: 'program', dataChanged: changed });
     } else {
         if (clearAllMessageDiffMeta(msg)) changed = true;
         clearTrackedDiffEntry(index, { persist: false });
@@ -349,7 +199,7 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
 /**
  * 执行增量净化：处理单条消息并刷新对应 DOM。
  * @param {number|object} payload 事件载荷或消息索引。
- * @param {{visualOnly?: boolean, skipPurifyDom?: boolean, diffSourceMes?: string, precomputedDiff?: {sourceMes:string, result:object}}} [options={}] 控制选项。
+ * @param {{visualOnly?: boolean, skipPurifyDom?: boolean, diffSourceMes?: string, streamingFrame?: {originalText:string, programText:string}}} [options={}] 控制选项。
  * @returns {{index:number, messageRef:object, beforeText:string, afterText:string, dataChanged:boolean, messageTextChanged:boolean, displayedContentChanged:boolean}|undefined}
  */
 export function performIncrementalCleanse(payload, options = {}) {
@@ -368,6 +218,7 @@ export function performIncrementalCleanse(payload, options = {}) {
         return;
     }
     if (isMessageManualFinal(msg)) {
+        refreshDiffCacheIfStale(index);
         injectDiffButtons([index]);
         return {
             index,
@@ -386,11 +237,8 @@ export function performIncrementalCleanse(payload, options = {}) {
         if (options.visualOnly) markDiffComparisonPending(index, signature);
         else {
             const previousState = diffRuntimeState.diffMessageStates.get(index);
-            const alreadyFinalizedSameSource = previousState?.status === 'ready'
-                && previousState.signature === signature
-                && isMessageFinalizedForCurrentBranch(msg);
-
-            if (alreadyFinalizedSameSource && hasRealDiffCache(index)) {
+            if (isMessageFinalizedForCurrentBranch(msg)) {
+                refreshDiffCacheIfStale(index);
                 const messageNode = getMessageDomNode(index);
                 if (messageNode) ensureMessageDiffButton(index, messageNode);
                 return {
@@ -412,7 +260,7 @@ export function performIncrementalCleanse(payload, options = {}) {
 
     const dataChanged = options.visualOnly ? false : cleanseMessageDataAtIndex(index, {
         diffSourceMes: options.diffSourceMes,
-        precomputedDiff: options.precomputedDiff,
+        streamingFrame: options.streamingFrame,
     });
     const afterCleanseText = typeof msg.mes === 'string' ? msg.mes : '';
     const displayedContentChanged = beforeDisplayText !== (msg?.extra?.display_text ?? msg?.mes);

@@ -1,13 +1,12 @@
 /**
  * Owns Preset toolbar, binding, and preset-owned AI-generation DOM projection.
- * Invalid binding cleanup is delegated to presets/bindings.js before rendering;
- * this module does not own Preset selection or settings persistence.
+ * This module does not own Preset selection, binding cleanup, or settings persistence.
  */
 import { defaultAiRewriteSettings, extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { presetsRuntimeState, markPresetsUiDirty } from './state.js';
 import { getCurrentCharacterContext, getCurrentChatCompletionPresetName } from '../host/context.js';
-import { cleanupInvalidPresetBindings, getPresetBindingInspection, getPresetBindingResolution, getPresetBindingUsage } from './bindings.js';
+import { getPresetBindingInspection, getPresetBindingResolution, getPresetBindingUsage } from './bindings.js';
 import { safeHtml } from '../ui/html.js';
 
 function getAiTimeoutSeconds(timeoutMs) {
@@ -177,7 +176,6 @@ export function refreshCharacterBindingUI() {
 export function updateToolbarUI() {
     const { extension_settings } = getAppContext();
     const settings = extension_settings[extensionName];
-    cleanupInvalidPresetBindings();
     const selects = $('#blai-preset-select, #blai-tools-preset-select');
     if (!selects.length) return;
 

@@ -123,7 +123,7 @@ function subtractRanges(sourceRanges, excludedRanges) {
 }
 
 const sentenceTerminators = new Set(['。', '！', '？', '!', '?']);
-const adjacentClosingQuotes = new Set(['”', '」']);
+const sentenceContinuationPunctuation = new Set(['。', '！', '？', '!', '?', '…']);
 
 function splitEditableRangeIntoSentences(text, range) {
     const sentences = [];
@@ -144,7 +144,7 @@ function splitEditableRangeIntoSentences(text, range) {
         }
         if (sentenceTerminators.has(char)) {
             let end = cursor + 1;
-            if (end < range.end && adjacentClosingQuotes.has(text[end])) end += 1;
+            while (end < range.end && sentenceContinuationPunctuation.has(text[end])) end += 1;
             pushSentence(end);
             cursor = end;
             continue;
@@ -306,7 +306,6 @@ function getAiProgramFallbackReplacement(match, sourceText = '') {
     const replacements = Array.isArray(match?.replacements) ? match.replacements : [];
     if (replacements.length === 0) return '';
 
-    const key = `${match.ruleIndex}:${match.subRuleIndex}:${match.mode}:${match.target}:${match.matchedText}`;
     if (match.mode === 'regex') {
         const args = [
             ...(Array.isArray(match.captures) ? match.captures : []),
@@ -314,10 +313,18 @@ function getAiProgramFallbackReplacement(match, sourceText = '') {
             String(sourceText || ''),
         ];
         if (match.groups && typeof match.groups === 'object') args.push(match.groups);
-        return resolveProcessorReplacement({ kind: 'regex', replacements }, key, String(match.matchedText || ''), args, true);
+        return resolveProcessorReplacement({ kind: 'regex', replacements }, String(match.matchedText || ''), args);
     }
 
-    return String(pickReplacement(replacements, key) ?? '');
+    return String(pickReplacement(replacements) ?? '');
+}
+
+export function getOccurrenceProgramFallbackText(occurrence, sourceText) {
+    // Automatic tasks select only on fallback; retain even deletion for later finalization.
+    if (occurrence.programFallbackText === undefined) {
+        occurrence.programFallbackText = getAiProgramFallbackReplacement(occurrence, sourceText);
+    }
+    return occurrence.programFallbackText;
 }
 
 export function applyAiProgramFallbackMatches(text, matches = []) {
@@ -344,7 +351,7 @@ export function applyAiProgramFallbackMatches(text, matches = []) {
     return output;
 }
 
-function collectSentenceEditableRanges(text, settings, aiSettings) {
+function collectEditableRanges(text, settings, aiSettings) {
     const source = String(text || '');
     const xmlSegments = collectAiXmlScopeSegments(source, aiSettings);
     if (xmlSegments.length === 0) return [];
@@ -362,17 +369,149 @@ function collectSentenceEditableRanges(text, settings, aiSettings) {
         ...commentRanges,
     ]);
 
-    return editable.flatMap((range) => splitEditableRangeIntoSentences(source, range));
+    return editable;
 }
 
-function copyRawOccurrence(match, sentenceStart, sourceText) {
+function addDelimitedSentenceWrappers(text, range, open, close, wrappers) {
+    let cursor = range.start;
+    while (cursor < range.end) {
+        const openStart = text.indexOf(open, cursor);
+        if (openStart < 0 || openStart >= range.end) break;
+        const closeStart = text.indexOf(close, openStart + open.length);
+        if (closeStart < 0 || closeStart >= range.end) break;
+        wrappers.push({
+            start: openStart,
+            end: closeStart + close.length,
+            interiorStart: openStart + open.length,
+            interiorEnd: closeStart,
+        });
+        cursor = closeStart + close.length;
+    }
+}
+
+function addAsteriskSentenceWrappers(text, range, marker, wrappers) {
+    const markers = [];
+    for (let cursor = range.start; cursor < range.end;) {
+        const token = text.startsWith('**', cursor) ? '**' : text[cursor] === '*' ? '*' : '';
+        if (!token) {
+            cursor += 1;
+            continue;
+        }
+        if (token === marker) markers.push(cursor);
+        cursor += token.length;
+    }
+    for (let index = 0; index + 1 < markers.length; index += 2) {
+        const openStart = markers[index];
+        const closeStart = markers[index + 1];
+        wrappers.push({
+            start: openStart,
+            end: closeStart + marker.length,
+            interiorStart: openStart + marker.length,
+            interiorEnd: closeStart,
+        });
+    }
+}
+
+function collectSentenceWrappers(text, range) {
+    const wrappers = [];
+    addDelimitedSentenceWrappers(text, range, '“', '”', wrappers);
+    addDelimitedSentenceWrappers(text, range, '‘', '’', wrappers);
+    addDelimitedSentenceWrappers(text, range, '「', '」', wrappers);
+    addDelimitedSentenceWrappers(text, range, '『', '』', wrappers);
+    addDelimitedSentenceWrappers(text, range, '（', '）', wrappers);
+    addAsteriskSentenceWrappers(text, range, '*', wrappers);
+    addAsteriskSentenceWrappers(text, range, '**', wrappers);
+    return wrappers;
+}
+
+function getSentenceSpan(text, match, range, wrappers = []) {
+    const sentences = splitEditableRangeIntoSentences(text, range);
+    const first = sentences.find((sentence) => match.start >= sentence.start && match.start < sentence.end);
+    const last = [...sentences].reverse().find((sentence) => match.end > sentence.start && match.end <= sentence.end);
+    if (!first || !last) return { start: match.start, end: match.end };
+
+    let start = first.start;
+    let advanced = true;
+    while (advanced) {
+        const precedingClosers = wrappers.filter((wrapper) => wrapper.interiorEnd === start);
+        const nextStart = precedingClosers.length > 0 ? Math.max(...precedingClosers.map((wrapper) => wrapper.end)) : start;
+        advanced = nextStart > start && nextStart <= match.start;
+        if (advanced) start = nextStart;
+    }
+
+    let end = last.end;
+    let extended = true;
+    while (extended) {
+        const targetClosers = wrappers.filter((wrapper) => wrapper.start >= start
+            && wrapper.start < end
+            && wrapper.interiorEnd === end);
+        const nextEnd = targetClosers.length > 0 ? Math.max(...targetClosers.map((wrapper) => wrapper.end)) : end;
+        extended = nextEnd > end;
+        if (extended) end = nextEnd;
+    }
+    return { start, end };
+}
+
+function getTextUnitSentences(text, range) {
+    return splitEditableRangeIntoSentences(text, range)
+        .filter((sentence) => text.slice(sentence.start, sentence.end)
+            .replace(/[“”‘’「」『』（）*]/gu, '')
+            .trim() !== '');
+}
+
+function getRewriteTargetRange(text, match, editableRange) {
+    const wrappers = collectSentenceWrappers(text, editableRange);
+    const containing = wrappers
+        .filter((wrapper) => match.start >= wrapper.interiorStart && match.end <= wrapper.interiorEnd)
+        .map((wrapper) => ({
+            wrapper,
+            interiorRange: { start: wrapper.interiorStart, end: wrapper.interiorEnd },
+        }));
+    const multiSentenceWrapper = containing
+        .map((entry) => ({
+            ...entry,
+            sentenceCount: getTextUnitSentences(text, entry.interiorRange).length,
+        }))
+        .filter((entry) => entry.sentenceCount > 1)
+        .sort((left, right) => (left.wrapper.end - left.wrapper.start) - (right.wrapper.end - right.wrapper.start))[0];
+    if (multiSentenceWrapper) {
+        return getSentenceSpan(text, match, multiSentenceWrapper.interiorRange, wrappers);
+    }
+
+    return getSentenceSpan(text, match, editableRange, wrappers);
+}
+
+function coalesceOverlappingRewriteTargets(targets) {
+    const coalesced = [];
+    for (const target of [...targets].sort((left, right) => left.start - right.start || left.end - right.end)) {
+        const previous = coalesced.at(-1);
+        if (previous && target.start < previous.end) {
+            previous.end = Math.max(previous.end, target.end);
+            previous.matches.push(target.match);
+            continue;
+        }
+        coalesced.push({ start: target.start, end: target.end, matches: [target.match] });
+    }
+    return coalesced;
+}
+
+function copyRawOccurrence(match, sentenceStart, sourceText, options) {
     return {
         ruleIndex: Number(match.ruleIndex),
         subRuleIndex: Number(match.subRuleIndex),
         aiPromptTemplate: String(match.aiPromptTemplate || ''),
         matchedText: String(match.matchedText || ''),
         relativeStart: match.start - sentenceStart,
-        programFallbackText: getAiProgramFallbackReplacement(match, sourceText),
+        // Keep automatic fallback inputs without selecting a candidate on the AI path.
+        ...(options.includeProgramFallback !== false
+            ? { programFallbackText: getAiProgramFallbackReplacement(match, sourceText) }
+            : {
+                mode: match.mode,
+                replacements: [...match.replacements],
+                captures: match.captures,
+                groups: match.groups,
+                start: match.start,
+            }),
     };
 }
 
@@ -380,35 +519,33 @@ export function buildRewriteItems(text, matches, settings, aiSettings, options =
     const source = String(text || '');
     if (!Array.isArray(matches) || matches.length === 0) return [];
     const segments = collectAiXmlScopeSegments(source, aiSettings);
-    const sentenceRanges = collectSentenceEditableRanges(source, settings, aiSettings);
-    const sentenceMatches = new Map();
+    const editableRanges = collectEditableRanges(source, settings, aiSettings);
+    const targets = [];
 
     for (const match of matches) {
-        const sentence = sentenceRanges.find((range) => match.start >= range.start && match.end <= range.end);
-        if (!sentence) continue;
-        const key = `${sentence.start}:${sentence.end}`;
-        const entry = sentenceMatches.get(key) || { ...sentence, matches: [] };
-        entry.matches.push(match);
-        sentenceMatches.set(key, entry);
+        const editableRange = editableRanges.find((range) => match.start >= range.start && match.end <= range.end);
+        if (!editableRange) continue;
+        const target = getRewriteTargetRange(source, match, editableRange);
+        if (target.start > match.start || target.end < match.end || target.start >= target.end) continue;
+        targets.push({ ...target, match });
     }
 
-    return [...sentenceMatches.values()]
-        .sort((left, right) => left.start - right.start || left.end - right.end)
-        .map((sentence, index) => {
-            const segment = segments.find((entry) => sentence.start >= entry.start && sentence.end <= entry.end);
+    return coalesceOverlappingRewriteTargets(targets)
+        .map((target, index) => {
+            const segment = segments.find((entry) => target.start >= entry.start && target.end <= entry.end);
             if (!segment) return null;
             return {
                 id: typeof options.createId === 'function'
-                    ? String(options.createId(index, sentence))
+                    ? String(options.createId(index, target))
                     : `hit-${index + 1}`,
                 segmentIndex: segment.index,
-                start: sentence.start,
-                end: sentence.end,
-                relativeStart: sentence.start - segment.start,
-                text: source.slice(sentence.start, sentence.end),
-                matches: sentence.matches
+                start: target.start,
+                end: target.end,
+                relativeStart: target.start - segment.start,
+                text: source.slice(target.start, target.end),
+                matches: target.matches
                     .sort((left, right) => left.start - right.start || left.end - right.end)
-                    .map((match) => copyRawOccurrence(match, sentence.start, source)),
+                    .map((match) => copyRawOccurrence(match, target.start, source, options)),
             };
         })
         .filter(Boolean);
@@ -509,4 +646,23 @@ export function materializeProjectedRewriteItems(programText, items, projectedRa
     }
 
     return { valid: true, items: materialized, failedItemId: '' };
+}
+
+export function countMatchedAiRules(matches = []) {
+    return new Set(matches.map(match => `${match.ruleIndex}:${match.subRuleIndex}`)).size;
+}
+
+export function extractCurrentAiRewriteScope(text, aiSettings) {
+    const source = String(text || '');
+    const segments = collectAiXmlScopeSegments(source, aiSettings);
+    if (segments.length === 0) {
+        return { ok: false, text: '', tailLength: source.length, reason: 'content-scope-missing' };
+    }
+    const scopedText = getAiXmlScopedRequestText(source, aiSettings);
+    return {
+        ok: true,
+        text: scopedText,
+        tailLength: Math.max(0, source.length - scopedText.length),
+        reason: '',
+    };
 }

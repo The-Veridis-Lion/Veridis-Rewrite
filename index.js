@@ -3,6 +3,7 @@ import * as scriptModule from "../../../../script.js";
 import { saveSettingsDebounced, eventSource, event_types, chat } from "../../../../script.js";
 import { user_avatar } from "../../../personas.js";
 import { world_info, worldInfoCache } from "../../../world-info.js";
+import { applyStreamFadeIn } from "../../../util/stream-fadein.js";
 
 import { aiRewritePromptProtocolVersion, defaultAiRewriteSettings, defaultSettings, extensionName, modifiedExtensionName, legacyExtensionName, normalizeAiSamplingSettings, normalizeDiffTrackedMessageLimit } from './src/settings/defaults.js';
 import { initAppContext } from './src/host/appContext.js';
@@ -26,11 +27,15 @@ import { isLoreFrameInstalled } from './src/integrations/loreFrame.js';
 import { normalizeZhVariantSettings, restoreZhDictionaryPackageFromCache } from './src/zh/dictionary.js';
 import { createDefaultSettings, ensureSettingsShape, legacySettingsCopiedThisBoot, maybeCopyLegacySettings, maybeImportModifiedSettingsIntoSharedNamespace, migrateOldData, modifiedSettingsImportedThisBoot, needsCustomGlobalPromptMigrationConfirmation, resolveCustomGlobalPromptMigration } from './src/settings/migration.js';
 import { syncComposerButtonScript } from './src/aiRewrite/composerButton.js';
-import { collectInstalledEnabledExtensions } from './src/feedback/payload.js';
+import { readExtensionManifest } from './src/host/extensionManifest.js';
+import { collectInstalledEnabledExtensions, getEnabledExtensionExternalIds } from './src/feedback/payload.js';
+import { bindUpdateStatusEvents, initializeUpdateStatus } from './src/update/status.js';
 
 const { extension_settings, getContext: getSillyTavernContext } = extensionsModule;
 const veridisExternalId = 'third-party/Veridis-Rewrite';
+const veridisExtensionFolderName = 'Veridis-Rewrite';
 let isBooted = false;
+let veridisCommit = '';
 
 function getCoarsePlatform() {
     const platform = String(globalThis.navigator?.userAgentData?.platform || globalThis.navigator?.platform || '').toLowerCase();
@@ -42,6 +47,34 @@ function getCoarsePlatform() {
     return 'Unknown';
 }
 
+async function captureVeridisCommit() {
+    const context = getSillyTavernContext();
+    const getRequestHeaders = context?.getRequestHeaders;
+    if (typeof getRequestHeaders !== 'function') return null;
+
+    try {
+        const response = await fetch('/api/extensions/version', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({
+                extensionName: veridisExtensionFolderName,
+                global: extensionsModule.extensionTypes[veridisExternalId] === 'global',
+            }),
+        });
+        if (!response.ok) return null;
+
+        const versionInfo = await response.json();
+        const currentCommitHash = String(versionInfo?.currentCommitHash || '').trim();
+        if (currentCommitHash.length >= 7) veridisCommit = currentCommitHash.slice(0, 7);
+        return versionInfo;
+    } catch {
+        // Feedback reports an unavailable commit without affecting the running extension.
+        return null;
+    }
+}
+
+const readHostExtensionManifest = (externalId) => readExtensionManifest(externalId, extensionsModule.getExtensionManifest);
+
 initAppContext({
     extension_settings,
     saveSettingsDebounced,
@@ -51,11 +84,14 @@ initAppContext({
     saveChat: scriptModule.saveChat,
     chat,
     getSillyTavernContext,
+    applyStreamFadeIn,
     markWindowedChatDirtyFromIndex: scriptModule.markWindowedChatDirtyFromIndex,
     getWorldInfoState: () => world_info,
     setWorldInfoCache: (name, data) => worldInfoCache.set(name, data),
     getCurrentPersonaIdentity: () => user_avatar,
-    getVeridisVersion: () => extensionsModule.getExtensionManifest(veridisExternalId)?.version || '',
+    veridisExternalId,
+    readExtensionManifest: readHostExtensionManifest,
+    getVeridisCommit: () => veridisCommit,
     getSillyTavernVersion: () => scriptModule.CLIENT_VERSION,
     getAiRewriteDiagnosticConfig: () => {
         const aiRewrite = extension_settings[extensionName].aiRewrite;
@@ -75,13 +111,19 @@ initAppContext({
         };
     },
     getCoarsePlatform,
-    getInstalledEnabledExtensions: () => collectInstalledEnabledExtensions({
-        extensionNames: extensionsModule.extensionNames,
-        extensionTypes: extensionsModule.extensionTypes,
-        disabledExtensions: extension_settings.disabledExtensions,
-        getExtensionManifest: extensionsModule.getExtensionManifest,
-        veridisExternalId,
-    }),
+    getInstalledEnabledExtensions: async () => {
+        const externalIds = getEnabledExtensionExternalIds({
+            extensionNames: extensionsModule.extensionNames,
+            extensionTypes: extensionsModule.extensionTypes,
+            disabledExtensions: extension_settings.disabledExtensions,
+            veridisExternalId,
+        });
+        const manifestsByExternalId = Object.fromEntries(await Promise.all(externalIds.map(async (externalId) => [
+            externalId,
+            await readHostExtensionManifest(externalId),
+        ])));
+        return collectInstalledEnabledExtensions({ externalIds, manifestsByExternalId });
+    },
 });
 
 jQuery(() => {
@@ -114,6 +156,7 @@ jQuery(() => {
             setTimeout(() => showToast('已复制旧版规则与预设到 AI 改写版'), 250);
         }
         bindEvents();
+        bindUpdateStatusEvents();
         syncComposerButtonScript(extension_settings[extensionName].showComposerAiRewriteButton);
         initRealtimeInterceptor();
         updateToolbarUI();
@@ -121,6 +164,13 @@ jQuery(() => {
         restoreDiffStateFromChatMetadata();
         performGlobalChatMaintenance();
         logger.info('[屏蔽词净化助手] 启动初始化完成');
+        void (async () => {
+            const versionInfo = await captureVeridisCommit();
+            await initializeUpdateStatus({
+                versionInfo,
+                isGlobal: extensionsModule.extensionTypes[veridisExternalId] === 'global',
+            });
+        })();
     };
 
     if (typeof eventSource !== 'undefined' && event_types.APP_READY) {

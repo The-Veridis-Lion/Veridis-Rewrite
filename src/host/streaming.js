@@ -1,7 +1,8 @@
-/** Owns integration with SillyTavern's streaming processor and streaming-specific presentation lifecycle. It does not own final message cleanse or AI finalization. */
+/** Runs Program once after each host-committed Original frame and publishes the generation's latest pair. Final mutation belongs to cleanse/AI apply. */
 import { getAppContext } from './appContext.js';
 import { streamingRuntimeState } from './streamingState.js';
-import { renderStreamingVisualMask, replayStreamingVisualMask } from '../dom/streaming.js';
+import { renderStreamingProgram } from '../dom/streaming.js';
+import { applyStreamingProgram } from '../rules/engine.js';
 import { computeMessageSignature, markDiffComparisonPending } from '../diff/state.js';
 import { isAssistantMessage } from '../diff/tracking.js';
 import { injectDiffButtons } from '../diff/view.js';
@@ -31,13 +32,6 @@ export function resetStreamingProcessorInstallFailureState() {
     streamProcessorInstallFailureLogged = false;
 }
 
-export function initStreamingVisualReplay() {
-    window.addEventListener('blai:realtime-beauty-frame', (event) => {
-        if (streamingRuntimeState.isStreamingGeneration !== true) return;
-        replayStreamingVisualMask(event?.detail?.messageIndex);
-    });
-}
-
 function getCurrentStreamingProcessor() {
     const getter = getAppContext().getStreamingProcessor;
     return typeof getter === 'function' ? getter() : null;
@@ -51,10 +45,10 @@ function markStreamingMessagePending(messageId) {
     injectDiffButtonsStreamingSafe([index]);
 }
 
-function installStreamingProcessorVisualMask(finalizeCommittedMessage) {
+function installStreamingProcessorProgram(finalizeCommittedMessage) {
     const processor = getCurrentStreamingProcessor();
     if (!processor || typeof processor.onProgressStreaming !== 'function') return false;
-    if (processor.__blai_streaming_visual_mask) return true;
+    if (processor.__blai_streaming_program) return true;
 
     const originalOnProgress = processor.onProgressStreaming;
     const originalFinalizeIntermediaryMessage = processor.finalizeIntermediaryMessage;
@@ -63,7 +57,7 @@ function installStreamingProcessorVisualMask(finalizeCommittedMessage) {
     const processorSession = generationLifecycle.getActive();
     const processorGenerationId = processorSession?.generationId || '';
     const processorChatId = processorSession?.chatId || '';
-    processor.__blai_streaming_visual_mask = true;
+    processor.__blai_streaming_program = true;
     processor.finalizeIntermediaryMessage = async function(...args) {
         const messageId = args[0];
         try {
@@ -101,17 +95,25 @@ function installStreamingProcessorVisualMask(finalizeCommittedMessage) {
     processor.onProgressStreaming = async function(messageId, text, isFinal) {
         const rawText = typeof text === 'string' ? text : String(text ?? '');
         const numericMessageId = Number.isInteger(messageId) && messageId >= 0 ? messageId : -1;
-        let changed = false;
 
         const result = await originalOnProgress.call(this, messageId, rawText, isFinal);
-        if (Number.isInteger(numericMessageId) && numericMessageId >= 0) {
+        if (this.type !== 'impersonate' && numericMessageId >= 0) {
             const { chat } = getAppContext();
             const committedMessage = Array.isArray(chat) ? chat[numericMessageId] : null;
             const committedText = typeof committedMessage?.mes === 'string'
                 ? committedMessage.mes
                 : '';
-            streamingRuntimeState.streamingCommittedMessageCache.set(numericMessageId, committedText);
-            changed = renderStreamingVisualMask(numericMessageId, committedText);
+            const resolution = generationLifecycle.bindMessage(numericMessageId, {
+                generationId: processorGenerationId, chatId: processorChatId, chat, source: 'streaming-committed',
+            });
+            if (!resolution.ok) return result;
+            const programText = applyStreamingProgram(committedText, processorSession.streamingChoices);
+            processorSession.streamingFrame = { originalText: committedText, programText };
+            if (isFinal === true) processorSession.streamingChoices.length = 0;
+            if (programText !== committedText) {
+                renderStreamingProgram(numericMessageId, programText);
+                markStreamingMessagePending(numericMessageId);
+            }
             if (committedText) {
                 maybeNotifyAiRewriteReadyFromStreamingText(numericMessageId, committedText, {
                     generationId: processorGenerationId,
@@ -129,41 +131,20 @@ function installStreamingProcessorVisualMask(finalizeCommittedMessage) {
                 );
             }
         }
-        if (changed) markStreamingMessagePending(numericMessageId);
         return result;
     };
     return true;
 }
 
-export function bindStreamingHostEvents({ eventSource, event_types, finalizeCommittedMessage }) {
-    if (event_types.STREAM_TOKEN_RECEIVED) {
-        const onStreamTokenReceived = () => {
-            streamingRuntimeState.isStreamingGeneration = true;
-            try {
-                installStreamingProcessorVisualMask(finalizeCommittedMessage);
-            } catch (error) {
-                if (!streamProcessorInstallFailureLogged) {
-                    streamProcessorInstallFailureLogged = true;
-                    recordAiRewriteRuntimeDebug('streaming-processor-install-failed', {
-                        reason: error?.message || String(error || 'unknown'),
-                    }, 'warn');
-                }
-            }
-        };
-        if (typeof eventSource.makeFirst === 'function') eventSource.makeFirst(event_types.STREAM_TOKEN_RECEIVED, onStreamTokenReceived);
-        else eventSource.on(event_types.STREAM_TOKEN_RECEIVED, onStreamTokenReceived);
+export function handleStreamingToken(finalizeCommittedMessage) {
+    try {
+        installStreamingProcessorProgram(finalizeCommittedMessage);
+    } catch (error) {
+        if (!streamProcessorInstallFailureLogged) {
+            streamProcessorInstallFailureLogged = true;
+            recordAiRewriteRuntimeDebug('streaming-processor-install-failed', {
+                reason: error?.message || String(error || 'unknown'),
+            }, 'warn');
+        }
     }
-    if (event_types.GENERATION_ENDED) eventSource.on(event_types.GENERATION_ENDED, (postOperationChatLength) => {
-        streamingRuntimeState.isStreamingGeneration = false;
-        recordAiRewriteRuntimeDebug('generation-ended-observed', {
-            postOperationChatLength: Number.isInteger(postOperationChatLength) ? postOperationChatLength : null,
-            generationId: generationLifecycle.getActive()?.generationId || '',
-        });
-    });
-    if (event_types.GENERATION_STOPPED) eventSource.on(event_types.GENERATION_STOPPED, () => {
-        streamingRuntimeState.isStreamingGeneration = false;
-        recordAiRewriteRuntimeDebug('generation-stopped-observed', {
-            generationId: generationLifecycle.getActive()?.generationId || '',
-        });
-    });
 }

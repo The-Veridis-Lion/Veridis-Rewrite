@@ -1,10 +1,13 @@
 import { markPresetsUiDirty } from '../presets/state.js';
 
-// Owns compiled Program processor cache and transient Rules editor/search UI state. Persisted Rules remain in extension settings.
-export const rulesRuntimeState = {
+// Owns the compiled Program processor cache. Persisted Rules remain in extension settings.
+export const programRuntimeState = {
     activeProcessors: [],
-    activeVisualProcessors: [],
     isRegexDirty: true,
+};
+
+// Owns the transient Rules UI/editor session independently of the Program cache.
+export const rulesUiState = {
     rulesUiDirty: true,
     ruleSearchKeyword: '',
     ruleSearchDraftKeyword: '',
@@ -24,11 +27,11 @@ export const rulesRuntimeState = {
 };
 
 export function markRegexDirty(dirty = true) {
-    rulesRuntimeState.isRegexDirty = dirty;
+    programRuntimeState.isRegexDirty = dirty;
 }
 
 export function markRulesUiDirty(dirty = true) {
-    rulesRuntimeState.rulesUiDirty = dirty;
+    rulesUiState.rulesUiDirty = dirty;
 }
 
 export function markRulesDataDirty(options = {}) {
