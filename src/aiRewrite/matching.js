@@ -142,7 +142,12 @@ function splitEditableRangeIntoSentences(text, range) {
             sentenceStart = cursor;
             continue;
         }
-        if (sentenceTerminators.has(char)) {
+        // A single sentence-final period is distinct from an ellipsis or a decimal.
+        const isPeriodTerminator = char === '.'
+            && text[cursor - 1] !== '.'
+            && text[cursor + 1] !== '.'
+            && (cursor + 1 === range.end || /[\s”’」』）)*]/u.test(text[cursor + 1]));
+        if (sentenceTerminators.has(char) || isPeriodTerminator) {
             let end = cursor + 1;
             while (end < range.end && sentenceContinuationPunctuation.has(text[end])) end += 1;
             pushSentence(end);
@@ -419,6 +424,7 @@ function collectSentenceWrappers(text, range) {
     addDelimitedSentenceWrappers(text, range, '「', '」', wrappers);
     addDelimitedSentenceWrappers(text, range, '『', '』', wrappers);
     addDelimitedSentenceWrappers(text, range, '（', '）', wrappers);
+    addDelimitedSentenceWrappers(text, range, '(', ')', wrappers);
     addAsteriskSentenceWrappers(text, range, '*', wrappers);
     addAsteriskSentenceWrappers(text, range, '**', wrappers);
     return wrappers;
@@ -449,13 +455,15 @@ function getSentenceSpan(text, match, range, wrappers = []) {
         extended = nextEnd > end;
         if (extended) end = nextEnd;
     }
+    while (start < match.start && /\s/u.test(text[start])) start += 1;
+    while (end > match.end && /\s/u.test(text[end - 1])) end -= 1;
     return { start, end };
 }
 
 function getTextUnitSentences(text, range) {
     return splitEditableRangeIntoSentences(text, range)
         .filter((sentence) => text.slice(sentence.start, sentence.end)
-            .replace(/[“”‘’「」『』（）*]/gu, '')
+            .replace(/[“”‘’「」『』（）()*]/gu, '')
             .trim() !== '');
 }
 
@@ -474,11 +482,14 @@ function getRewriteTargetRange(text, match, editableRange) {
         }))
         .filter((entry) => entry.sentenceCount > 1)
         .sort((left, right) => (left.wrapper.end - left.wrapper.start) - (right.wrapper.end - right.wrapper.start))[0];
-    if (multiSentenceWrapper) {
-        return getSentenceSpan(text, match, multiSentenceWrapper.interiorRange, wrappers);
+    const targetRange = { ...(multiSentenceWrapper?.interiorRange || editableRange) };
+    // Neighboring wrapped prose is a separate unit, even without a sentence terminator.
+    for (const wrapper of wrappers) {
+        if (wrapper.end <= match.start) targetRange.start = Math.max(targetRange.start, wrapper.end);
+        if (wrapper.start >= match.end) targetRange.end = Math.min(targetRange.end, wrapper.start);
     }
 
-    return getSentenceSpan(text, match, editableRange, wrappers);
+    return getSentenceSpan(text, match, targetRange, wrappers);
 }
 
 function coalesceOverlappingRewriteTargets(targets) {
