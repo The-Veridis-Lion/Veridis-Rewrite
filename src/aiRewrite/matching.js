@@ -319,6 +319,14 @@ function getAiProgramFallbackReplacement(match, sourceText = '') {
     return String(pickReplacement(replacements) ?? '');
 }
 
+export function getOccurrenceProgramFallbackText(occurrence, sourceText) {
+    // Automatic tasks select only on fallback; retain even deletion for later finalization.
+    if (occurrence.programFallbackText === undefined) {
+        occurrence.programFallbackText = getAiProgramFallbackReplacement(occurrence, sourceText);
+    }
+    return occurrence.programFallbackText;
+}
+
 export function applyAiProgramFallbackMatches(text, matches = []) {
     const source = String(text || '');
     if (!source || !Array.isArray(matches) || matches.length === 0) return source;
@@ -494,9 +502,16 @@ function copyRawOccurrence(match, sentenceStart, sourceText, options) {
         aiPromptTemplate: String(match.aiPromptTemplate || ''),
         matchedText: String(match.matchedText || ''),
         relativeStart: match.start - sentenceStart,
+        // Keep automatic fallback inputs without selecting a candidate on the AI path.
         ...(options.includeProgramFallback !== false
             ? { programFallbackText: getAiProgramFallbackReplacement(match, sourceText) }
-            : {}),
+            : {
+                mode: match.mode,
+                replacements: [...match.replacements],
+                captures: match.captures,
+                groups: match.groups,
+                start: match.start,
+            }),
     };
 }
 

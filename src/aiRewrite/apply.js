@@ -9,7 +9,7 @@ import { getMessageDiffMeta, writeMessageDiffAiStage, writeMessageDiffProgram } 
 import { beginAtomicMessageDisplaySwap } from '../dom/message.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
 import { collectXmlCommentRanges } from './commentProtection.js';
-import { resolveRewriteTrackedRanges } from './matching.js';
+import { getOccurrenceProgramFallbackText, resolveRewriteTrackedRanges } from './matching.js';
 import { getTaskFreshnessIssue } from './task.js';
 import { recordAiRewriteDebug } from './debug.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
@@ -136,53 +136,39 @@ function applyRewritePlan(task, selectedReplacements, mode) {
     }
     // Host/MVU owns the complete automatic Original; manual runs use the retained Original.
     const originalText = task.automatic === true ? currentText : task.originalText;
-    const session = task.automatic === true ? generationLifecycle.getSession(task.generationId) : null;
-    const streamingFrame = mode === 'program'
-        && task.aiSettings?.protectXmlComments !== true
-        && session?.streamingFrame?.originalText === originalText
-        ? session.streamingFrame
-        : null;
     const selectedItems = mode === 'ai'
         ? task.items.filter((item) => selectedReplacements.has(item.id))
         : task.items;
-    let replacements = [];
-    let composition = { text: originalText };
-    // Automatic failure/no-send reuses streaming Program only without comment protection;
-    // otherwise it runs normal protected Program on Original. Manual fallback retains its contract.
-    if (mode === 'ai' || task.automatic !== true) {
-        const resolved = resolveRewriteTrackedRanges(originalText, task.items, task.aiSettings);
-        if (!resolved.valid) return { appliedCount: 0, reason: 'item-locate-failed' };
-        replacements = resolved.ranges
-            .filter((range) => mode === 'ai'
-                ? range.rangeType === 'sentence' && selectedReplacements.has(range.itemId)
-                : range.rangeType === 'occurrence')
-            .map((range) => ({
-                start: range.start,
-                end: range.end,
-                rewritten: mode === 'ai'
-                    ? String(selectedReplacements.get(range.itemId) ?? '')
-                    : String(task.items.find((item) => item.id === range.itemId)
-                        .matches[range.occurrenceIndex].programFallbackText ?? ''),
-                strategy: mode === 'ai' ? 'sentence' : 'raw-occurrence-fallback',
-            }));
-        composition = applyResolvedReplacements(originalText, replacements);
-    }
-    let programText;
-    if (streamingFrame) {
-        programText = streamingFrame.programText;
-    } else {
-        const transformedText = applyScopedCompiledReplacements(
-            composition.text,
-            task.programProcessors,
-            task.settings,
-            {
-                protectedRanges: task.aiSettings?.protectXmlComments === true
-                    ? collectXmlCommentRanges(composition.text)
-                    : [],
-            },
-        );
-        programText = preserveMvuStatusPlaceholder(transformedText, msg, [originalText, composition.text]);
-    }
+    const resolved = resolveRewriteTrackedRanges(originalText, task.items, task.aiSettings);
+    if (!resolved.valid) return { appliedCount: 0, reason: 'item-locate-failed' };
+    const replacements = resolved.ranges
+        .filter((range) => mode === 'ai'
+            ? range.rangeType === 'sentence' && selectedReplacements.has(range.itemId)
+            : range.rangeType === 'occurrence')
+        .map((range) => ({
+            start: range.start,
+            end: range.end,
+            rewritten: mode === 'ai'
+                ? String(selectedReplacements.get(range.itemId) ?? '')
+                : getOccurrenceProgramFallbackText(
+                    task.items.find((item) => item.id === range.itemId).matches[range.occurrenceIndex],
+                    task.originalText,
+                ),
+            strategy: mode === 'ai' ? 'sentence' : 'raw-occurrence-fallback',
+        }));
+    const composition = applyResolvedReplacements(originalText, replacements);
+    // Streaming Program contains no AI-rule fallbacks; run Program on the composed text.
+    const transformedText = applyScopedCompiledReplacements(
+        composition.text,
+        task.programProcessors,
+        task.settings,
+        {
+            protectedRanges: task.aiSettings?.protectXmlComments === true
+                ? collectXmlCommentRanges(composition.text)
+                : [],
+        },
+    );
+    const programText = preserveMvuStatusPlaceholder(transformedText, msg, [originalText, composition.text]);
     const desiredStage = {
         originalMes: originalText,
         aiMes: mode === 'ai' ? composition.text : '',
