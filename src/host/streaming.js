@@ -110,8 +110,10 @@ function installStreamingProcessorProgram(finalizeCommittedMessage) {
             const programText = applyStreamingProgram(committedText, processorSession.streamingChoices);
             processorSession.streamingFrame = { originalText: committedText, programText };
             if (isFinal === true) processorSession.streamingChoices.length = 0;
-            renderStreamingProgram(numericMessageId, programText);
-            if (programText !== committedText) markStreamingMessagePending(numericMessageId);
+            if (programText !== committedText) {
+                renderStreamingProgram(numericMessageId, programText);
+                markStreamingMessagePending(numericMessageId);
+            }
             if (committedText) {
                 maybeNotifyAiRewriteReadyFromStreamingText(numericMessageId, committedText, {
                     generationId: processorGenerationId,
