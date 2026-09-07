@@ -20,7 +20,6 @@ const inlineDiffCellLimit = 1600000;
 const lineDiffCellLimit = 200000;
 const snippetWindowCharLimit = 900;
 const snippetJoinEqualChars = 96;
-const maxDiffSnippetCount = 16;
 
 /**
  * 生成两段文本的行内差异 HTML。
@@ -569,7 +568,6 @@ function getChangeWindows(annotatedOperations = [], originalText = '') {
     }
 
     return merged
-        .slice(0, maxDiffSnippetCount)
         .map(window => clampWindowToLimit(window, text.length));
 }
 
@@ -617,8 +615,7 @@ function buildDiffSnippetsFromOperations(operations = [], originalText = '') {
 function buildDiffSnippetsFromAnnotatedOperations(annotatedOperations = [], originalText = '') {
     return getChangeWindows(annotatedOperations, originalText)
         .map(window => renderDiffWindow(annotatedOperations, window))
-        .filter(Boolean)
-        .slice(0, maxDiffSnippetCount);
+        .filter(Boolean);
 }
 
 export function extractDiffDisplayText(rawText = '') {
