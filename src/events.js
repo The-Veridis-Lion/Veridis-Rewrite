@@ -38,7 +38,7 @@ export function bindEvents() {
     bindFeedbackEvents();
     bindTourEvents();
 
-    $(document).off('click', '#blai-wand-btn, #blai-wand-btn-panel, #blai-extension-settings-entry').on('click', '#blai-wand-btn, #blai-wand-btn-panel, #blai-extension-settings-entry', openPurifier);
+    $(document).off('click', '#blai-wand-btn, #blai-wand-btn-panel').on('click', '#blai-wand-btn, #blai-wand-btn-panel', openPurifier);
 
     $(document).off('click', '#blai-purifier-popup [data-page-target]').on('click', '#blai-purifier-popup [data-page-target]', function(e) {
         e.preventDefault();

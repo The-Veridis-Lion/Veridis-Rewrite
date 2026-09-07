@@ -275,18 +275,25 @@
 }}
 
 @media (max-width: 600px) {#blai-purifier-popup .blai-global-header {
-    min-height: calc(62px + env(safe-area-inset-top, 0px));
-    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 8px;
-    grid-template-columns: minmax(76px, 1fr) auto minmax(76px, 1fr);
+    min-height: 0;
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 10px 5px;
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
     grid-template-rows: auto auto;
-    column-gap: 8px;
-    row-gap: 4px;
+    align-items: center;
+    column-gap: 4px;
+    row-gap: 1px;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-global-left-actions, #blai-purifier-popup .blai-global-actions {
+    align-self: center;
+    gap: 1px;
 }}
 
 @media (max-width: 600px) {#blai-purifier-popup .blai-global-icon-button {
-    width: 34px;
-    min-width: 34px;
-    height: 34px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    font-size: 16px;
 }}
 
 @media (max-width: 600px) {#blai-purifier-popup .blai-global-heading strong {
@@ -294,13 +301,22 @@
 }}
 
 @media (max-width: 600px) {#blai-purifier-popup .blai-global-heading {
-    max-width: 52vw;
-    gap: 6px;
+    max-width: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
 }}
 
 @media (max-width: 600px) {#blai-purifier-popup .blai-global-description {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
     overflow-wrap: anywhere;
     white-space: normal;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup .blai-global-heading span {
+    display: none;
 }}
 
 #blai-purifier-popup.blai-app-shell {

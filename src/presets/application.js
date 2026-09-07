@@ -18,7 +18,6 @@ import { refreshCharacterBindingUI, syncPresetAiRewriteGenerationSettingsUI, upd
 function normalizeRulesForPresetComparison(rules) {
     return (Array.isArray(rules) ? rules : []).map((rule) => {
         const normalized = deepClone(rule || {});
-        delete normalized.enabled;
         return normalized;
     });
 }

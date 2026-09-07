@@ -13,8 +13,8 @@ import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { clearTrackedDiffEntry, diffRuntimeState, getDiffComparisonForMessage, getDiffSnippetsForMessage, getDiffStateForMessage, refreshDiffCacheIfStale, syncTrackedIndicesToLatestAssistantMessages } from './state.js';
 import { injectDiffButtons } from './view.js';
 import { escapeHtml } from './compare.js';
-import { setCurrentSwipeText } from '../chat/messageBranch.js';
-import { getCurrentMessageOriginalMes } from './messageMeta.js';
+import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
+import { getMessageDiffMeta } from './messageMeta.js';
 import { findRelatedRulesForDiffChange } from './relatedRules.js';
 import { requestManualAiRewriteForMessage } from '../aiRewrite/index.js';
 
@@ -274,11 +274,19 @@ export function bindDiffEvents() {
         if (msg.__blai_is_reverted === true) {
             recleanseDiffMessageAtIndex(index);
         } else {
-            const originalMes = getCurrentMessageOriginalMes(msg);
-            if (originalMes) {
-                msg.mes = originalMes;
-                setCurrentSwipeText(msg, originalMes);
+            const branchKey = getMessageDiffBranchKey(msg);
+            const diffMeta = getMessageDiffMeta(msg, branchKey);
+            if (!diffMeta) {
+                showToast('无法撤回净化：当前消息分支缺少原始文本记录');
+                return;
             }
+            const commitResult = commitCurrentMessageText(msg, diffMeta.originalMes, branchKey);
+            if (!commitResult.ok) {
+                showToast(`无法撤回净化：当前消息分支写入失败（${commitResult.reason || 'unknown'}）`);
+                return;
+            }
+            clearMessageDisplayText(msg);
+            syncCurrentSwipeExtra(msg);
             msg.__blai_is_reverted = true;
             clearTrackedDiffEntry(index);
         }

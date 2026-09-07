@@ -2,10 +2,12 @@
 import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { getGlobalObject, getSillyTavernContextSnapshot } from '../host/context.js';
+import { isAssistantMessage } from '../diff/tracking.js';
 import { getTavernHelperGlobalApi } from './tavernHelper.js';
 
 const minMvuToolCallingTavernHelperVersion = [4, 8, 4];
 const mvuExtraModelLorebookEntryPattern = /\[mvu_(?:update|plot)\]/i;
+const mvuStatusPlaceholder = '<StatusPlaceHolderImpl/>';
 
 function getMvuGlobalApi() {
     const root = getGlobalObject();
@@ -21,6 +23,43 @@ function getMvuGlobalApi() {
 
 export function getMvuIntegrationSignal() {
     return getMvuGlobalApi() ? 'detected' : 'not_detected';
+}
+
+function hasMvuStatusPlaceholder(text) {
+    return String(text || '').includes(mvuStatusPlaceholder);
+}
+
+function hasMvuUpdatePayload(text) {
+    return String(text || '').includes('<UpdateVariable>');
+}
+
+function stripMvuStatusPlaceholders(text) {
+    return String(text ?? '')
+        .split(mvuStatusPlaceholder)
+        .join('')
+        .replace(/\n{3,}/g, '\n\n')
+        .trimEnd();
+}
+
+function getCurrentSwipeVariables(msg) {
+    const swipeId = Number.isInteger(Number(msg?.swipe_id)) ? Number(msg.swipe_id) : 0;
+    return msg?.variables?.[swipeId];
+}
+
+function hasCurrentSwipeMvuState(msg) {
+    const variables = getCurrentSwipeVariables(msg);
+    return !!(variables && typeof variables === 'object' && (variables.stat_data || variables.schema || variables.display_data));
+}
+
+export function preserveMvuStatusPlaceholder(text, msg, sources = []) {
+    const nextText = typeof text === 'string' ? text : String(text ?? '');
+    if (!nextText || !isAssistantMessage(msg)) return nextText;
+    const sourceTexts = [nextText, msg?.mes, ...sources].map(value => String(value || ''));
+    const hadPlaceholder = sourceTexts.some(hasMvuStatusPlaceholder);
+    const hasMvuPayload = sourceTexts.some(hasMvuUpdatePayload);
+    if (!hadPlaceholder && !(hasMvuPayload && hasCurrentSwipeMvuState(msg))) return nextText;
+    const normalizedText = stripMvuStatusPlaceholders(nextText);
+    return normalizedText ? `${normalizedText}\n\n${mvuStatusPlaceholder}` : mvuStatusPlaceholder;
 }
 
 function isVersionAtLeast(version, minimum) {

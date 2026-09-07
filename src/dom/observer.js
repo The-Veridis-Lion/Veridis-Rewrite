@@ -1,7 +1,7 @@
 /** Owns host DOM observation, Diff-button projection, and chat-input rewriting. Finalized message text is not mutated here. */
 import { getAppContext } from '../host/appContext.js';
 import { streamingRuntimeState } from '../host/streamingState.js';
-import { rulesRuntimeState } from '../rules/state.js';
+import { programRuntimeState } from '../rules/state.js';
 import { applyScopedReplacements, buildProcessors } from '../rules/engine.js';
 import { isAllowedChatInputElement, isProtectedNode } from './protection.js';
 import { syncPersonaDescriptionProtectionControl } from '../ui/personaProtection.js';
@@ -82,9 +82,9 @@ export function initDomObserver({ injectDiffButtons }) {
         const el = e.target;
         if (!isAllowedChatInputElement(el) || isProtectedNode(el)) return;
         buildProcessors();
-        if (rulesRuntimeState.activeProcessors.length === 0) return;
+        if (programRuntimeState.activeProcessors.length === 0) return;
         const originalVal = el.value || '';
-        const cleanedVal = applyScopedReplacements(originalVal, { deterministic: true });
+        const cleanedVal = applyScopedReplacements(originalVal);
         if (originalVal !== cleanedVal) {
             const start = el.selectionStart;
             isPurifying = true;

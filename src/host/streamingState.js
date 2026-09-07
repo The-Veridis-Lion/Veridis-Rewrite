@@ -1,5 +1,6 @@
-// Owns the shared runtime identity of the active streaming generation and its committed-message source cache.
+// Host pre-finalization gate, written only by lifecycleEvents.js; not token activity or AI task lifetime.
+// Opens on a tracked generation start or host stream token; closes on accepted finalization/MVU entry or host end/stop.
+// Frame data belongs to generationLifecycle.js.
 export const streamingRuntimeState = {
     isStreamingGeneration: false,
-    streamingCommittedMessageCache: new Map(),
 };

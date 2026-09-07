@@ -113,6 +113,18 @@
     gap: 24px;
 }
 
+#blai-feedback-workspace .blai-feedback-update-warning {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--accent-color) 42%, var(--border-color));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+    color: var(--text-main);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
 #blai-feedback-workspace .blai-feedback-fieldset {
     min-width: 0;
     margin: 0;

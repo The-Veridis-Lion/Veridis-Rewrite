@@ -1,3 +1,5 @@
+import { recordAiRewriteDebug } from './debug.js';
+
 export class AiRewriteResponseFormatError extends Error {
     constructor(message, cause = null, diagnostic = null) {
         super(message);
@@ -74,4 +76,19 @@ export function validateAiRewriteEntries(returnedEntries, itemById) {
 export function validateAiRewriteResponse(rawText, itemById) {
     const parsed = parseAiRewriteResponseObject(rawText);
     return validateAiRewriteEntries(Object.entries(parsed), itemById);
+}
+
+export function parseAiResponse(rawText, itemById) {
+    try {
+        const accepted = validateAiRewriteResponse(rawText, itemById);
+        recordAiRewriteDebug('parse-result', {
+            returnedCount: itemById.size,
+            acceptedCount: accepted.size,
+            rejectedCount: 0,
+        });
+        return accepted;
+    } catch (error) {
+        if (error?.diagnostic) recordAiRewriteDebug('parse-failed', error.diagnostic, 'warn');
+        throw error;
+    }
 }

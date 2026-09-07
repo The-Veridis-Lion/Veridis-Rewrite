@@ -3,7 +3,7 @@ import { mergeScopeTagsWithBuiltins } from '../scope/model.js';
 import { collectXmlCommentRanges, maskXmlCommentRanges } from './commentProtection.js';
 import { recordAiRewriteDebug } from './debug.js';
 
-const responseGuard = `输出必须是一个 JSON 对象，键必须恰好为本次全部 rewrite_target 的 id。每个值必须是替换对应完整目标句子的完整结果字符串；空字符串表示删除整个目标句子。禁止 markdown、解释和额外包装。`;
+const responseGuard = `输出必须是一个 JSON 对象，键必须恰好为本次全部 rewrite_target 的 id。每个值必须是直接替换对应完整目标文本的完整结果字符串；空字符串表示删除整个目标文本。不得输出解释、代码块或标签外包装。`;
 
 export function normalizeLimit(value, fallback, min, max) {
     const parsed = Number(value);

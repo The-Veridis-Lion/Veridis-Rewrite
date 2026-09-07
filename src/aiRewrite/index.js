@@ -11,10 +11,11 @@ export {
     resetAiRewriteRuntimeState,
     runAiRewriteForMessageNow,
     scheduleAiRewriteForMessage,
-    validateAiRewriteFinalization,
     validateAiRewriteMessageTarget,
     waitForAutomaticAiRewrite,
 } from './runtime.js';
+
+export { validateAiRewriteFinalization } from './task.js';
 
 export {
     clearAiRewriteDebugLog,

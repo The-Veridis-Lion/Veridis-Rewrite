@@ -7,8 +7,10 @@ import { isAssistantMessage } from '../diff/tracking.js';
 import { compileProcessors } from '../rules/engine.js';
 import { getZhVariantCompatOptions, isZhDictionaryReady } from '../zh/dictionary.js';
 import { recordAiRewriteDebug } from './debug.js';
+import { getTavernHelperGenerationApi } from './generation.js';
 
-// Owns current settings access, automatic generation target validation, and task freshness predicates.
+// Owns settings access/snapshots, configuration and message-id checks, task identity,
+// automatic generation/finalization validation, and task freshness predicates.
 
 export function getSettings() {
     const { extension_settings } = getAppContext();
@@ -120,4 +122,70 @@ export function getTaskFreshnessIssue(task) {
 
 export function isTaskStillFresh(task) {
     return !getTaskFreshnessIssue(task);
+}
+
+export function getAiRewriteMessageId(payload) {
+    if (Number.isInteger(payload) && payload >= 0) return payload;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return -1;
+    return Number.isInteger(payload.messageId) && payload.messageId >= 0
+        ? payload.messageId
+        : -1;
+}
+
+export function getAiConfigIssue(aiSettings) {
+    if (aiSettings?.enabled !== true) {
+        return {
+            code: 'disabled',
+            reason: 'AI改写未启用',
+        };
+    }
+
+    const missingConfig = [];
+    if (!String(aiSettings.baseUrl || '').trim()) missingConfig.push('Base URL');
+    if (!String(aiSettings.apiKey || '')) missingConfig.push('API Key');
+    if (!String(aiSettings.model || '').trim()) missingConfig.push('模型');
+    if (missingConfig.length > 0) {
+        return {
+            code: 'incomplete-config',
+            reason: `AI API配置不完整：缺少 ${missingConfig.join('、')}`,
+        };
+    }
+
+    if (!getTavernHelperGenerationApi()) {
+        return {
+            code: 'tavern-helper-unavailable',
+            reason: 'TavernHelper.generateRaw 不可用',
+        };
+    }
+
+    return null;
+}
+
+export function isSameAiRewriteTask(left, right) {
+    if (!left || !right) return false;
+    if (left.automatic === true || right.automatic === true) {
+        return left.automatic === true
+            && right.automatic === true
+            && String(left.generationId || '') !== ''
+            && String(left.generationId || '') === String(right.generationId || '');
+    }
+    return left.messageRef === right.messageRef
+        && String(left.branchKey || '') === String(right.branchKey || '');
+}
+
+export function validateAiRewriteFinalization(payload) {
+    const generationId = String(payload?.generationId || '');
+    const session = generationLifecycle.getSession(generationId);
+    if (!session?.contentIdentity) {
+        return generationLifecycle.validate(generationId, {
+            chatId: getCurrentChatIdentity(),
+            chat: getAppContext().chat,
+        });
+    }
+    return validateAutomaticAiRewriteContent({
+        generationId,
+        chatId: String(payload?.chatId || ''),
+        index: getAiRewriteMessageId(payload),
+        scheduleSource: String(payload?.source || 'finalization'),
+    }, { source: 'finalization' });
 }
