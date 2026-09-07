@@ -8,6 +8,7 @@ const appContext = {
     saveChat: null,
     chat: null,
     getSillyTavernContext: null,
+    applyStreamFadeIn: null,
     markWindowedChatDirtyFromIndex: null,
     getWorldInfoState: null,
     setWorldInfoCache: null,

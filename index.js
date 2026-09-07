@@ -3,6 +3,7 @@ import * as scriptModule from "../../../../script.js";
 import { saveSettingsDebounced, eventSource, event_types, chat } from "../../../../script.js";
 import { user_avatar } from "../../../personas.js";
 import { world_info, worldInfoCache } from "../../../world-info.js";
+import { applyStreamFadeIn } from "../../../util/stream-fadein.js";
 
 import { aiRewritePromptProtocolVersion, defaultAiRewriteSettings, defaultSettings, extensionName, modifiedExtensionName, legacyExtensionName, normalizeAiSamplingSettings, normalizeDiffTrackedMessageLimit } from './src/settings/defaults.js';
 import { initAppContext } from './src/host/appContext.js';
@@ -83,6 +84,7 @@ initAppContext({
     saveChat: scriptModule.saveChat,
     chat,
     getSillyTavernContext,
+    applyStreamFadeIn,
     markWindowedChatDirtyFromIndex: scriptModule.markWindowedChatDirtyFromIndex,
     getWorldInfoState: () => world_info,
     setWorldInfoCache: (name, data) => worldInfoCache.set(name, data),
