@@ -3,9 +3,10 @@ import { getAppContext } from '../host/appContext.js';
 import { streamingRuntimeState } from '../host/streamingState.js';
 import { aiRewriteState } from './state.js';
 import { logger } from '../log.js';
+import { getMvuIntegrationSignal } from '../integrations/mvu.js';
 import { isAssistantMessage } from '../diff/tracking.js';
 import { getMessageDiffMeta } from '../diff/messageMeta.js';
-import { getMessageDiffBranchKey, setMessageTextForMvuTransaction } from '../chat/messageBranch.js';
+import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
 import { getCurrentChatIdentity } from '../host/context.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
 import { AiRewriteRequestFormatError, isAiRewriteRequestFormatError, isBadRequestError, requestAiRewrite } from './generation.js';
@@ -39,8 +40,6 @@ import {
 // retry/cancellation, status UI, and accepted/fallback routing; task checks, matching,
 // single-request transport, response parsing, and final composition/commit are delegated.
 
-let automaticRunGenerationId = '';
-let automaticRunPromise = null;
 const streamingXmlTailLookbackChars = 64;
 const streamingXmlScanByMessageId = new Map();
 
@@ -644,8 +643,6 @@ export function validateAiRewriteMessageTarget(payload) {
 
 export function handleAiRewriteGenerationStarted(session = null) {
     streamingXmlScanByMessageId.clear();
-    automaticRunGenerationId = '';
-    automaticRunPromise = null;
     const state = aiRewriteState;
     if (state?.activeController) {
         recordAiRewriteDebug('generation-started-cancelled-active', {
@@ -667,8 +664,6 @@ export function resetAiRewriteRuntimeState(reason = 'reset') {
     const state = aiRewriteState;
     state.statusDismissedTask = null;
     streamingXmlScanByMessageId.clear();
-    automaticRunGenerationId = '';
-    automaticRunPromise = null;
     state.runningTask = null;
     state.finalCleanseSequence = 0;
     state.finalCleanseByMessageKey.clear();
@@ -713,9 +708,10 @@ function buildAiRewriteCandidate(payload, options = {}) {
     const frozenSnapshot = isAutomatic && payload && typeof payload === 'object' && typeof payload.snapshotText === 'string'
         ? payload.snapshotText
         : '';
+    const useLiveManualText = !isAutomatic && getMvuIntegrationSignal() === 'detected';
     const sourceText = isAutomatic
         ? (frozenSnapshot || currentText)
-        : (previous?.originalMes ?? currentText);
+        : (useLiveManualText ? currentText : (previous?.originalMes ?? currentText));
     if (!sourceText.trim()) return { task: null, reason: '目标消息为空' };
 
     const taskSettings = snapshotAiRewriteTaskSettings(settings, aiSettings);
@@ -758,7 +754,7 @@ function buildAiRewriteCandidate(payload, options = {}) {
             sentenceTargetCount: originalItems.length,
             itemLengths: originalItems.map((item) => item.text.length),
             isStreaming: streamingRuntimeState.isStreamingGeneration === true,
-            source: !isAutomatic && previous ? 'retained-original' : 'host-original',
+            source: useLiveManualText ? 'live-message' : (!isAutomatic && previous ? 'retained-original' : 'host-original'),
             rawSourceLength: currentText.length,
             sourceLength: sourceText.length,
             generationId: isAutomatic ? String(payload.generationId || '') : '',
@@ -1030,7 +1026,7 @@ async function requestAcceptedRewritesOnce(task, rewriteState, attempt, maxAttem
 
 async function runAiRewriteForMessage(payload, options = {}) {
     if (payload?.automatic === true && options.claimRequest === true) {
-        const claim = generationLifecycle.claimRequest(payload.generationId, payload.source || 'mvu-transaction');
+        const claim = generationLifecycle.claimRequest(payload.generationId, payload.source || 'automatic');
         if (!claim.ok) {
             recordAiRewriteDebug('task-deduped', {
                 generationId: String(payload.generationId || ''),
@@ -1180,64 +1176,6 @@ export function runAiRewriteForMessageNow(payload, options = {}) {
     });
 }
 
-export function adoptMvuMessageContentForAiRewrite(payload, messageContent) {
-    const generationId = String(payload?.generationId || '');
-    const messageId = getAiRewriteMessageId(payload);
-    const { chat } = getAppContext();
-    if (!generationId || messageId < 0 || !Array.isArray(chat)) {
-        return { ok: false, reason: 'invalid-mvu-payload' };
-    }
-
-    const msg = chat[messageId];
-    if (!isAssistantMessage(msg) || typeof msg.mes !== 'string') {
-        return { ok: false, reason: 'message-not-assistant' };
-    }
-
-    const nextText = String(messageContent ?? '');
-    const previousText = msg.mes;
-    if (nextText === previousText) return { ok: true, changed: false, reason: '' };
-
-    const session = generationLifecycle.getSession(generationId);
-    if (!session || session.phase === 'cancelled') {
-        return { ok: false, reason: 'generation-inactive' };
-    }
-    if (session.messageRef !== msg || session.messageId !== messageId) {
-        return { ok: false, reason: 'generation-message-mismatch' };
-    }
-
-    setMessageTextForMvuTransaction(msg, nextText);
-    const acknowledgement = generationLifecycle.acknowledgeInternalMessageMutation(generationId, {
-        chatId: String(payload?.chatId || ''),
-        chat,
-        messageId,
-        messageRef: msg,
-        beforeText: previousText,
-        afterText: nextText,
-        source: 'mvu-before-message-update',
-    });
-    if (!acknowledgement.ok) {
-        setMessageTextForMvuTransaction(msg, previousText);
-        return acknowledgement;
-    }
-
-    generationLifecycle.clearStreamingProgram(generationId);
-    recordAiRewriteDebug('mvu-message-content-adopted', {
-        generationId,
-        chatId: String(payload?.chatId || ''),
-        messageId,
-        beforeLength: previousText.length,
-        afterLength: nextText.length,
-        contentIdentityActive: Boolean(session.contentIdentity),
-    });
-    return { ok: true, changed: true, reason: '' };
-}
-
-export async function waitForAutomaticAiRewrite(generationId) {
-    const normalizedGenerationId = String(generationId || '');
-    if (!automaticRunPromise || automaticRunGenerationId !== normalizedGenerationId) return null;
-    return automaticRunPromise;
-}
-
 export function scheduleAiRewriteForMessage(payload, options = {}) {
     const delay = normalizeLimit(options.delayMs, 0, 0, 10000);
     const finalCleanseSequence = Number(aiRewriteState.finalCleanseSequence) || 0;
@@ -1283,21 +1221,7 @@ export function scheduleAiRewriteForMessage(payload, options = {}) {
         }
         return runAiRewriteForMessage(payload, { ...options, finalCleanseSequence });
     };
-    const generationId = String(payload?.generationId || '');
-    const scheduledPromise = new Promise((resolve) => {
-        setTimeout(() => resolve(runScheduledTask()), delay);
-    });
-    if (payload?.automatic === true && generationId) {
-        automaticRunGenerationId = generationId;
-        automaticRunPromise = scheduledPromise;
-        const clearScheduledPromise = () => {
-            if (automaticRunPromise === scheduledPromise) {
-                automaticRunGenerationId = '';
-                automaticRunPromise = null;
-            }
-        };
-        scheduledPromise.then(clearScheduledPromise, clearScheduledPromise);
-    }
+    setTimeout(runScheduledTask, delay);
     return true;
 }
 

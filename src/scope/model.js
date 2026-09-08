@@ -3,6 +3,18 @@ import { getAppContext } from '../host/appContext.js';
 
 // Scope Tag parsing, normalization, and protection semantics.
 
+export function collectMvuStatusPlaceholderRanges(text) {
+    const source = String(text ?? '');
+    const literal = '<StatusPlaceHolderImpl/>';
+    const ranges = [];
+    let start = source.indexOf(literal);
+    while (start >= 0) {
+        ranges.push({ start, end: start + literal.length });
+        start = source.indexOf(literal, start + literal.length);
+    }
+    return ranges;
+}
+
 const SCOPE_TAG_NAME_PATTERN = /^[\p{L}\p{N}_:][\p{L}\p{N}\p{M}_.:~-]*$/u;
 const SCOPE_TAG_START_PATTERN = /^<([\p{L}\p{N}_:][\p{L}\p{N}\p{M}_.:~-]*)>$/u;
 const SCOPE_TAG_LABEL_SEPARATOR = '//';

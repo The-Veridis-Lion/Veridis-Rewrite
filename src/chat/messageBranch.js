@@ -119,14 +119,6 @@ export function commitCurrentMessageText(msg, text, expectedBranchKey = '') {
     return { ok: true, changed, reason: '', branchKey, swipeIndex: -1 };
 }
 
-export function setMessageTextForMvuTransaction(msg, text) {
-    if (!isObject(msg) || typeof msg.mes !== 'string') return false;
-    const nextText = String(text ?? '');
-    if (msg.mes === nextText) return false;
-    msg.mes = nextText;
-    return true;
-}
-
 export function clearMessageDisplayText(msg) {
     if (!isObject(msg) || !isObject(msg.extra)) return false;
     return deleteValue(msg.extra, 'display_text');

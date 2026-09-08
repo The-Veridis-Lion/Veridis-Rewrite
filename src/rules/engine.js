@@ -3,7 +3,7 @@ import { getAppContext } from '../host/appContext.js';
 import { programRuntimeState } from './state.js';
 import { logger } from '../log.js';
 import { buildSimpleWildcardPattern, compileRegexTarget } from './regex.js';
-import { mergeScopeTagsWithBuiltins } from '../scope/model.js';
+import { collectMvuStatusPlaceholderRanges, mergeScopeTagsWithBuiltins } from '../scope/model.js';
 import { buildChineseVariantPattern, getChineseTextVariantLengths } from '../zh/conversion.js';
 import { getZhVariantCompatOptions, isZhDictionaryReady } from '../zh/dictionary.js';
 
@@ -389,7 +389,10 @@ export function applyCompiledReplacementsWithTrackedRanges(originalText, process
 
     let text = source;
     let trackedRanges = (Array.isArray(ranges) ? ranges : []).map((range) => ({ ...range }));
-    let protectedRanges = (options.protectedRanges || []).map((range) => ({ ...range }));
+    let protectedRanges = [
+        ...collectMvuStatusPlaceholderRanges(source),
+        ...(options.protectedRanges || []).map((range) => ({ ...range })),
+    ];
     let valid = trackedRanges.every((range) => Number.isInteger(range.start)
         && Number.isInteger(range.end)
         && range.start >= 0
@@ -441,6 +444,7 @@ export function applyReplacements(originalText, options = {}) {
 export function countProcessorMatches(originalText, processors = []) {
     if (typeof originalText !== 'string' || !originalText) return 0;
     let hitCount = 0;
+    const protectedRanges = collectMvuStatusPlaceholderRanges(originalText);
 
     (Array.isArray(processors) ? processors : []).forEach((processor) => {
         if (!processor?.regex) return;
@@ -448,7 +452,9 @@ export function countProcessorMatches(originalText, processors = []) {
         let match;
         while ((match = regex.exec(originalText)) !== null) {
             const matchedText = String(match[0] || '');
-            if (matchedText) hitCount++;
+            if (matchedText) {
+                if (!protectedRanges.some((range) => match.index < range.end && range.start < match.index + matchedText.length)) hitCount++;
+            }
             else regex.lastIndex++;
         }
     });

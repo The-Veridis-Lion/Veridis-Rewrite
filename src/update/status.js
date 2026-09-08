@@ -73,7 +73,7 @@ function projectToolsVersion(message = '正在检查版本信息…') {
             appendReleaseNotes(body, updateState.updateNote);
         } else {
             appendStatusRow(details, updateState.localVersion, '检测到小型修复更新', 'is-update');
-            body.append(makeElement('p', 'blai-tools-version-minor-copy', '本次更新包含一些小问题修复与细节调整。'));
+            appendReleaseNotes(body, updateState.updateNote);
         }
         appendUpdateAction(body);
     }
@@ -98,55 +98,28 @@ function projectUpdateSurfaces() {
     projectFeedbackUpdateWarning();
 }
 
-async function readRemoteManifest(branchName) {
-    const branch = String(branchName || '').trim();
-    if (!branch) throw new Error('SillyTavern version response did not provide currentBranchName.');
-    const response = await fetch(`https://raw.githubusercontent.com/${remoteManifestRepository}/${encodeURIComponent(branch)}/manifest.json`, {
+async function readRemoteManifest() {
+    const response = await fetch(`https://raw.githubusercontent.com/${remoteManifestRepository}/main/manifest.json`, {
         cache: 'no-store',
     });
     if (!response.ok) throw new Error(`Remote manifest request returned HTTP ${response.status}.`);
     return await response.json();
 }
 
+async function readRemoteMainCommitSha() {
+    const response = await fetch(`https://api.github.com/repos/${remoteManifestRepository}/git/ref/heads/main`, {
+        headers: { Accept: 'application/vnd.github+json' },
+        cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`Remote main reference request returned HTTP ${response.status}.`);
+    const reference = await response.json();
+    return reference.object?.sha;
+}
+
 export async function initializeUpdateStatus({ versionInfo, isGlobal } = {}) {
     updateState = null;
     updateInFlight = false;
     projectUpdateSurfaces();
-    if (!versionInfo || typeof versionInfo !== 'object') {
-        logger.error('[Veridis Update] The SillyTavern version response is unavailable; update status will remain hidden.');
-        projectToolsVersion('暂时无法确认版本状态。');
-        return;
-    }
-
-    if (versionInfo.isUpToDate === true) {
-        try {
-            const appContext = getAppContext();
-            const localManifest = await appContext.readExtensionManifest(appContext.veridisExternalId);
-            const localVersion = String(localManifest?.version || '').trim();
-            if (!localVersion) {
-                logger.error('[Veridis Update] Local manifest does not provide a version; update status will remain hidden.');
-                projectToolsVersion('暂时无法确认版本状态。');
-                return;
-            }
-            updateState = {
-                kind: 'latest',
-                localVersion,
-                updateNote: String(localManifest?.update_note || '').trim(),
-                isGlobal: isGlobal === true,
-            };
-            projectUpdateSurfaces();
-        } catch (error) {
-            logger.error('[Veridis Update] Failed to read the local manifest; update status will remain hidden.', error);
-            projectToolsVersion('暂时无法确认版本状态。');
-        }
-        return;
-    }
-
-    if (versionInfo.isUpToDate !== false) {
-        logger.error('[Veridis Update] SillyTavern version response did not provide isUpToDate; update status will remain hidden.');
-        projectToolsVersion('暂时无法确认版本状态。');
-        return;
-    }
 
     const appContext = getAppContext();
     let localManifest;
@@ -160,7 +133,7 @@ export async function initializeUpdateStatus({ versionInfo, isGlobal } = {}) {
 
     let remoteManifest;
     try {
-        remoteManifest = await readRemoteManifest(versionInfo.currentBranchName);
+        remoteManifest = await readRemoteManifest();
     } catch (error) {
         logger.error('[Veridis Update] Failed to retrieve or parse the remote manifest; update status will remain hidden.', error);
         projectToolsVersion('暂时无法确认版本状态。');
@@ -179,7 +152,28 @@ export async function initializeUpdateStatus({ versionInfo, isGlobal } = {}) {
         if (!updateNote) logger.warn('[Veridis Update] Formal remote version update has no update_note metadata.');
         updateState = { kind: 'formal', localVersion, remoteVersion, updateNote, isGlobal: isGlobal === true };
     } else {
-        updateState = { kind: 'minor', localVersion, remoteVersion, isGlobal: isGlobal === true };
+        const localFullCommitSha = String(versionInfo?.currentCommitHash || '').trim();
+        let remoteMainFullCommitSha;
+        try {
+            remoteMainFullCommitSha = await readRemoteMainCommitSha();
+        } catch (error) {
+            logger.error('[Veridis Update] Failed to retrieve or parse the remote main reference; update status will remain hidden.', error);
+            projectToolsVersion('暂时无法确认版本状态。');
+            return;
+        }
+        if (!/^[0-9a-f]{40}$/.test(localFullCommitSha) || !/^[0-9a-f]{40}$/.test(remoteMainFullCommitSha)) {
+            logger.error('[Veridis Update] Local or remote main reference does not provide a full commit SHA; update status will remain hidden.');
+            projectToolsVersion('暂时无法确认版本状态。');
+            return;
+        }
+        const isLatest = localFullCommitSha === remoteMainFullCommitSha;
+        updateState = {
+            kind: isLatest ? 'latest' : 'minor',
+            localVersion,
+            remoteVersion,
+            updateNote: String((isLatest ? localManifest : remoteManifest)?.update_note || '').trim(),
+            isGlobal: isGlobal === true,
+        };
     }
     projectUpdateSurfaces();
 }
@@ -199,6 +193,22 @@ async function updateAndReload() {
     updateInFlight = true;
     $button.prop('disabled', true).text('正在更新…');
     try {
+        // Fetch all remote branches first, including main in shallow release-branch installs.
+        const branchesResponse = await fetch('/api/extensions/branches', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ extensionName: extensionFolderName, global: updateState.isGlobal }),
+        });
+        if (!branchesResponse.ok) throw new Error(`Extension branches request returned HTTP ${branchesResponse.status}.`);
+
+        const switchResponse = await fetch('/api/extensions/switch', {
+            method: 'POST',
+            headers: getRequestHeaders(),
+            body: JSON.stringify({ extensionName: extensionFolderName, global: updateState.isGlobal, branch: 'origin/main' }),
+        });
+        if (!switchResponse.ok) throw new Error(`Extension switch request returned HTTP ${switchResponse.status}.`);
+
+        // SillyTavern pulls the current branch; only reach this after checking out main.
         const response = await fetch('/api/extensions/update', {
             method: 'POST',
             headers: getRequestHeaders(),

@@ -1,5 +1,4 @@
 export {
-    adoptMvuMessageContentForAiRewrite,
     cancelAiRewriteTask,
     getActiveAiRewriteBranchKeyForMessage,
     handleAiRewriteGenerationStarted,
@@ -12,7 +11,6 @@ export {
     runAiRewriteForMessageNow,
     scheduleAiRewriteForMessage,
     validateAiRewriteMessageTarget,
-    waitForAutomaticAiRewrite,
 } from './runtime.js';
 
 export { validateAiRewriteFinalization } from './task.js';

@@ -28,7 +28,7 @@ export function bindZhEvents() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
     const settings = extension_settings[extensionName];
     const syncZhCompatToggle = () => {
-        const packageStatus = getZhDictionaryPackageStatus(settings, { hydrate: true });
+        const packageStatus = getZhDictionaryPackageStatus(settings);
         const ready = packageStatus.ready;
         if (settings.zhVariantCompatEnabled === true && !ready) {
             settings.zhVariantCompatEnabled = false;

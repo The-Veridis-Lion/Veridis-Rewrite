@@ -12,7 +12,6 @@ import { getMessageDomNode } from '../dom/message.js';
 import { commitCurrentMessageText, getMessageDiffBranchKey } from './messageBranch.js';
 import { clearAllMessageDiffMeta, isMessageAiFinal, isMessageFinalizedForCurrentBranch, isMessageManualFinal, writeMessageDiffProgram } from '../diff/messageMeta.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
-import { preserveMvuStatusPlaceholder } from '../integrations/mvu.js';
 import { applyScopedReplacements, buildProcessors } from '../rules/engine.js';
 import { queueIncrementalChatSave } from './persistence.js';
 import { markLatestMessageShujukuRewritePending } from '../shujuku/realtime.js';
@@ -121,7 +120,7 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     // The final streamed Program is already a completed stage, including an unchanged result.
     const cleanedText = streamingFrame
         ? streamingFrame.programText
-        : preserveMvuStatusPlaceholder(applyScopedReplacements(sourceMes), msg, [currentMes, sourceMes]);
+        : applyScopedReplacements(sourceMes);
 
     if (typeof msg.mes === 'string') {
         const currentSwipeIndex = Array.isArray(msg.swipes) ? Number(msg.swipe_id) : -1;

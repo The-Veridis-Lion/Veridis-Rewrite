@@ -1,5 +1,4 @@
 import { getAppContext } from '../host/appContext.js';
-import { preserveMvuStatusPlaceholder } from '../integrations/mvu.js';
 import { refreshMessageDisplay } from '../chat/display.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
@@ -134,7 +133,7 @@ function applyRewritePlan(task, selectedReplacements, mode) {
     if (task.automatic !== true && !messageStagesEqual(previous, task.claimedMeta || null)) {
         return { appliedCount: 0, reason: 'message-stage-changed' };
     }
-    // Host/MVU owns the complete automatic Original; manual runs use the retained Original.
+    // Automatic composition reads live text; manual composition uses its captured source.
     const originalText = task.automatic === true ? currentText : task.originalText;
     const selectedItems = mode === 'ai'
         ? task.items.filter((item) => selectedReplacements.has(item.id))
@@ -158,7 +157,7 @@ function applyRewritePlan(task, selectedReplacements, mode) {
         }));
     const composition = applyResolvedReplacements(originalText, replacements);
     // Run only normal Program rules on the composition, never temporary streaming replacements.
-    const transformedText = applyScopedCompiledReplacements(
+    const programText = applyScopedCompiledReplacements(
         composition.text,
         task.programProcessors,
         task.settings,
@@ -168,7 +167,6 @@ function applyRewritePlan(task, selectedReplacements, mode) {
                 : [],
         },
     );
-    const programText = preserveMvuStatusPlaceholder(transformedText, msg, [originalText, composition.text]);
     const desiredStage = {
         originalMes: originalText,
         aiMes: mode === 'ai' ? composition.text : '',

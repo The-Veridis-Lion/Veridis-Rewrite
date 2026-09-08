@@ -8,7 +8,7 @@
 import { logger } from '../log.js';
 import { buildSimpleTargetPattern, buildTargetLiteralPattern, pickReplacement, resolveProcessorReplacement } from '../rules/engine.js';
 import { compileRegexTarget } from '../rules/regex.js';
-import { normalizeOptionalXmlTagNameInput } from '../scope/model.js';
+import { collectMvuStatusPlaceholderRanges, normalizeOptionalXmlTagNameInput } from '../scope/model.js';
 import { getZhVariantCompatOptions, isZhDictionaryReady } from '../zh/dictionary.js';
 import { collectXmlCommentRanges, maskXmlCommentRanges } from './commentProtection.js';
 import { collectScopeRanges } from './planning.js';
@@ -256,6 +256,7 @@ export function collectAiMatches(text, settings, aiSettings, options = {}) {
         : (source.length > 0 ? [{ index: 0, start: 0, end: source.length, outerStart: 0, outerEnd: source.length }] : []);
     if (segments.length === 0) return [];
     const codeRanges = collectCodeRanges(source);
+    const placeholderRanges = collectMvuStatusPlaceholderRanges(source);
     const commentRanges = aiSettings.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
     const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const scopeRanges = collectScopeRanges(scopeScanText, settings);
@@ -289,6 +290,7 @@ export function collectAiMatches(text, settings, aiSettings, options = {}) {
                     continue;
                 }
                 if (isAllowedByScope(start, end)
+                    && !rangeOverlapsAny(start, end, placeholderRanges)
                     && !rangeOverlapsAny(start, end, codeRanges)
                     && !rangeOverlapsAny(start, end, commentRanges)) {
                     matches.push({
@@ -370,6 +372,7 @@ function collectEditableRanges(text, settings, aiSettings) {
         ? intersectRanges(xmlBodies, scopeRanges.map((range) => ({ start: range.bodyStart, end: range.bodyEnd })))
         : subtractRanges(xmlBodies, scopeRanges.map((range) => ({ start: range.start, end: range.end })));
     const editable = subtractRanges(scopeEditable, [
+        ...collectMvuStatusPlaceholderRanges(source),
         ...collectCodeRanges(source),
         ...commentRanges,
     ]);

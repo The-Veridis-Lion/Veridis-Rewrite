@@ -1,4 +1,4 @@
-/** Owns SillyTavern generation/message/chat lifecycle routing, MVU finalization routing, and composition of host lifecycle side effects. Actual Program, AI, Diff, DOM, and persistence semantics remain in their subsystem owners. */
+/** Owns SillyTavern generation/message/chat lifecycle routing and composition of host lifecycle side effects. Actual Program, AI, Diff, DOM, and persistence semantics remain in their subsystem owners. */
 import { getAppContext } from './appContext.js';
 import { streamingRuntimeState } from './streamingState.js';
 import { applyCharacterPresetBinding } from '../presets/application.js';
@@ -6,15 +6,14 @@ import {
     performGlobalChatMaintenance,
     performIncrementalCleanse,
     getMessageIndexFromEvent,
-    getLatestMessageIndex,
 } from '../chat/cleanse.js';
 import { computeMessageSignature, diffRuntimeState, markDiffComparisonPending, refreshDiffCacheIfStale, resetDiffRuntimeState, restoreDiffStateFromChatMetadata } from '../diff/state.js';
 import { isAssistantMessage } from '../diff/tracking.js';
 import { getMessageSwipeIndex, setCurrentSwipeText } from '../chat/messageBranch.js';
 import { clearMessageDiffMeta, writeMessageDiffManualFinal } from '../diff/messageMeta.js';
-import { getCurrentChatIdentity } from './context.js';
-import { getMvuExtraModelTransaction, shouldWaitForMvuExtraModelTransaction } from '../integrations/mvu.js';
-import { adoptMvuMessageContentForAiRewrite, getActiveAiRewriteBranchKeyForMessage, handleAiRewriteGenerationStarted, hasInvalidAiRewriteTarget, isLiveAiRewriteTargetMessage, markAiRewriteFinalCleanseReady, recordAiRewriteRuntimeDebug, resetAiRewriteRuntimeState, validateAiRewriteMessageTarget, waitForAutomaticAiRewrite } from '../aiRewrite/index.js';
+import { getCurrentCharacterContext, getCurrentChatIdentity } from './context.js';
+import { getMvuIntegrationSignal } from '../integrations/mvu.js';
+import { getActiveAiRewriteBranchKeyForMessage, handleAiRewriteGenerationStarted, hasInvalidAiRewriteTarget, isLiveAiRewriteTargetMessage, markAiRewriteFinalCleanseReady, recordAiRewriteRuntimeDebug, resetAiRewriteRuntimeState, validateAiRewriteMessageTarget } from '../aiRewrite/index.js';
 import { classifyHostGenerationStart, generationLifecycle } from './generationLifecycle.js';
 import { handleStreamingToken, injectDiffButtonsStreamingSafe, resetStreamingProcessorInstallFailureState } from './streaming.js';
 import { initDomObserver, initPersonaProtectionObserver } from '../dom/observer.js';
@@ -35,6 +34,16 @@ export function initRealtimeInterceptor() {
 
 export function bindHostLifecycleEvents() {
     const { eventSource, event_types } = getAppContext();
+    let messageReceivedHasMvuPriority = false;
+    let currentCharacter = getCurrentCharacterContext();
+    const updateMessageReceivedOrder = () => {
+        if (!event_types.MESSAGE_RECEIVED) return;
+        const needsMvuPriority = getMvuIntegrationSignal() === 'detected';
+        if (needsMvuPriority === messageReceivedHasMvuPriority) return;
+        if (needsMvuPriority) eventSource.makeFirst(event_types.MESSAGE_RECEIVED, onMessageReceived);
+        else eventSource.makeLast(event_types.MESSAGE_RECEIVED, onMessageReceived);
+        messageReceivedHasMvuPriority = needsMvuPriority;
+    };
     const markPendingFromPayload = (payload) => {
         const { chat } = getAppContext();
         const index = getMessageIndexFromEvent(payload);
@@ -89,134 +98,7 @@ export function bindHostLifecycleEvents() {
         return cleanseResult;
     };
 
-    let pendingMvuFinalPayload = null;
-    let activeMvuFinalPromise = null;
-    let activeMvuFinalGenerationId = '';
-    let completedMvuFinalGenerationId = '';
-
-    const buildActiveMvuFinalPayload = async (source) => {
-        const transaction = getMvuExtraModelTransaction();
-        if (!transaction.enabled) return null;
-
-        const session = generationLifecycle.getActive();
-        const { chat } = getAppContext();
-        if (!session || !Array.isArray(chat)) return null;
-
-        const candidateIndex = Number.isInteger(session.messageId)
-            ? session.messageId
-            : getLatestMessageIndex();
-        if (candidateIndex < 0) return null;
-        if (!await shouldWaitForMvuExtraModelTransaction(candidateIndex)) return null;
-
-        const resolution = generationLifecycle.bindMessage(candidateIndex, {
-            generationId: session.generationId,
-            chatId: getCurrentChatIdentity(),
-            chat,
-            source,
-        });
-        if (!resolution.ok) {
-            recordAiRewriteRuntimeDebug('mvu-transaction-rejected', {
-                generationId: session.generationId,
-                source,
-                reason: resolution.reason,
-            }, 'warn');
-            return null;
-        }
-
-        if (generationLifecycle.markFinalSource(resolution.generationId, source)) {
-            clearMessageDiffMeta(resolution.message);
-        }
-        return {
-            automatic: true,
-            generationId: resolution.generationId,
-            chatId: resolution.chatId,
-            messageId: resolution.messageIndex,
-            source,
-        };
-    };
-
-    const runMvuFinalTransaction = async (context = null, source = 'mvu-before-message-update') => {
-        const stablePayload = pendingMvuFinalPayload || await buildActiveMvuFinalPayload(source);
-        if (!stablePayload) return false;
-
-        const { chat } = getAppContext();
-        const msg = Array.isArray(chat) ? chat[stablePayload.messageId] : null;
-        if (!isAssistantMessage(msg) || typeof msg.mes !== 'string') return false;
-        if (completedMvuFinalGenerationId === stablePayload.generationId) {
-            if (context && typeof msg.mes === 'string') context.message_content = msg.mes;
-            return true;
-        }
-        if (activeMvuFinalPromise && activeMvuFinalGenerationId === stablePayload.generationId) {
-            await activeMvuFinalPromise;
-            if (context && typeof msg.mes === 'string') context.message_content = msg.mes;
-            return true;
-        }
-
-        if (context && typeof context.message_content === 'string') {
-            const adoption = adoptMvuMessageContentForAiRewrite(stablePayload, context.message_content);
-            if (!adoption.ok) {
-                recordAiRewriteRuntimeDebug('mvu-transaction-rejected', {
-                    generationId: stablePayload.generationId,
-                    index: stablePayload.messageId,
-                    source,
-                    reason: adoption.reason,
-                }, 'warn');
-                return false;
-            }
-        }
-
-        activeMvuFinalGenerationId = stablePayload.generationId;
-        activeMvuFinalPromise = (async () => {
-            streamingRuntimeState.isStreamingGeneration = false;
-            recordAiRewriteRuntimeDebug('mvu-transaction-start', {
-                generationId: stablePayload.generationId,
-                index: stablePayload.messageId,
-                source,
-            });
-
-            const aiOwnsFinalCommit = markAiRewriteFinalCleanseReady(stablePayload);
-            if (aiOwnsFinalCommit) {
-                markLatestMessageShujukuRewritePending(stablePayload.messageId, 'ai-finalization');
-                await waitForAutomaticAiRewrite(stablePayload.generationId);
-            } else {
-                runFinalStreamingCleanse(stablePayload, {
-                    acknowledgeGenerationId: stablePayload.generationId,
-                    acknowledgementSource: 'mvu-transaction-cleanse',
-                });
-            }
-
-            generationLifecycle.clearStreamingProgram(stablePayload.generationId);
-            completedMvuFinalGenerationId = stablePayload.generationId;
-            pendingMvuFinalPayload = null;
-            recordAiRewriteRuntimeDebug('mvu-transaction-complete', {
-                generationId: stablePayload.generationId,
-                index: stablePayload.messageId,
-                source,
-            });
-        })();
-
-        try {
-            await activeMvuFinalPromise;
-            if (context && typeof msg.mes === 'string') context.message_content = msg.mes;
-            return true;
-        } catch (error) {
-            recordAiRewriteRuntimeDebug('mvu-transaction-failed', {
-                generationId: stablePayload.generationId,
-                index: stablePayload.messageId,
-                source,
-                reason: error?.message || String(error || 'unknown'),
-            }, 'warn');
-            if (context && typeof msg.mes === 'string') context.message_content = msg.mes;
-            return false;
-        } finally {
-            if (activeMvuFinalGenerationId === stablePayload.generationId) {
-                activeMvuFinalPromise = null;
-                activeMvuFinalGenerationId = '';
-            }
-        }
-    };
-
-    const finalizeGenerationMessage = async (messageId, source, generationId = '') => {
+    const finalizeGenerationMessage = (messageId, source, generationId = '') => {
         const { chat } = getAppContext();
         const resolution = generationLifecycle.bindMessage(messageId, {
             generationId,
@@ -253,29 +135,6 @@ export function bindHostLifecycleEvents() {
             source,
         };
         markPendingFromPayload(stablePayload);
-        if (completedMvuFinalGenerationId === resolution.generationId) return;
-
-        const waitForMvuExtraModel = await shouldWaitForMvuExtraModelTransaction(resolution.messageIndex);
-        const routeValidation = generationLifecycle.validate(resolution.generationId);
-        if (!routeValidation.ok) {
-            recordAiRewriteRuntimeDebug('mvu-route-rejected', {
-                generationId: resolution.generationId,
-                index: resolution.messageIndex,
-                source,
-                reason: routeValidation.reason,
-            }, 'warn');
-            return;
-        }
-        if (completedMvuFinalGenerationId === resolution.generationId) return;
-        if (waitForMvuExtraModel) {
-            pendingMvuFinalPayload = stablePayload;
-            recordAiRewriteRuntimeDebug('final-cleanse-deferred-to-mvu', {
-                generationId: resolution.generationId,
-                index: resolution.messageIndex,
-                source,
-            });
-            return;
-        }
         const aiOwnsFinalCommit = markAiRewriteFinalCleanseReady(stablePayload);
         if (!aiOwnsFinalCommit) {
             runFinalStreamingCleanse(stablePayload, {
@@ -295,10 +154,6 @@ export function bindHostLifecycleEvents() {
     const cancelAutomaticGeneration = (reason) => {
         generationLifecycle.cancelActive(reason);
         resetAiRewriteRuntimeState(reason);
-        pendingMvuFinalPayload = null;
-        activeMvuFinalPromise = null;
-        activeMvuFinalGenerationId = '';
-        completedMvuFinalGenerationId = '';
     };
 
     if (event_types.MESSAGE_EDITED) {
@@ -330,15 +185,6 @@ export function bindHostLifecycleEvents() {
         const generationStart = classifyHostGenerationStart(type, options, dryRun);
         const { chat } = getAppContext();
         const tail = Array.isArray(chat) && chat.length > 0 ? chat[chat.length - 1] : null;
-        const mvuTransaction = getMvuExtraModelTransaction();
-        let mvuDuringExtraAnalysis = null;
-        try {
-            mvuDuringExtraAnalysis = Boolean(mvuTransaction.api?.isDuringExtraAnalysis?.());
-        } catch (error) {
-            recordAiRewriteRuntimeDebug('mvu-analysis-state-read-failed', {
-                reason: error?.message || String(error || 'unknown'),
-            }, 'warn');
-        }
         const diagnostic = {
             mode: generationStart.mode,
             dryRun: dryRun === true,
@@ -347,9 +193,6 @@ export function bindHostLifecycleEvents() {
             tailRole: tail?.is_user === true ? 'user' : (tail ? 'assistant' : 'empty'),
             tailSwipeId: Number.isInteger(tail?.swipe_id) ? tail.swipe_id : null,
             tailSwipeCount: Array.isArray(tail?.swipes) ? tail.swipes.length : null,
-            mvuExtraModelConfiguredFromHostSettings: mvuTransaction.enabled,
-            mvuApiAvailable: Boolean(mvuTransaction.api),
-            mvuDuringExtraAnalysis,
             automaticTrigger: options?.automatic_trigger === true,
         };
         if (!generationStart.track) {
@@ -359,6 +202,8 @@ export function bindHostLifecycleEvents() {
             });
             return;
         }
+        // Character scripts may activate reactively; move the listener only on a priority transition.
+        updateMessageReceivedOrder();
         recordAiRewriteRuntimeDebug('generation-start-observed', diagnostic);
         const session = generationLifecycle.startGeneration({
             chatId: getCurrentChatIdentity(),
@@ -367,10 +212,6 @@ export function bindHostLifecycleEvents() {
         });
         streamingRuntimeState.isStreamingGeneration = true;
         resetStreamingProcessorInstallFailureState();
-        pendingMvuFinalPayload = null;
-        activeMvuFinalPromise = null;
-        activeMvuFinalGenerationId = '';
-        completedMvuFinalGenerationId = '';
         handleAiRewriteGenerationStarted(session);
     });
     if (event_types.STREAM_TOKEN_RECEIVED) {
@@ -395,7 +236,7 @@ export function bindHostLifecycleEvents() {
             generationId: generationLifecycle.getActive()?.generationId || '',
         });
     });
-    if (event_types.MESSAGE_RECEIVED) eventSource.on(event_types.MESSAGE_RECEIVED, (messageId, hostGenerationType) => {
+    const onMessageReceived = (messageId, hostGenerationType) => {
         const { chat } = getAppContext();
         const messageRef = Number.isInteger(messageId) && Array.isArray(chat) ? chat[messageId] : null;
         const streamingReceipt = generationLifecycle.consumeStreamingHostReceipt(messageId, messageRef);
@@ -407,22 +248,10 @@ export function bindHostLifecycleEvents() {
             mode: activeSession?.mode || '',
             chatLength: Array.isArray(chat) ? chat.length : null,
         });
-        return finalizeGenerationMessage(messageId, 'message-received', streamingReceipt?.generationId || '');
-    });
-    const mvuBeforeMessageUpdateEvent = getMvuExtraModelTransaction().beforeMessageUpdateEvent;
-    eventSource.on(mvuBeforeMessageUpdateEvent, async (context) => {
-        await runMvuFinalTransaction(context, 'mvu-before-message-update');
-    });
-    if (event_types.CHARACTER_MESSAGE_RENDERED) {
-        eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, async (messageId) => {
-            if (!getMvuExtraModelTransaction().enabled) return;
-            const index = Number.isInteger(messageId) && messageId >= 0 ? messageId : -1;
-            const { chat } = getAppContext();
-            const msg = Number.isInteger(index) && index >= 0 && Array.isArray(chat) ? chat[index] : null;
-            if (!isAssistantMessage(msg) || !String(msg.mes || '').includes('<StatusPlaceHolderImpl/>')) return;
-            if (activeMvuFinalPromise || completedMvuFinalGenerationId === generationLifecycle.getActive()?.generationId) return;
-            await runMvuFinalTransaction(null, 'mvu-character-message-rendered');
-        });
+        finalizeGenerationMessage(messageId, 'message-received', streamingReceipt?.generationId || '');
+    };
+    if (event_types.MESSAGE_RECEIVED) {
+        eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
     }
     if (event_types.MESSAGE_SWIPED) eventSource.on(event_types.MESSAGE_SWIPED, (messageId) => {
         const index = Number.isInteger(messageId) && messageId >= 0 ? messageId : -1;
@@ -491,13 +320,14 @@ export function bindHostLifecycleEvents() {
     }
     if (event_types.CHAT_CHANGED) {
         eventSource.on(event_types.CHAT_CHANGED, () => {
+            const nextCharacter = getCurrentCharacterContext();
+            if (nextCharacter.key !== currentCharacter.key || nextCharacter.name !== currentCharacter.name) {
+                currentCharacter = nextCharacter;
+                updateMessageReceivedOrder();
+            }
             generationLifecycle.cancelActive('chat-changed');
             resetAiRewriteRuntimeState('chat-changed');
             clearPendingShujukuRewrite();
-            pendingMvuFinalPayload = null;
-            activeMvuFinalPromise = null;
-            activeMvuFinalGenerationId = '';
-            completedMvuFinalGenerationId = '';
             resetDiffRuntimeState();
             resetStreamingProcessorInstallFailureState();
             diffRuntimeState.currentDiffIndex = undefined;
