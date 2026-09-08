@@ -117,6 +117,7 @@ export function buildFeedbackPayload(form = {}, selected = {}, readers = getFeed
             platform: requiredReaderValue(readers.getPlatform, 'Platform'),
             mvuSignal,
             aiRewrite: {
+                baseUrl: aiRewriteConfig.baseUrl,
                 model: aiRewriteConfig.model,
                 sampling: {
                     temperature: aiRewriteConfig.temperature,

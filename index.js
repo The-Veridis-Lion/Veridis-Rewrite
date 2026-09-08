@@ -96,6 +96,7 @@ initAppContext({
     getAiRewriteDiagnosticConfig: () => {
         const aiRewrite = extension_settings[extensionName].aiRewrite;
         return {
+            baseUrl: aiRewrite.baseUrl,
             model: aiRewrite.model,
             temperature: aiRewrite.temperature,
             topP: aiRewrite.topP,
