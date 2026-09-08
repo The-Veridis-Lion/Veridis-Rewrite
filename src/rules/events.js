@@ -24,6 +24,7 @@ import {
     recognizeRegexReplacementInput,
     removeRegexReplacementInput,
     renderRuleSearchModal,
+    renderRuleEditHistory,
     renderSubrulesToModal,
     renderTags,
     setSingleRuleReplacementEditor,
@@ -172,6 +173,31 @@ function isRelatedDirectSubruleFlow() {
     return rulesUiState.searchEditFlow.active === true && rulesUiState.searchEditFlow.returnMode === 'related';
 }
 
+function isHistoryDirectSubruleFlow() {
+    return rulesUiState.searchEditFlow.active === true && rulesUiState.searchEditFlow.returnMode === 'history';
+}
+
+function refreshRuleEditHistory() {
+    const rules = getAppContext().extension_settings[extensionName].rules || [];
+    rulesUiState.recentEdits = rulesUiState.recentEdits.filter(({ rule, subRule }) =>
+        rules.includes(rule) && (!subRule || rule.subRules.includes(subRule)));
+    renderRuleEditHistory(rulesUiState.recentEdits);
+}
+
+function recordRuleEdit(rule, subRule = null) {
+    rulesUiState.recentEdits = [
+        { rule, subRule },
+        ...rulesUiState.recentEdits.filter((entry) => entry.rule !== rule || entry.subRule !== subRule),
+    ].slice(0, 10);
+}
+
+function openRuleEditTarget(ruleIndex, subRuleIndex, returnMode) {
+    openEditModal(ruleIndex, { source: 'search', returnMode, subRuleIndex });
+    if (subRuleIndex >= 0 && returnMode !== 'group') {
+        openSingleRuleModal(subRuleIndex, { hideEditModal: true });
+    }
+}
+
 function resetRuleSearchQueryState() {
     rulesUiState.ruleSearchKeyword = '';
     rulesUiState.ruleSearchDraftKeyword = '';
@@ -225,6 +251,19 @@ function saveCurrentEditingRule(options = {}) {
 
     markRulesDataDirty();
     saveSettingsDebounced();
+    // Follow only the exact objects cloned by this editor, never text or saved indexes.
+    for (const entry of rulesUiState.recentEdits) {
+        if (entry.rule !== previousRule) continue;
+        entry.rule = newRule;
+        if (entry.subRule) {
+            entry.subRule = validSubrules.find((sub) => rulesUiState.editingSubruleSources.get(sub) === entry.subRule) || entry.subRule;
+        }
+    }
+    if (!isSearchDirectSubruleFlow() && !isRelatedDirectSubruleFlow() && !isHistoryDirectSubruleFlow()) recordRuleEdit(newRule);
+    for (const subRule of rulesUiState.editedSubrules) {
+        if (validSubrules.includes(subRule)) recordRuleEdit(newRule, subRule);
+    }
+    refreshRuleEditHistory();
     renderTags();
     if (isCreatingNewRule && focusLatest) {
         window.setTimeout(() => {
@@ -381,6 +420,28 @@ function runRuleTransfer(isMove) {
 export function bindRuleEvents() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
 
+    $(document).off('click', '#blai-rule-history-open').on('click', '#blai-rule-history-open', () => {
+        refreshRuleEditHistory();
+        $('#blai-rule-history-modal').css('display', 'flex');
+    });
+    $(document).off('click', '#blai-rule-history-close').on('click', '#blai-rule-history-close', () => {
+        $('#blai-rule-history-modal').hide();
+    });
+    $(document).off('click', '[data-rule-history-index]').on('click', '[data-rule-history-index]', function() {
+        const entry = rulesUiState.recentEdits[Number($(this).attr('data-rule-history-index'))];
+        if (!entry) return;
+        const rules = extension_settings[extensionName].rules || [];
+        const ruleIndex = rules.indexOf(entry.rule);
+        const subRuleIndex = entry.subRule ? entry.rule.subRules.indexOf(entry.subRule) : -1;
+        if (ruleIndex < 0 || (entry.subRule && subRuleIndex < 0)) {
+            refreshRuleEditHistory();
+            return;
+        }
+        $('#blai-rule-history-modal').hide();
+        if (entry.subRule) openRuleEditTarget(ruleIndex, subRuleIndex, 'history');
+        else openEditModal(ruleIndex);
+    });
+
     $(document).off('click', '#blai-rule-sort-toggle').on('click', '#blai-rule-sort-toggle', function(e) {
         e.preventDefault();
         const rules = extension_settings[extensionName].rules || [];
@@ -434,7 +495,7 @@ export function bindRuleEvents() {
         renderRuleSearchModal();
     });
 
-    $(document).off('click', '.blai-rule-search-menu-item').on('click', '.blai-rule-search-menu-item', function(e) {
+    $(document).off('click', '#blai-rule-search-modal .blai-rule-search-menu-item').on('click', '#blai-rule-search-modal .blai-rule-search-menu-item', function(e) {
         e.preventDefault();
         e.stopPropagation();
         const action = String($(this).data('action') || '');
@@ -448,13 +509,12 @@ export function bindRuleEvents() {
         closeRuleSearchModal();
 
         if (action === 'group') {
-            openEditModal(ruleIndex, { source: 'search', returnMode: 'group', subRuleIndex });
+            openRuleEditTarget(ruleIndex, subRuleIndex, 'group');
             return;
         }
 
         if (action === 'subrule') {
-            openEditModal(ruleIndex, { source: 'search', returnMode: 'subrule', subRuleIndex });
-            openSingleRuleModal(subRuleIndex, { hideEditModal: true });
+            openRuleEditTarget(ruleIndex, subRuleIndex, 'subrule');
         }
     });
 
@@ -679,6 +739,7 @@ export function bindRuleEvents() {
         const aiPromptTemplate = String($('#blai-modal-sub-ai-prompt').val() || '').trim();
         const isDirectSearchFlow = isSearchDirectSubruleFlow();
         const isRelatedFlow = isRelatedDirectSubruleFlow();
+        const isHistoryFlow = isHistoryDirectSubruleFlow();
 
         if (mode === 'regex') {
             const validation = validateRegexTargetField();
@@ -719,6 +780,11 @@ export function bindRuleEvents() {
             enabled: previousSubRule?.enabled !== false,
         };
 
+        const sourceSubRule = rulesUiState.editingSubruleSources.get(previousSubRule);
+        if (sourceSubRule) rulesUiState.editingSubruleSources.set(subRule, sourceSubRule);
+        rulesUiState.editedSubrules = rulesUiState.editedSubrules.filter((sub) => sub !== previousSubRule);
+        rulesUiState.editedSubrules.push(subRule);
+
         if (rulesUiState.currentSubruleEditIndex === -1) {
             rulesUiState.currentEditingSubrules.push(subRule);
         } else {
@@ -726,14 +792,14 @@ export function bindRuleEvents() {
         }
 
         clearRegexTargetValidationState();
-        if (isDirectSearchFlow || isRelatedFlow) {
+        if (isDirectSearchFlow || isRelatedFlow || isHistoryFlow) {
             const saveResult = saveCurrentEditingRule({ toastMessage: '条目保存成功', focusLatest: false });
             if (!saveResult.ok) return;
             $('#blai-subrule-edit-modal').fadeOut(150, () => {
                 $('#blai-rule-edit-modal').hide();
                 clearRuleSearchEditFlow();
                 if (isDirectSearchFlow) openRuleSearchModal();
-                else if (diffRuntimeState.currentDiffIndex !== undefined) diffRuntimeState.diffModalRefresh(diffRuntimeState.currentDiffIndex);
+                else if (isRelatedFlow && diffRuntimeState.currentDiffIndex !== undefined) diffRuntimeState.diffModalRefresh(diffRuntimeState.currentDiffIndex);
             });
             return;
         }
@@ -749,7 +815,7 @@ export function bindRuleEvents() {
 
     $(document).off('click', '#blai-modal-sub-cancel').on('click', '#blai-modal-sub-cancel', () => {
         clearRegexTargetValidationState();
-        if (isSearchDirectSubruleFlow() || isRelatedDirectSubruleFlow()) {
+        if (isSearchDirectSubruleFlow() || isRelatedDirectSubruleFlow() || isHistoryDirectSubruleFlow()) {
             const shouldReturnSearch = isSearchDirectSubruleFlow();
             $('#blai-subrule-edit-modal').fadeOut(150, () => {
                 $('#blai-rule-edit-modal').hide();
