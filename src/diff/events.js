@@ -4,7 +4,6 @@
 import { extensionName, minTrackedDiffMessages, maxTrackedDiffMessages, normalizeDiffTrackedMessageLimit } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { openSingleRuleModal, openEditModal } from '../rules/view.js';
-import { showToast } from '../ui/notifications.js';
 import {
     cleanseMessageDataAtIndex,
 } from '../chat/cleanse.js';
@@ -75,7 +74,6 @@ export function bindDiffEvents() {
         syncTrackedIndicesToLatestAssistantMessages({ cleanupHistoricalResidue: true });
         injectDiffButtons();
         if (diffRuntimeState.currentDiffIndex !== undefined) renderDiffModalContent(diffRuntimeState.currentDiffIndex);
-        showToast(`透视楼层已设为最近 ${next} 层`);
     };
 
     const closeDiffRelatedModal = ({ clearSelection = true } = {}) => {
@@ -277,12 +275,10 @@ export function bindDiffEvents() {
             const branchKey = getMessageDiffBranchKey(msg);
             const diffMeta = getMessageDiffMeta(msg, branchKey);
             if (!diffMeta) {
-                showToast('无法撤回净化：当前消息分支缺少原始文本记录');
                 return;
             }
             const commitResult = commitCurrentMessageText(msg, diffMeta.originalMes, branchKey);
             if (!commitResult.ok) {
-                showToast(`无法撤回净化：当前消息分支写入失败（${commitResult.reason || 'unknown'}）`);
                 return;
             }
             clearMessageDisplayText(msg);
@@ -299,11 +295,9 @@ export function bindDiffEvents() {
         const index = diffRuntimeState.currentDiffIndex;
         const msg = getDiffMessageByIndex(index);
         if (!Number.isInteger(index) || index < 0 || !msg || typeof msg !== 'object') {
-            showToast('未找到可改写的助手消息');
             return;
         }
         if (msg.__blai_is_reverted === true) {
-            showToast('请先重新净化文本，再执行 AI 改写');
             return;
         }
 

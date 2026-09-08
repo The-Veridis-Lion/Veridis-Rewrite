@@ -262,7 +262,6 @@ function importPresetAsTemporaryPreview() {
     updateToolbarUI();
     renderTags();
     closeImportChoiceModal();
-    showToast('已进入临时规则预览');
 }
 
 export function bindPresetEvents() {
@@ -463,7 +462,6 @@ export function bindPresetEvents() {
         a.download = (settings.activePreset || '临时规则') + '.json';
         a.click();
         URL.revokeObjectURL(url);
-        showToast(`已导出：${a.download}`);
     });
 
     $(document).off('click', '#blai-preset-import').on('click', '#blai-preset-import', function() {

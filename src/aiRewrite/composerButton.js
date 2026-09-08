@@ -4,7 +4,6 @@ import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { resolveLatestTrackableMessageIndex } from '../chat/cleanse.js';
 import { requestManualAiRewriteForMessage } from './index.js';
-import { showToast } from '../ui/notifications.js';
 
 export const composerButtonScriptId = 'veridis-rewrite-composer-button';
 export const composerButtonName = 'AI 改写';
@@ -124,12 +123,10 @@ export function updateComposerButtonSetting(enabled) {
 export function bindComposerButtonAiRewriteEvent(
     eventSource,
     requestManualAiRewrite = requestManualAiRewriteForMessage,
-    notify = showToast,
 ) {
     eventSource.on(composerButtonAiRewriteEvent, () => {
         const index = resolveLatestTrackableMessageIndex();
         if (index < 0) {
-            notify('未找到可改写的助手消息');
             return false;
         }
         return requestManualAiRewrite(index);

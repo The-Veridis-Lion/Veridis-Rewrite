@@ -14,7 +14,7 @@ import { initRealtimeInterceptor } from './src/host/lifecycleEvents.js';
 import { setupUI } from './src/ui/shell.js';
 import { updateToolbarUI } from './src/presets/view.js';
 import { applyCharacterPresetBinding } from './src/presets/application.js';
-import { showRiskConfirmModal, showToast } from './src/ui/notifications.js';
+import { showRiskConfirmModal } from './src/ui/notifications.js';
 import { cleanupInvalidPresetBindings } from './src/presets/bindings.js';
 import { restoreDiffStateFromChatMetadata } from './src/diff/state.js';
 import { performGlobalChatMaintenance } from './src/chat/cleanse.js';
@@ -25,7 +25,7 @@ import { isTauriTavernHost, waitForTauriTavernReady } from './src/integrations/t
 import { isBaiBaiToolkitInstalled } from './src/integrations/baiBai.js';
 import { isLoreFrameInstalled } from './src/integrations/loreFrame.js';
 import { normalizeZhVariantSettings, restoreZhDictionaryPackageFromCache } from './src/zh/dictionary.js';
-import { createDefaultSettings, ensureSettingsShape, legacySettingsCopiedThisBoot, maybeCopyLegacySettings, maybeImportModifiedSettingsIntoSharedNamespace, migrateOldData, modifiedSettingsImportedThisBoot, needsCustomGlobalPromptMigrationConfirmation, resolveCustomGlobalPromptMigration } from './src/settings/migration.js';
+import { createDefaultSettings, ensureSettingsShape, maybeCopyLegacySettings, maybeImportModifiedSettingsIntoSharedNamespace, migrateOldData, needsCustomGlobalPromptMigrationConfirmation, resolveCustomGlobalPromptMigration } from './src/settings/migration.js';
 import { syncComposerButtonScript } from './src/aiRewrite/composerButton.js';
 import { readExtensionManifest } from './src/host/extensionManifest.js';
 import { collectInstalledEnabledExtensions, getEnabledExtensionExternalIds } from './src/feedback/payload.js';
@@ -149,11 +149,6 @@ jQuery(() => {
             const accepted = await showRiskConfirmModal('【屏蔽词净化助手 AI 改写版】的全局提示词写法已经更新。检测到你当前使用的是自定义提示词，是否应用新版默认全局提示词？');
             resolveCustomGlobalPromptMigration(aiRewrite, accepted);
             saveSettingsDebounced();
-        }
-        if (modifiedSettingsImportedThisBoot === true) {
-            setTimeout(() => showToast('已导入旧改版的规则、预设与 AI 配置'), 250);
-        } else if (legacySettingsCopiedThisBoot === true) {
-            setTimeout(() => showToast('已复制旧版规则与预设到 AI 改写版'), 250);
         }
         bindEvents();
         bindUpdateStatusEvents();

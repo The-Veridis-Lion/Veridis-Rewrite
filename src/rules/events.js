@@ -449,7 +449,6 @@ export function bindRuleEvents() {
         markRulesDataDirty();
         saveSettingsDebounced();
         renderTagsPreserveBatchSelection();
-        showToast('分组顺序已反转');
     });
 
     $(document).off('click', '#blai-preset-search').on('click', '#blai-preset-search', () => {
@@ -713,7 +712,6 @@ export function bindRuleEvents() {
     $(document).off('click', '#blai-modal-sub-regex-recognize').on('click', '#blai-modal-sub-regex-recognize', () => {
         const result = recognizeRegexReplacementInput();
         if (!result.ok) {
-            showToast('留空会直接删除，直接保存条目即可。');
             $('#blai-modal-sub-rep').trigger('focus');
             return;
         }

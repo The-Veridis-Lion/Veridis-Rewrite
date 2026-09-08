@@ -184,7 +184,6 @@ export function bindFeedbackEvents() {
     $(document).off('click', '#blai-feedback-copy-log').on('click', '#blai-feedback-copy-log', async () => {
         const logText = getAiRewriteDebugLogText();
         if (!logText || logText === '[]') {
-            showToast('暂无运行日志');
             return;
         }
         try {
