@@ -7,7 +7,7 @@ import { mergeScopeTagsWithBuiltins } from '../scope/model.js';
 import { buildChineseVariantPattern, getChineseTextVariantLengths } from '../zh/conversion.js';
 import { getZhVariantCompatOptions, isZhDictionaryReady } from '../zh/dictionary.js';
 
-// Program replacement transformation owner; callers own mutation and persistence.
+// Final Program and temporary streaming replacement owner; callers own mutation and persistence.
 
 function escapeRegExpLiteral(value) {
     return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -148,6 +148,10 @@ function finalizeProcessorBucket(bucket, useZhVariantCompat, zhVariantOptions) {
 }
 
 export function compileProcessors(rules = [], options = {}) {
+    return compileReplacementProcessors(rules, options, false);
+}
+
+function compileReplacementProcessors(rules, options, includeAi) {
     const useZhVariantCompat = options.useZhVariantCompat === true;
     const zhVariantOptions = options.zhVariantOptions || {};
     const warn = typeof options.warn === 'function' ? options.warn : () => {};
@@ -160,7 +164,7 @@ export function compileProcessors(rules = [], options = {}) {
         for (const sub of subRulesToProcess) {
             if (!sub || typeof sub !== 'object' || sub.enabled === false) continue;
             const rewriteMode = sub.rewriteMode === 'ai' ? 'ai' : 'program';
-            if (rewriteMode !== 'program') continue;
+            if (rewriteMode !== 'program' && !includeAi) continue;
 
             const mode = sub.mode || 'text';
             const targets = Array.isArray(sub.targets) ? [...sub.targets] : [];
@@ -223,13 +227,15 @@ export function buildProcessors() {
     }
     const { extension_settings } = getAppContext();
     const settings = extension_settings[extensionName] || {};
-    const compiled = compileProcessors(settings.rules || [], {
+    const options = {
         useZhVariantCompat: settings.zhVariantCompatEnabled === true && isZhDictionaryReady(settings),
         zhVariantOptions: getZhVariantCompatOptions(settings),
         warn: (message) => logger.warn(message),
-    });
+    };
+    const compiled = compileProcessors(settings.rules || [], options);
 
     programRuntimeState.activeProcessors = compiled.dataProcessors;
+    programRuntimeState.streamingProcessors = compileReplacementProcessors(settings.rules || [], options, true).dataProcessors;
     programRuntimeState.isRegexDirty = false;
     const regexProcessorCount = programRuntimeState.activeProcessors.filter((processor) => processor.kind === 'regex').length;
     const simpleProcessorCount = programRuntimeState.activeProcessors.filter((processor) => processor.kind === 'simple').length;
@@ -297,7 +303,7 @@ function renderRegexReplacementTemplate(template, captures) {
     return output;
 }
 
-// Only the current Original -> Program streaming stage supplies choice memory.
+// Only the current Original -> temporary streaming stage supplies choice memory.
 // Coordinates belong to this processor's input in this scope segment, never AI/Diff.
 function pickProgramCandidate(replacements, processor, match, options = {}) {
     if (replacements.length <= 1) return replacements[0] ?? '';
@@ -317,8 +323,16 @@ function pickProgramCandidate(replacements, processor, match, options = {}) {
 }
 
 export function applyStreamingProgram(originalText, choices) {
+    buildProcessors();
+    const { extension_settings } = getAppContext();
+    const settings = extension_settings[extensionName] || {};
     const frameChoices = { previous: choices, next: [] };
-    const programText = applyScopedReplacements(originalText, { streamingChoices: frameChoices });
+    const programText = applyScopedCompiledReplacements(
+        originalText,
+        programRuntimeState.streamingProcessors,
+        settings,
+        { streamingChoices: frameChoices },
+    );
     // Retain only actual occurrences in the latest frame, not historical choices.
     choices.splice(0, choices.length, ...frameChoices.next);
     return programText;
