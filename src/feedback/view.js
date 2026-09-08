@@ -129,7 +129,7 @@ export function renderFeedbackForm(slots = {}) {
                 </section>
 
                 <p class="blai-feedback-privacy" role="note">
-                    Veridis 不会自动读取或附加 API Key、API URL、聊天内容、提示词、AI 回复、角色卡正文或世界书正文。请勿在详细说明或所选文件中包含敏感信息。
+                    Veridis 不会自动读取或附加 API Key、聊天内容、提示词、AI 回复、角色卡正文或世界书正文。请勿在详细说明或所选文件中包含敏感信息。
                 </p>
 
                 <button id="blai-feedback-preview-generate" class="blai-feedback-primary" type="button">生成提交预览</button>

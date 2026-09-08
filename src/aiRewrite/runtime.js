@@ -1306,6 +1306,7 @@ export function requestManualAiRewriteForMessage(payload) {
     const task = taskCheck.task;
     if (!task) {
         recordAiRewriteDebug('not-sent', { reason: taskCheck.reason || '未满足发送条件', manual: true }, 'warn');
+        notifyAiRewriteStatus('error', 'AI 改写未发送', taskCheck.reason || '未满足发送条件');
         clearAiRewriteStatusToast();
         return false;
     }
