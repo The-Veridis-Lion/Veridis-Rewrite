@@ -3,7 +3,6 @@ import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 import { getSillyTavernContextSnapshot } from '../host/context.js';
 import { isTauriTavernHost } from '../integrations/tauriTavern.js';
-import { getMaxHostChatSaveDefers, getRecommendedChatSaveDelay, shouldDelayChatSaveForHost } from '../integrations/baiBai.js';
 
 /**
  * 排队执行增量聊天保存。
@@ -12,7 +11,6 @@ import { getMaxHostChatSaveDefers, getRecommendedChatSaveDelay, shouldDelayChatS
 let chatSaveTimer = null;
 let chatSaveInFlight = false;
 let pendingChatSave = false;
-let chatSaveDelayCount = 0;
 let chatSaveFailureNotified = false;
 
 function getPreferredSaveChatFunction() {
@@ -46,7 +44,7 @@ function notifyChatSaveFailure(error) {
     }
 }
 
-function scheduleQueuedChatSave(delay = getRecommendedChatSaveDelay()) {
+function scheduleQueuedChatSave(delay = 600) {
     chatSaveTimer = setTimeout(runQueuedChatSave, Math.max(0, Number(delay) || 0));
 }
 
@@ -54,15 +52,8 @@ async function runQueuedChatSave() {
     chatSaveTimer = null;
     if (!pendingChatSave) return;
 
-    if (shouldDelayChatSaveForHost() && chatSaveDelayCount < getMaxHostChatSaveDefers()) {
-        chatSaveDelayCount += 1;
-        scheduleQueuedChatSave(getRecommendedChatSaveDelay());
-        return;
-    }
-
-    chatSaveDelayCount = 0;
     if (chatSaveInFlight) {
-        scheduleQueuedChatSave(getRecommendedChatSaveDelay());
+        scheduleQueuedChatSave();
         return;
     }
 
@@ -75,12 +66,12 @@ async function runQueuedChatSave() {
         notifyChatSaveFailure(e);
     } finally {
         chatSaveInFlight = false;
-        if (pendingChatSave) scheduleQueuedChatSave(getRecommendedChatSaveDelay());
+        if (pendingChatSave) scheduleQueuedChatSave();
     }
 }
 
 export function queueIncrementalChatSave() {
     pendingChatSave = true;
     if (chatSaveTimer) return;
-    scheduleQueuedChatSave(getRecommendedChatSaveDelay());
+    scheduleQueuedChatSave();
 }

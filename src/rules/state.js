@@ -1,8 +1,10 @@
 import { markPresetsUiDirty } from '../presets/state.js';
 
-// Owns the compiled Program processor cache. Persisted Rules remain in extension settings.
+// Owns final Program and streaming processor sets under one invalidation boundary.
+// Persisted Rules remain in extension settings.
 export const programRuntimeState = {
     activeProcessors: [],
+    streamingProcessors: [],
     isRegexDirty: true,
 };
 

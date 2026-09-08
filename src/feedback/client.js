@@ -1,12 +1,25 @@
 // Owns the single anonymous feedback POST and gateway response parsing.
 import { feedbackEndpoint } from './config.js';
 
-export async function submitFeedbackPayloadJson(payloadJson, fetchImpl = globalThis.fetch?.bind(globalThis)) {
+export function validateFeedbackAttachments(attachments) {
+    if (attachments.length > 5) throw new Error('Select at most 5 attachments.');
+    for (const file of attachments) {
+        if (file.size > 10 * 1024 * 1024) throw new Error(`Attachment exceeds 10 MiB: ${file.name}`);
+        if (!/^(image\/[^\s;]+|text\/[^\s;]+|application\/(pdf|json))$/i.test(file.type)) {
+            throw new Error(`Attachment must be an image, PDF, text, or JSON file: ${file.name}`);
+        }
+    }
+}
+
+export async function submitFeedbackPayloadJson(payloadJson, attachments = [], fetchImpl = globalThis.fetch?.bind(globalThis)) {
     if (typeof fetchImpl !== 'function') throw new Error('Feedback submission is unavailable.');
+    validateFeedbackAttachments(attachments);
+    const body = new FormData();
+    body.append('payload', payloadJson);
+    for (const file of attachments) body.append('attachments', file, file.name);
     const response = await fetchImpl(feedbackEndpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payloadJson,
+        body,
     });
     const responseBody = await response.json();
     if (!response.ok) {

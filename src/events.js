@@ -16,7 +16,6 @@ import { bindThemeEvents } from './ui/theme.js';
 import { bindZhEvents } from './zh/events.js';
 import { bindScopeEvents } from './scope/events.js';
 import { closeScopeTagsModal, renderScopeTagsModal } from './scope/view.js';
-import { showToast } from './ui/notifications.js';
 import { bindDiffEvents } from './diff/events.js';
 import { bindDeepCleanEvents } from './deepClean/events.js';
 import { bindComposerButtonAiRewriteEvent, updateComposerButtonSetting } from './aiRewrite/composerButton.js';
@@ -57,11 +56,6 @@ export function bindEvents() {
             return;
         }
         if (target && target.disabled) {
-            if (!$(this).hasClass('blai-tools-binding-main-action')) {
-                const $target = $(target);
-                const message = String($target.find('.blai-bind-menu-note').text() || $target.attr('title') || '当前操作不可用').trim();
-                showToast(message);
-            }
             refreshCharacterBindingUI();
             return;
         }
@@ -85,7 +79,7 @@ export function bindEvents() {
 
     $(document).off('click', '#blai-close-legacy-plugin').on('click', '#blai-close-legacy-plugin', function(e) {
         e.preventDefault();
-        const detected = updateLegacyPurifierWarning();
+        updateLegacyPurifierWarning();
         const legacyEntry = document.getElementById('bl-extension-settings-entry') || document.getElementById('bl-wand-btn');
         if (legacyEntry) {
             $('#blai-purifier-popup').fadeOut(120);
@@ -95,9 +89,6 @@ export function bindEvents() {
             legacyEntry.classList.add('blai-legacy-target-flash');
             window.setTimeout(() => legacyEntry.classList.remove('blai-legacy-target-flash'), 1800);
         }
-        showToast(detected
-            ? '请关闭旧插件 Veridis-Keyword-filtering-main 后刷新页面'
-            : '未检测到旧版 purifier');
     });
 
     $(document).off('click', '#blai-close-btn').on('click', '#blai-close-btn', () => {
@@ -152,21 +143,13 @@ export function bindEvents() {
         if (!settings.shujukuAutoProgramRewriteEnabled) clearPendingShujukuRewrite();
         saveSettingsDebounced();
         syncShujukuAutoRewriteToggle();
-        showToast(settings.shujukuAutoProgramRewriteEnabled
-            ? '已开启 Shujuku 数据库自动净化'
-            : '已关闭 Shujuku 数据库自动净化');
     });
 
     $(document).off('click', '#blai-composer-button-toggle').on('click', '#blai-composer-button-toggle', function(e) {
         e.preventDefault();
         const enabled = settings.showComposerAiRewriteButton !== true;
-        const synchronized = updateComposerButtonSetting(enabled);
+        updateComposerButtonSetting(enabled);
         syncComposerButtonToggle();
-        if (synchronized === false) {
-            showToast('酒馆助手不可用，未能同步输入框手动 AI 改写按钮');
-            return;
-        }
-        showToast(enabled ? '已显示输入框手动 AI 改写按钮' : '已移除输入框手动 AI 改写按钮');
     });
 
     $(document).off('click', '#blai-skip-user-toggle').on('click', '#blai-skip-user-toggle', function(e) {
@@ -174,7 +157,6 @@ export function bindEvents() {
         settings.skipUserMessages = settings.skipUserMessages !== true;
         saveSettingsDebounced();
         syncSkipUserToggle();
-        showToast(settings.skipUserMessages ? '已跳过用户消息' : '已恢复净化用户消息');
     });
 
     $(document).off('click', '.blai-persona-description-protect-toggle').on('click', '.blai-persona-description-protect-toggle', function(e) {
@@ -182,7 +164,6 @@ export function bindEvents() {
         settings.protectPersonaDescription = settings.protectPersonaDescription !== true;
         saveSettingsDebounced();
         syncPersonaDescriptionProtectionControl();
-        showToast(settings.protectPersonaDescription ? '用户设定描述已保护' : '用户设定描述已取消保护');
     });
 
     bindRuleEvents();

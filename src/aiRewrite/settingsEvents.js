@@ -196,11 +196,9 @@ export function bindAiSettingsEvents() {
         saveSettingsDebounced();
         syncAiRewriteSettingsUI();
         resetAiApiCheckState();
-        showToast(`已切换 API 预设：${name}`);
         return true;
     };
-    const runAiModelsHealthCheck = async (options = {}) => {
-        const { silent = false } = options;
+    const runAiModelsHealthCheck = async () => {
         const aiSettings = ensureAiRewriteSettings();
         if (aiSettings.enabled !== true) {
             setAiApiCheckState('disabled', 'AI 改写未启用，开启后再拉取模型列表。');
@@ -215,7 +213,6 @@ export function bindAiSettingsEvents() {
         const tavernHelper = getTavernHelperApi();
         if (typeof tavernHelper?.getModelList !== 'function') {
             setAiApiCheckState('failed', 'TavernHelper.getModelList 不可用，请更新或启用酒馆助手。');
-            if (!silent) showToast('酒馆助手模型列表接口不可用');
             return false;
         }
         const requestId = ++aiApiCheckSequence;
@@ -232,13 +229,11 @@ export function bindAiSettingsEvents() {
                 ? `已拉取 ${modelIds.length} 个模型。`
                 : `模型列表已拉取，但其中没有当前模型 ${selectedModel}。`;
             setAiApiCheckState('ok', title);
-            if (!silent) showToast(`已拉取 ${modelIds.length} 个模型`);
             return true;
         } catch (error) {
             if (requestId !== aiApiCheckSequence) return false;
             const reason = error?.message || '请求失败';
             setAiApiCheckState('failed', `模型列表拉取失败：${reason}`);
-            if (!silent) showToast(`模型列表拉取失败：${reason}`);
             logger.warn('酒馆助手模型列表拉取失败', reason);
             return false;
         }
@@ -335,7 +330,6 @@ export function bindAiSettingsEvents() {
         const enabled = $(this).prop('checked') === true;
         const aiSettings = ensureAiRewriteSettings();
         aiSettings.enabledDefaultApplied = true;
-        if (enabled && !isLocalHttpUrl(aiSettings.baseUrl)) showToast('当前 Base URL 使用非本地 HTTP，建议改用 HTTPS 或本地代理。');
         updateAiRewriteSetting('enabled', enabled);
     });
 
@@ -523,7 +517,7 @@ export function bindAiSettingsEvents() {
 
     $(document).off('click', '#blai-ai-model-fetch').on('click', '#blai-ai-model-fetch', function(e) {
         e.preventDefault();
-        void runAiModelsHealthCheck({ silent: false });
+        void runAiModelsHealthCheck();
     });
 
     if (settings.enableVisualDiff === false) {

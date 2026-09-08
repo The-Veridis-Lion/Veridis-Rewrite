@@ -213,7 +213,7 @@ export function compileAiMatchers(settings, options = {}) {
                 if (!normalizedTarget) return;
                 try {
                     if (mode === 'regex') {
-                        const compiled = compileRegexTarget(normalizedTarget);
+                        const compiled = compileRegexTarget(normalizedTarget, { useZhVariantCompat, zhVariantOptions });
                         if (!compiled.ok) {
                             logger.warn(`AI 改写忽略非法正则表达式: ${normalizedTarget} (${compiled.error.message})`);
                             return;

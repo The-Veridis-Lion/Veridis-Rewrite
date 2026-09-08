@@ -157,7 +157,7 @@ function applyRewritePlan(task, selectedReplacements, mode) {
             strategy: mode === 'ai' ? 'sentence' : 'raw-occurrence-fallback',
         }));
     const composition = applyResolvedReplacements(originalText, replacements);
-    // Streaming Program contains no AI-rule fallbacks; run Program on the composed text.
+    // Run only normal Program rules on the composition, never temporary streaming replacements.
     const transformedText = applyScopedCompiledReplacements(
         composition.text,
         task.programProcessors,

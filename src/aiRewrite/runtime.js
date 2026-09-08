@@ -8,7 +8,6 @@ import { getMessageDiffMeta } from '../diff/messageMeta.js';
 import { getMessageDiffBranchKey, setMessageTextForMvuTransaction } from '../chat/messageBranch.js';
 import { getCurrentChatIdentity } from '../host/context.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
-import { showToast } from '../ui/notifications.js';
 import { AiRewriteRequestFormatError, isAiRewriteRequestFormatError, isBadRequestError, requestAiRewrite } from './generation.js';
 import { recordAiRewriteDebug } from './debug.js';
 import {
@@ -47,10 +46,6 @@ const streamingXmlScanByMessageId = new Map();
 
 function getAiRetryCount(aiSettings) {
     return normalizeLimit(aiSettings?.maxRetries, 2, 0, 5);
-}
-
-function stripStatusText(value = '') {
-    return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 function getToastApi() {
@@ -158,9 +153,6 @@ function terminateAiRewriteTask(task = null, options = {}) {
     if (rewriteState.activeController && (!targetTask || isSameAiRewriteTask(rewriteState.activeTask, targetTask))) {
         cancelAiRewriteTask('user-terminated');
     }
-    if (options.silent !== true) {
-        showToast('AI 改写已终止');
-    }
 }
 
 function attachAiRewriteTerminateAction(toast, task) {
@@ -214,8 +206,6 @@ function notifyAiRewriteStatus(type, title, message, options = {}) {
         }
         return;
     }
-
-    showToast(`${safeTitle}${safeMessage ? `：${stripStatusText(safeMessage)}` : ''}`);
 }
 
 function isLatestTrackableMessageIndex(index) {
@@ -278,12 +268,7 @@ function freezeAiRewriteContentIdentity(payload, snapshotText, aiSettings) {
     }
     const scoped = extractCurrentAiRewriteScope(snapshotText, aiSettings);
     if (!scoped.ok) return null;
-    const currentBranchKey = getMessageDiffBranchKey(messageRef);
-    const branchKey = payload?.source === 'message-received'
-        && currentBranchKey === 'main'
-        && messageRef.swipe_id === undefined
-        ? 'swipe:0'
-        : currentBranchKey;
+    const branchKey = getMessageDiffBranchKey(messageRef);
     const xmlTag = getAiXmlScopeTag(aiSettings).tagName;
     const identity = { branchKey };
     session.contentIdentity = identity;
@@ -392,11 +377,6 @@ function applyAiProgramFallback(taskLike, reason = '') {
     };
 }
 
-function formatAiRewriteCompletionMessage(task, message) {
-    const elapsedSeconds = Math.max(0, Date.now() - task.startedAtMs) / 1000;
-    return `${message} · 用时 ${elapsedSeconds.toFixed(1)} 秒`;
-}
-
 function finishAiRewriteApply(task, accepted) {
     const rewriteState = aiRewriteState;
     if (isSameAiRewriteTask(rewriteState.pendingApply?.task, task)) rewriteState.pendingApply = null;
@@ -407,7 +387,7 @@ function finishAiRewriteApply(task, accepted) {
             generationId: task.generationId || '',
             reason: freshnessIssue,
         }, 'warn');
-        notifyAiRewriteStatus('error', 'AI 改写失败', '消息状态已变化，未写回', { timeOut: 8000, extendedTimeOut: 16000 });
+        clearAiRewriteStatusToast();
         if (task.automatic === true) generationLifecycle.clearStreamingProgram(task.generationId);
         return { status: 'stale' };
     }
@@ -419,7 +399,7 @@ function finishAiRewriteApply(task, accepted) {
             generationId: task.generationId || '',
             appliedCount,
         });
-        notifyAiRewriteStatus('success', 'AI 改写成功', formatAiRewriteCompletionMessage(task, `已应用 ${appliedCount} 个句子改写`), { timeOut: 5000 });
+        clearAiRewriteStatusToast();
         return { status: 'applied', applyResult };
     }
     if (applyResult.reason !== 'no-text-change') {
@@ -430,10 +410,7 @@ function finishAiRewriteApply(task, accepted) {
         const fallbackResult = applyAiProgramFallback(task, applyResult.reason || 'apply-failed');
         if (fallbackResult.applied) return { status: 'fallback-applied', applyResult, fallbackResult };
         if (task.automatic === true) generationLifecycle.clearStreamingProgram(task.generationId);
-        notifyAiRewriteStatus('error', 'AI 改写未写入', `改写结果未覆盖聊天数据：${applyResult.reason || fallbackResult.reason || 'apply-failed'}`, {
-            timeOut: 8000,
-            extendedTimeOut: 16000,
-        });
+        clearAiRewriteStatusToast();
         return { status: 'apply-failed', applyResult, fallbackResult };
     }
 
@@ -442,7 +419,7 @@ function finishAiRewriteApply(task, accepted) {
         acceptedCount: accepted.size,
         reason: 'no-text-change',
     });
-    notifyAiRewriteStatus('success', 'AI 改写成功', formatAiRewriteCompletionMessage(task, '没有新的文本变更需要写入'), { timeOut: 5000 });
+    clearAiRewriteStatusToast();
     return { status: 'no-change', applyResult };
 }
 
@@ -578,7 +555,7 @@ export function markAiRewriteFinalCleanseReady(payload) {
     if (taskCheck.fallbackTask) {
         const fallbackResult = applyAiProgramFallback(taskCheck.fallbackTask, taskCheck.fallbackCode || 'not-sent');
         if (!fallbackResult.applied) {
-            notifyAiRewriteStatus('error', 'AI 改写未写入', fallbackResult.reason || 'fallback-apply-failed');
+            clearAiRewriteStatusToast();
         }
         return true;
     }
@@ -849,7 +826,7 @@ function notifyAiRewriteNotSent(taskCheckOrReason) {
         return;
     }
     logger.warn(`AI 改写未发送：${message}`);
-    notifyAiRewriteStatus('error', 'AI 改写未发送', message, { timeOut: 8000, extendedTimeOut: 16000 });
+    clearAiRewriteStatusToast();
 }
 
 function notifyAiRewriteReadyForMessage(payload) {
@@ -1152,7 +1129,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
                     const freshnessIssue = getTaskFreshnessIssue(task) || 'stale';
                     if (task.automatic === true) generationLifecycle.markRequestFailed(task.generationId, freshnessIssue);
                     recordAiRewriteDebug('run-stale', { generationId: task.generationId || '', reason: freshnessIssue }, 'warn');
-                    notifyAiRewriteStatus('error', 'AI 改写失败', '消息已变化，未写回', { timeOut: 8000, extendedTimeOut: 16000 });
+                    clearAiRewriteStatusToast();
                     return;
                 }
                 break;
@@ -1182,7 +1159,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
             const fallbackResult = applyAiProgramFallback(task, 'ai-failed');
             if (fallbackResult.applied) return { status: 'fallback-applied', fallbackResult };
         }
-        notifyAiRewriteStatus('error', 'AI 改写失败', err?.message || '请求未完成', { timeOut: 8000, extendedTimeOut: 16000 });
+        clearAiRewriteStatusToast();
     } finally {
         if (rewriteState.runningTask === task) rewriteState.runningTask = null;
         if (isSameAiRewriteTask(rewriteState.statusDismissedTask, task)) {
@@ -1329,7 +1306,8 @@ export function requestManualAiRewriteForMessage(payload) {
     const task = taskCheck.task;
     if (!task) {
         recordAiRewriteDebug('not-sent', { reason: taskCheck.reason || '未满足发送条件', manual: true }, 'warn');
-        notifyAiRewriteStatus('error', 'AI 改写未发送', taskCheck.reason || '未满足发送条件', { timeOut: 8000, extendedTimeOut: 16000 });
+        notifyAiRewriteStatus('error', 'AI 改写未发送', taskCheck.reason || '未满足发送条件');
+        clearAiRewriteStatusToast();
         return false;
     }
 

@@ -57,6 +57,7 @@ export class GenerationLifecycleRegistry {
             messageRef: null,
             mode: String(mode || 'unknown'),
             phase: 'active',
+            finalSource: '',
             requestState: 'idle',
             requestSource: '',
             contentIdentity: null,
@@ -287,6 +288,7 @@ export class GenerationLifecycleRegistry {
             return false;
         }
         session.phase = 'finalizing';
+        session.finalSource = String(source || 'unknown');
         this.log('event-received', session, { source: String(source || 'unknown') });
         return true;
     }

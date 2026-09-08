@@ -172,6 +172,13 @@ function isRelatedDirectSubruleFlow() {
     return rulesUiState.searchEditFlow.active === true && rulesUiState.searchEditFlow.returnMode === 'related';
 }
 
+function openRuleEditTarget(ruleIndex, subRuleIndex, returnMode) {
+    openEditModal(ruleIndex, { source: 'search', returnMode, subRuleIndex });
+    if (subRuleIndex >= 0 && returnMode !== 'group') {
+        openSingleRuleModal(subRuleIndex, { hideEditModal: true });
+    }
+}
+
 function resetRuleSearchQueryState() {
     rulesUiState.ruleSearchKeyword = '';
     rulesUiState.ruleSearchDraftKeyword = '';
@@ -388,7 +395,6 @@ export function bindRuleEvents() {
         markRulesDataDirty();
         saveSettingsDebounced();
         renderTagsPreserveBatchSelection();
-        showToast('分组顺序已反转');
     });
 
     $(document).off('click', '#blai-preset-search').on('click', '#blai-preset-search', () => {
@@ -434,7 +440,7 @@ export function bindRuleEvents() {
         renderRuleSearchModal();
     });
 
-    $(document).off('click', '.blai-rule-search-menu-item').on('click', '.blai-rule-search-menu-item', function(e) {
+    $(document).off('click', '#blai-rule-search-modal .blai-rule-search-menu-item').on('click', '#blai-rule-search-modal .blai-rule-search-menu-item', function(e) {
         e.preventDefault();
         e.stopPropagation();
         const action = String($(this).data('action') || '');
@@ -448,13 +454,12 @@ export function bindRuleEvents() {
         closeRuleSearchModal();
 
         if (action === 'group') {
-            openEditModal(ruleIndex, { source: 'search', returnMode: 'group', subRuleIndex });
+            openRuleEditTarget(ruleIndex, subRuleIndex, 'group');
             return;
         }
 
         if (action === 'subrule') {
-            openEditModal(ruleIndex, { source: 'search', returnMode: 'subrule', subRuleIndex });
-            openSingleRuleModal(subRuleIndex, { hideEditModal: true });
+            openRuleEditTarget(ruleIndex, subRuleIndex, 'subrule');
         }
     });
 
@@ -653,7 +658,6 @@ export function bindRuleEvents() {
     $(document).off('click', '#blai-modal-sub-regex-recognize').on('click', '#blai-modal-sub-regex-recognize', () => {
         const result = recognizeRegexReplacementInput();
         if (!result.ok) {
-            showToast('留空会直接删除，直接保存条目即可。');
             $('#blai-modal-sub-rep').trigger('focus');
             return;
         }
@@ -733,7 +737,7 @@ export function bindRuleEvents() {
                 $('#blai-rule-edit-modal').hide();
                 clearRuleSearchEditFlow();
                 if (isDirectSearchFlow) openRuleSearchModal();
-                else if (diffRuntimeState.currentDiffIndex !== undefined) diffRuntimeState.diffModalRefresh(diffRuntimeState.currentDiffIndex);
+                else if (isRelatedFlow && diffRuntimeState.currentDiffIndex !== undefined) diffRuntimeState.diffModalRefresh(diffRuntimeState.currentDiffIndex);
             });
             return;
         }

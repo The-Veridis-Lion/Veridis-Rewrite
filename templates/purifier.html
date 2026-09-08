@@ -9,10 +9,7 @@
                         <i class="fas fa-question" aria-hidden="true"></i>
                     </button>
                 </div>
-                <div class="blai-global-heading">
-                    <strong id="blai-responsive-title" data-title>首页</strong>
-                    <span id="blai-responsive-preset-title">临时规则</span>
-                </div>
+                <strong id="blai-responsive-title" class="blai-global-heading" data-title>首页</strong>
                 <div class="blai-global-actions">
                     <span id="blai-responsive-model-pill" class="blai-global-model-label">AI 改写</span>
                     <button id="blai-preset-save" type="button" class="blai-global-icon-button" title="保存当前规则集" aria-label="保存当前规则集">
@@ -404,7 +401,7 @@
                                             <div class="blai-tools-feedback-copy">
                                                 <strong>反馈与诊断中心</strong>
                                                 <p>查看运行日志、AI 上下文、Deep Clean 诊断，并按需提交反馈。</p>
-                                                <p class="blai-tools-feedback-privacy">不会自动读取或附加 API Key、API URL、聊天内容、提示词、AI 回复、角色卡正文或世界书正文。</p>
+                                                <p class="blai-tools-feedback-privacy">不会自动读取或附加 API Key、聊天内容、提示词、AI 回复、角色卡正文或世界书正文。</p>
                                             </div>
                                             <button id="blai-tools-feedback-open" class="blai-tools-feedback-action" type="button">打开</button>
                                         </div>
@@ -464,14 +461,19 @@
                                     <section class="blai-tools-section blai-tools-opencc-section" aria-labelledby="blai-tools-opencc-title">
                                         <header class="blai-tools-section-header blai-tools-opencc-header">
                                             <div>
-                                                <h2 id="blai-tools-opencc-title">简繁转换 (OpenCC)</h2>
-                                                <p>控制文本的自动简繁转换输出。</p>
+                                                <h2 id="blai-tools-opencc-title">简繁转换</h2>
+                                                <p>让预设规则在匹配文本时自动兼容简繁体。</p>
                                             </div>
-                                            <span id="blai-zh-dict-status-chip" class="blai-tools-install-status">未安装</span>
+                                            <button id="blai-zh-dict-install-open" class="blai-tools-primary-button" type="button">下载兼容包</button>
+                                            <button id="blai-zh-compat-toggle" class="blai-tools-switch" type="button" aria-pressed="false" aria-label="开启简繁转换" title="开启简繁转换" hidden>
+                                                <span class="blai-tools-switch-track" aria-hidden="true"><span></span></span>
+                                                <span class="blai-tools-switch-state">关闭</span>
+                                            </button>
                                         </header>
                                         <div class="blai-tools-opencc-content">
-                                            <p>安装增强词典后，可在本地处理标准简繁、台湾与香港常用字词变体。词典下载完成后会保存在本地缓存。</p>
-                                            <button id="blai-zh-dict-install-open" class="blai-tools-primary-button" type="button">下载并安装字典</button>
+                                            <p>安装简繁转换词典后，插件预设的规则匹配文本时能实现简繁互换。简体规则条目能够兼容并匹配繁体正文，反之亦然。词典下载后会保存在本地缓存，无需二次下载安装。</p>
+                                            <p>OpenCC 兼容包为可选的外部下载，不随插件内置；下载完成后会自动启用。</p>
+                                            <p id="blai-zh-dict-install-status" role="status" hidden></p>
                                         </div>
                                     </section>
                                 </aside>
@@ -661,7 +663,7 @@
                 </div>
                 <div class="blai-modal-actions blai-zh-dict-actions">
                     <button id="blai-zh-dict-cancel" type="button" class="blai-secondary-btn">取消</button>
-                    <button id="blai-zh-dict-download" type="button" class="blai-primary-btn"><i class="fas fa-download"></i> 下载并启用</button>
+                    <button id="blai-zh-dict-download" type="button" class="blai-primary-btn"><i class="fas fa-download"></i> 下载兼容包</button>
                 </div>
             </div>
         </div>

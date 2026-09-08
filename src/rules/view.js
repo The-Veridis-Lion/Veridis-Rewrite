@@ -634,7 +634,7 @@ export function openEditModal(index = -1, options = {}) {
         $('#blai-edit-modal-title').html('<i class="fas fa-pen"></i> 编辑规则合集');
         $('#blai-edit-name').val(rule.name || '');
         rulesUiState.currentEditingSubrules = JSON.parse(JSON.stringify(rule.subRules || []));
-        rulesUiState.currentEditingSubrules.forEach(sub => {
+        rulesUiState.currentEditingSubrules.forEach((sub) => {
             if (sub.enabled === undefined) sub.enabled = true;
             sub.isEditing = false;
         });

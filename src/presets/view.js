@@ -189,11 +189,9 @@ export function updateToolbarUI() {
     }
     selects.val(settings.activePreset || '');
     const rules = Array.isArray(settings.rules) ? settings.rules : [];
-    const activePresetLabel = settings.activePreset || '临时规则';
     const aiRuleCount = rules.reduce((count, rule) => count + (Array.isArray(rule?.subRules)
         ? rule.subRules.filter((sub) => sub?.rewriteMode === 'ai').length
         : 0), 0);
-    $('#blai-responsive-preset-title, #blai-responsive-mobile-preset-title, #blai-bind-active-preset').text(activePresetLabel);
     $('#blai-rule-group-count').text(String(rules.length));
     $('#blai-ai-rule-count').text(String(aiRuleCount));
     refreshCharacterBindingUI();

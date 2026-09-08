@@ -102,6 +102,14 @@ function writeCachedPackage(packagePayload) {
     storage.setItem(CACHE_KEY, JSON.stringify(packagePayload));
 }
 
+export function removeZhDictionaryPackage(settings = getSettings()) {
+    const storage = getStorage();
+    if (storage) storage.removeItem(CACHE_KEY);
+    zhRuntimeState.zhVariantDictionary = null;
+    settings.zhVariantCompatEnabled = false;
+    updateSettingsDictionaryMeta(null, 'missing', '', settings);
+}
+
 function updateSettingsDictionaryMeta(meta, status = 'verified', error = '', targetSettings = getSettings()) {
     const settings = targetSettings;
     normalizeZhVariantSettings(settings);
@@ -563,7 +571,7 @@ export async function downloadZhDictionaryPackage(options = {}) {
     onProgress({ ratio: 0.94, statusText: '正在写入本地缓存。' });
     writeCachedPackage(packagePayload);
     updateSettingsDictionaryMeta({ digest, verifiedAt: packagePayload.verifiedAt }, 'verified');
-    onProgress({ ratio: 1, statusText: '增强简繁词典已验证并启用。' });
+    onProgress({ ratio: 1, statusText: '简繁兼容包已验证并安装，请在工具页单独启用。' });
 
     return {
         packageVersion: ZH_DICTIONARY_PACKAGE_VERSION,

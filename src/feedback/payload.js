@@ -110,13 +110,14 @@ export function buildFeedbackPayload(form = {}, selected = {}, readers = getFeed
         title: requiredText(form.title, 'Title'),
         details: requiredText(form.details, 'Details'),
         environment: {
-            veridisVersion: requiredReaderValue(readers.getVeridisVersion, 'Veridis version'),
+            pluginVersion: requiredReaderValue(readers.getPluginVersion, 'Plugin version'),
             veridisCommit: typeof readers.getVeridisCommit === 'function' ? String(readers.getVeridisCommit() || '').trim() : '',
             sillyTavernVersion: requiredReaderValue(readers.getSillyTavernVersion, 'SillyTavern version'),
             runtime: requiredReaderValue(readers.getRuntime, 'Runtime'),
             platform: requiredReaderValue(readers.getPlatform, 'Platform'),
             mvuSignal,
             aiRewrite: {
+                baseUrl: aiRewriteConfig.baseUrl,
                 model: aiRewriteConfig.model,
                 sampling: {
                     temperature: aiRewriteConfig.temperature,
