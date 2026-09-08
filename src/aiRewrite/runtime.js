@@ -268,12 +268,7 @@ function freezeAiRewriteContentIdentity(payload, snapshotText, aiSettings) {
     }
     const scoped = extractCurrentAiRewriteScope(snapshotText, aiSettings);
     if (!scoped.ok) return null;
-    const currentBranchKey = getMessageDiffBranchKey(messageRef);
-    const branchKey = payload?.source === 'message-received'
-        && currentBranchKey === 'main'
-        && messageRef.swipe_id === undefined
-        ? 'swipe:0'
-        : currentBranchKey;
+    const branchKey = getMessageDiffBranchKey(messageRef);
     const xmlTag = getAiXmlScopeTag(aiSettings).tagName;
     const identity = { branchKey };
     session.contentIdentity = identity;

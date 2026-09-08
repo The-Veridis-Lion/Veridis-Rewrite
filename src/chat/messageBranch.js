@@ -1,7 +1,8 @@
 /**
- * Owns current Message/Swipe branch resolution and atomic message-branch mutation.
+ * Owns logical Message/Swipe branch resolution and atomic message-branch mutation.
  * It does not own Diff metadata or persistence.
  */
+import { generationLifecycle } from '../host/generationLifecycle.js';
 
 function isObject(value) {
     return !!(value && typeof value === 'object');
@@ -35,7 +36,20 @@ export function getMessageSwipeIndex(msg) {
 
 export function getMessageDiffBranchKey(msg) {
     const swipeIndex = getMessageSwipeIndex(msg);
-    return swipeIndex >= 0 ? `swipe:${swipeIndex}` : 'main';
+    if (swipeIndex >= 0) return `swipe:${swipeIndex}`;
+
+    // saveReply awaits MESSAGE_RECEIVED before allocating initial Swipe 0.
+    // Only the bound receipt target has that logical branch before allocation.
+    const session = generationLifecycle.getActive();
+    if (session?.finalSource === 'message-received'
+        && session.messageRef === msg
+        && msg?.swipe_id === undefined
+        && msg?.swipeId === undefined
+        && msg?.swipes === undefined
+        && generationLifecycle.validate(session.generationId).ok) {
+        return 'swipe:0';
+    }
+    return 'main';
 }
 
 export function setCurrentSwipeText(msg, text) {
@@ -102,7 +116,7 @@ export function commitCurrentMessageText(msg, text, expectedBranchKey = '') {
 
     const changed = msg.mes !== nextText;
     msg.mes = nextText;
-    return { ok: true, changed, reason: '', branchKey: 'main', swipeIndex: -1 };
+    return { ok: true, changed, reason: '', branchKey, swipeIndex: -1 };
 }
 
 export function setMessageTextForMvuTransaction(msg, text) {
