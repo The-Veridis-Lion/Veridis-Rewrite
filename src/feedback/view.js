@@ -4,6 +4,9 @@ import { getAiRewriteDebugDisplayText } from '../aiRewrite/debug.js';
 import { formatAiCommunicationRecords } from '../aiRewrite/communicationMonitor.js';
 import { projectFeedbackUpdateWarning } from '../update/status.js';
 
+// Retain the actual editable form, including browser-owned File selections, for this page.
+let feedbackDraftForm = null;
+
 const feedbackAreaLabels = Object.freeze({
     'Deep Clean': '深度净化',
     'AI Rewrite': 'AI 改写',
@@ -47,7 +50,7 @@ function diagnosticAttachment(label, name, available = true, description = '') {
                 <span class="blai-feedback-check-title">${escapeHtml(label)}</span>
                 ${description ? `<small class="blai-feedback-check-description">${escapeHtml(description)}</small>` : ''}
             </span>
-            ${available ? '' : '<small class="blai-feedback-check-status">不可用</small>'}
+            <small class="blai-feedback-check-status"${available ? ' hidden' : ''}>不可用</small>
         </label>
     `;
 }
@@ -55,6 +58,22 @@ function diagnosticAttachment(label, name, available = true, description = '') {
 export function renderFeedbackForm(slots = {}) {
     const content = document.getElementById('blai-feedback-workspace-content');
     if (!content) return;
+    if (feedbackDraftForm) {
+        content.replaceChildren(feedbackDraftForm);
+        projectFeedbackUpdateWarning();
+        updateFeedbackAreaSummary();
+        if (!feedbackDraftForm.querySelector('#blai-feedback-preview-generate').disabled) {
+            showFeedbackStatus('草稿已保留，请重新生成预览。', 'notice');
+            for (const [name, slot] of Object.entries({ deepCleanLatestFailure: 'latestFailure', deepCleanPreviousFailure: 'previousFailure', deepCleanLastSuccess: 'lastSuccess' })) {
+                const input = feedbackDraftForm.querySelector(`[name="${name}"]`);
+                const available = Boolean(slots[slot]);
+                input.disabled = !available;
+                input.closest('label').classList.toggle('is-unavailable', !available);
+                input.closest('label').querySelector('.blai-feedback-check-status').hidden = available;
+            }
+        }
+        return;
+    }
     content.innerHTML = `
         <form id="blai-feedback-form" class="blai-feedback-form" novalidate>
             <div class="blai-feedback-form-main">
@@ -99,10 +118,18 @@ export function renderFeedbackForm(slots = {}) {
                     ${diagnosticAttachment('最近一次失败的 Deep Clean 诊断', 'deepCleanLatestFailure', Boolean(slots.latestFailure))}
                     ${diagnosticAttachment('上一次失败的 Deep Clean 诊断', 'deepCleanPreviousFailure', Boolean(slots.previousFailure))}
                     ${diagnosticAttachment('最近一次成功的 Deep Clean 诊断', 'deepCleanLastSuccess', Boolean(slots.lastSuccess))}
+                    <div class="blai-feedback-file-picker">
+                        <div class="blai-feedback-file-copy">
+                            <span>选择文件（可多选）</span>
+                            <p id="blai-feedback-files-help">最多 5 个文件，每个不超过 10 MiB；支持图片、PDF、文本和 JSON。仅上传你主动选择的文件。</p>
+                        </div>
+                        <input id="blai-feedback-files" name="feedbackFiles" type="file" multiple accept="image/*,application/pdf,text/*,application/json" aria-describedby="blai-feedback-files-help">
+                        <button id="blai-feedback-files-trigger" class="blai-feedback-file-trigger" type="button" aria-controls="blai-feedback-files"><i class="fas fa-paperclip" aria-hidden="true"></i><span>选择文件</span></button>
+                    </div>
                 </section>
 
                 <p class="blai-feedback-privacy" role="note">
-                    Veridis 不会自动读取或附加 API Key、API URL、聊天内容、提示词、AI 回复、角色卡正文或世界书正文。请勿在详细说明中主动粘贴敏感信息。
+                    Veridis 不会自动读取或附加 API Key、API URL、聊天内容、提示词、AI 回复、角色卡正文或世界书正文。请勿在详细说明或所选文件中包含敏感信息。
                 </p>
 
                 <button id="blai-feedback-preview-generate" class="blai-feedback-primary" type="button">生成提交预览</button>
@@ -113,10 +140,11 @@ export function renderFeedbackForm(slots = {}) {
                 <header>
                     <div>
                         <h3>提交预览</h3>
-                        <p>下方 JSON 将作为请求正文原样发送。</p>
+                        <p>下方完整 JSON 将作为 payload 部分原样发送，所选文件将随同一次提交上传。</p>
                     </div>
                 </header>
                 <pre id="blai-feedback-preview-json" tabindex="0"></pre>
+                <div id="blai-feedback-preview-files"></div>
                 <label class="blai-feedback-confirm">
                     <input id="blai-feedback-confirm" type="checkbox">
                     <span>我已检查并确认提交以上完整内容。</span>
@@ -126,6 +154,7 @@ export function renderFeedbackForm(slots = {}) {
             </section>
         </form>
     `;
+    feedbackDraftForm = document.getElementById('blai-feedback-form');
     projectFeedbackUpdateWarning();
     updateFeedbackAreaSummary();
 }
@@ -240,11 +269,15 @@ export function closeFeedbackWorkspace() {
     document.getElementById('blai-feedback-workspace')?.setAttribute('aria-hidden', 'true');
 }
 
-export function renderFeedbackPreview(payloadJson) {
+export function renderFeedbackPreview(payloadJson, attachments = []) {
     const section = document.getElementById('blai-feedback-preview-section');
     const output = document.getElementById('blai-feedback-preview-json');
     if (!section || !output) return;
     output.textContent = payloadJson;
+    const files = document.getElementById('blai-feedback-preview-files');
+    if (files) files.innerHTML = `<h4>所选文件</h4>${attachments.length
+        ? `<ul>${attachments.map((file) => `<li>${escapeHtml(file.name)} · ${escapeHtml(file.type)} · ${file.size} bytes</li>`).join('')}</ul>`
+        : '<p>未选择文件</p>'}`;
     section.hidden = false;
     document.getElementById('blai-feedback-confirm')?.removeAttribute('checked');
     const confirmation = document.getElementById('blai-feedback-confirm');
@@ -255,16 +288,18 @@ export function renderFeedbackPreview(payloadJson) {
 }
 
 export function clearRenderedFeedbackPreview({ preserveSubmissionStatus = false } = {}) {
-    const section = document.getElementById('blai-feedback-preview-section');
-    const output = document.getElementById('blai-feedback-preview-json');
+    const section = feedbackDraftForm?.querySelector('#blai-feedback-preview-section');
+    const output = feedbackDraftForm?.querySelector('#blai-feedback-preview-json');
     if (output) output.textContent = '';
+    const files = feedbackDraftForm?.querySelector('#blai-feedback-preview-files');
+    if (files) files.textContent = '';
     if (section) section.hidden = true;
-    const confirmation = document.getElementById('blai-feedback-confirm');
+    const confirmation = feedbackDraftForm?.querySelector('#blai-feedback-confirm');
     if (confirmation) confirmation.checked = false;
-    const submit = document.getElementById('blai-feedback-submit');
+    const submit = feedbackDraftForm?.querySelector('#blai-feedback-submit');
     if (submit) submit.disabled = true;
     if (!preserveSubmissionStatus) clearFeedbackSubmissionStatus();
-    if (preserveSubmissionStatus && section && document.getElementById('blai-feedback-submit-status')?.textContent) {
+    if (preserveSubmissionStatus && section && feedbackDraftForm?.querySelector('#blai-feedback-submit-status')?.textContent) {
         section.hidden = false;
     }
 }
@@ -282,14 +317,14 @@ export function showFeedbackStatus(message, status = '') {
 }
 
 export function showFeedbackSubmissionStatus(message, status = '') {
-    const element = document.getElementById('blai-feedback-submit-status');
+    const element = feedbackDraftForm?.querySelector('#blai-feedback-submit-status');
     if (!element) return;
     element.textContent = String(message || '');
     element.dataset.status = status;
 }
 
 export function clearFeedbackSubmissionStatus() {
-    const element = document.getElementById('blai-feedback-submit-status');
+    const element = feedbackDraftForm?.querySelector('#blai-feedback-submit-status');
     if (!element) return;
     element.textContent = '';
     element.dataset.status = '';

@@ -202,9 +202,11 @@
 }
 
 #blai-feedback-workspace .blai-feedback-area-select > div {
-    padding: 4px 10px 10px;
+    max-height: 160px;
+    overflow-y: auto;
+    padding: 0 10px;
     display: grid;
-    gap: 6px;
+    grid-auto-rows: minmax(32px, auto);
     border-top: 1px solid var(--border-color);
 }
 
@@ -231,6 +233,53 @@
 #blai-feedback-workspace .blai-feedback-attachments {
     display: grid;
     gap: 5px;
+}
+
+#blai-feedback-workspace .blai-feedback-file-picker {
+    margin-top: 19px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+}
+
+#blai-feedback-workspace .blai-feedback-file-copy {
+    min-width: 0;
+    display: grid;
+    gap: 8px;
+    overflow-wrap: anywhere;
+}
+
+#blai-feedback-workspace .blai-feedback-file-copy > span {
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 850;
+}
+
+#blai-feedback-workspace .blai-feedback-file-copy > p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.55;
+}
+
+#blai-feedback-workspace .blai-feedback-file-picker input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+#blai-feedback-workspace .blai-feedback-file-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
 }
 
 #blai-feedback-workspace .blai-feedback-check,
@@ -294,6 +343,7 @@
 }
 
 #blai-feedback-workspace .blai-feedback-primary,
+#blai-feedback-workspace .blai-feedback-file-trigger,
 #blai-feedback-workspace .blai-feedback-diagnostics-intro button,
 #blai-feedback-workspace .blai-feedback-diagnostic-heading button {
     min-height: 40px;
@@ -316,6 +366,7 @@
     background: color-mix(in srgb, var(--accent-color) 88%, var(--text-main));
 }
 
+#blai-feedback-workspace .blai-feedback-file-trigger:hover,
 #blai-feedback-workspace .blai-feedback-diagnostics-intro button:hover,
 #blai-feedback-workspace .blai-feedback-diagnostic-heading button:hover {
     color: var(--accent-color);
@@ -364,7 +415,24 @@
     border-top: 1px solid var(--border-color);
 }
 
-#blai-feedback-workspace .blai-feedback-preview pre,
+#blai-feedback-workspace .blai-feedback-preview pre {
+    max-width: 100%;
+    max-height: 420px;
+    margin: 12px 0;
+    padding: 14px;
+    overflow: auto;
+    box-sizing: border-box;
+    border: 1px solid var(--border-color);
+    border-radius: 9px;
+    background: var(--bg-base);
+    color: var(--text-main);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.55;
+    white-space: pre;
+    overflow-wrap: normal;
+}
+
 #blai-feedback-workspace .blai-feedback-diagnostic-record pre {
     max-width: 100%;
     max-height: 420px;

@@ -1,6 +1,6 @@
 // Owns feedback workspace action binding and the exact serialized preview submitted to the gateway.
 import { buildFeedbackPayload, getFeedbackPayloadReaders } from './payload.js';
-import { submitFeedbackPayloadJson } from './client.js';
+import { submitFeedbackPayloadJson, validateFeedbackAttachments } from './client.js';
 import {
     clearDeepCleanDiagnostics,
     getDeepCleanDiagnosticSlots,
@@ -26,15 +26,17 @@ import { logger } from '../log.js';
 import { showToast } from '../ui/notifications.js';
 
 let previewPayloadJson = '';
+let previewAttachments = [];
+let previewRevision = 0;
 
 async function resolveFeedbackPreviewReaders(selected, readers) {
     const unresolvedReaders = readers || getFeedbackPayloadReaders();
     if (typeof unresolvedReaders.readExtensionManifest !== 'function') return unresolvedReaders;
 
-    const veridisManifest = await unresolvedReaders.readExtensionManifest(unresolvedReaders.veridisExternalId);
+    const pluginManifest = await unresolvedReaders.readExtensionManifest(unresolvedReaders.veridisExternalId);
     const resolvedReaders = {
         ...unresolvedReaders,
-        getVeridisVersion: () => veridisManifest?.version || '',
+        getPluginVersion: () => pluginManifest?.version || '',
     };
     if (selected.installedEnabledExtensions === true) {
         const extensions = await unresolvedReaders.getInstalledEnabledExtensions();
@@ -49,7 +51,9 @@ export async function createFeedbackPreviewPayloadJson(form, selected, readers) 
 }
 
 export function invalidateFeedbackPreview() {
+    previewRevision += 1;
     previewPayloadJson = '';
+    previewAttachments = [];
     return previewPayloadJson;
 }
 
@@ -59,7 +63,11 @@ export function getFeedbackPreviewPayloadJson() {
 
 export function submitCurrentFeedbackPreview(fetchImpl) {
     if (!previewPayloadJson) throw new Error('Generate a new preview before submitting.');
-    return submitFeedbackPayloadJson(previewPayloadJson, fetchImpl);
+    return submitFeedbackPayloadJson(previewPayloadJson, previewAttachments, fetchImpl);
+}
+
+function readFeedbackAttachments(form) {
+    return [...(form.querySelector('#blai-feedback-files')?.files || [])];
 }
 
 function readFeedbackForm(form) {
@@ -90,10 +98,10 @@ function isCurrentVisibleFeedbackForm(form) {
     const workspace = document.getElementById('blai-feedback-workspace');
     return document.getElementById('blai-feedback-form') === form
         && workspace?.getAttribute('aria-hidden') === 'false'
-        && workspace?.dataset.feedbackView === 'feedback';
+        && workspace?.dataset.feedbackView === 'submit';
 }
 
-function feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics) {
+function feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics, capturedAttachments) {
     if (!isCurrentVisibleFeedbackForm(form)) return false;
     const currentForm = readFeedbackForm(form);
     const currentDiagnostics = readDiagnosticSelections(form);
@@ -101,6 +109,7 @@ function feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics
         && currentForm.title === capturedForm.title
         && currentForm.details === capturedForm.details
         && haveSameValues(currentForm.area, capturedForm.area)
+        && haveSameValues(readFeedbackAttachments(form), capturedAttachments)
         && currentDiagnostics.installedEnabledExtensions === capturedDiagnostics.installedEnabledExtensions
         && currentDiagnostics.runtimeLog === capturedDiagnostics.runtimeLog
         && currentDiagnostics.deepCleanLatestFailure === capturedDiagnostics.deepCleanLatestFailure
@@ -110,6 +119,7 @@ function feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics
 
 function showWorkspaceView(view) {
     invalidateFeedbackPreview();
+    clearRenderedFeedbackPreview({ preserveSubmissionStatus: true });
     openFeedbackWorkspace(view);
     if (view === 'runtime-log') renderRuntimeLog();
     else if (view === 'ai-context') renderAiContext();
@@ -121,7 +131,11 @@ export function bindFeedbackEvents() {
     $(document).off('click', '#blai-tools-feedback-open').on('click', '#blai-tools-feedback-open', () => {
         showWorkspaceView('runtime-log');
     });
-    $(document).off('click', '#blai-feedback-close').on('click', '#blai-feedback-close', closeFeedbackWorkspace);
+    $(document).off('click', '#blai-feedback-close').on('click', '#blai-feedback-close', () => {
+        invalidateFeedbackPreview();
+        clearRenderedFeedbackPreview({ preserveSubmissionStatus: true });
+        closeFeedbackWorkspace();
+    });
     $(document).off('click', '#blai-feedback-workspace [data-feedback-view]').on('click', '#blai-feedback-workspace [data-feedback-view]', function() {
         showWorkspaceView(String($(this).attr('data-feedback-view') || 'runtime-log'));
     });
@@ -139,24 +153,32 @@ export function bindFeedbackEvents() {
         if (!form || this.disabled) return;
         const capturedForm = readFeedbackForm(form);
         const capturedDiagnostics = readDiagnosticSelections(form);
+        const capturedAttachments = readFeedbackAttachments(form);
         invalidateFeedbackPreview();
         clearRenderedFeedbackPreview();
         this.disabled = true;
+        const revision = previewRevision;
         try {
+            validateFeedbackAttachments(capturedAttachments);
             const payloadJson = await createFeedbackPreviewPayloadJson(capturedForm, capturedDiagnostics);
-            if (!feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics)) return;
+            if (revision !== previewRevision || !feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics, capturedAttachments)) return;
             previewPayloadJson = payloadJson;
-            renderFeedbackPreview(payloadJson);
-            document.getElementById('blai-feedback-preview-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            showFeedbackStatus('预览已生成。请检查完整 JSON 后确认提交。', 'success');
+            previewAttachments = capturedAttachments;
+            renderFeedbackPreview(payloadJson, capturedAttachments);
+            document.getElementById('blai-feedback-preview-section')?.scrollIntoView({ block: 'start' });
+            showFeedbackStatus('预览已生成。请检查完整 JSON 和所选文件后确认提交。', 'success');
         } catch (error) {
-            if (!feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics)) return;
+            if (revision !== previewRevision || !feedbackPreviewInputsStillMatch(form, capturedForm, capturedDiagnostics, capturedAttachments)) return;
             invalidateFeedbackPreview();
             clearRenderedFeedbackPreview();
             showFeedbackStatus(`无法生成预览：${error instanceof Error ? error.message : String(error)}`, 'error');
         } finally {
-            if (document.getElementById('blai-feedback-form') === form && this.form === form) this.disabled = false;
+            this.disabled = false;
         }
+    });
+
+    $(document).off('click', '#blai-feedback-files-trigger').on('click', '#blai-feedback-files-trigger', () => {
+        document.getElementById('blai-feedback-files')?.click();
     });
 
     $(document).off('click', '#blai-feedback-copy-log').on('click', '#blai-feedback-copy-log', async () => {
@@ -169,10 +191,8 @@ export function bindFeedbackEvents() {
             const tavernHelper = globalThis.TavernHelper || globalThis.parent?.TavernHelper;
             if (typeof tavernHelper?.builtin?.copyText !== 'function') throw new Error('TavernHelper.builtin.copyText 不可用');
             await tavernHelper.builtin.copyText(logText);
-            showToast('运行日志已复制');
         } catch (error) {
             logger.warn('复制运行日志失败', error);
-            showToast('复制运行日志失败，请更新或启用酒馆助手');
         }
     });
 
@@ -186,10 +206,18 @@ export function bindFeedbackEvents() {
 
     $(document).off('click', '#blai-feedback-submit').on('click', '#blai-feedback-submit', async function() {
         if (!previewPayloadJson || document.getElementById('blai-feedback-confirm')?.checked !== true) return;
+        const form = this.form;
+        const submittedInputs = [...form.querySelectorAll('input, textarea, select')]
+            .filter((input) => !input.disabled);
+        submittedInputs.forEach((input) => { input.disabled = true; });
+        const previewButton = form.querySelector('#blai-feedback-preview-generate');
+        previewButton.disabled = true;
         $(this).prop('disabled', true);
         showFeedbackSubmissionStatus('正在提交匿名反馈…', 'notice');
         try {
             const result = await submitCurrentFeedbackPreview();
+            form.reset();
+            updateFeedbackAreaSummary();
             invalidateFeedbackPreview();
             showFeedbackSubmissionStatus(`提交成功。反馈 ID：${result.feedbackId}`, 'success');
             clearRenderedFeedbackPreview({ preserveSubmissionStatus: true });
@@ -197,8 +225,10 @@ export function bindFeedbackEvents() {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             showFeedbackSubmissionStatus(`提交失败：${message}`, 'error');
-            showToast(`反馈提交失败：${message}`);
-            setFeedbackSubmitEnabled(true);
+            setFeedbackSubmitEnabled(Boolean(previewPayloadJson) && document.getElementById('blai-feedback-confirm')?.checked === true);
+        } finally {
+            submittedInputs.forEach((input) => { input.disabled = false; });
+            previewButton.disabled = false;
         }
     });
 
