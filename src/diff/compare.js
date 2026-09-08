@@ -394,7 +394,7 @@ function applyStageTransition(tokens, deletedSources, fromText, toText, source) 
     return nextTokens;
 }
 
-function restoreFinalEqualities(tokens, originalChars, deletedSources, stageRank) {
+function restoreFinalEqualities(tokens, originalChars, deletedSources) {
     const anchors = [{ tokenPosition: -1, originalIndex: -1 }];
     tokens.forEach((token, tokenPosition) => {
         if (Number.isInteger(token.originalIndex)) {
@@ -423,7 +423,7 @@ function restoreFinalEqualities(tokens, originalChars, deletedSources, stageRank
                 for (let offset = 0; offset < length; offset++) {
                     const originalIndex = oldStart + oldCursor + offset;
                     const token = intervalTokens[newCursor + offset];
-                    if ((stageRank[token.source] || 0) <= (stageRank[deletedSources[originalIndex]] || 0)) continue;
+                    // Exact equality cancels a change regardless of which stage inserted or deleted it.
                     token.originalIndex = originalIndex;
                     token.source = 'original';
                     deletedSources[originalIndex] = undefined;
@@ -466,11 +466,10 @@ function composeStageOperations(originalText, stages) {
     const originalChars = Array.from(originalText);
     let tokens = originalChars.map((char, originalIndex) => ({ char, originalIndex, source: 'original' }));
     const deletedSources = new Array(originalChars.length);
-    const stageRank = Object.fromEntries(stages.map((stage, index) => [stage.source, index + 1]));
     let currentText = originalText;
     stages.forEach((stage) => {
         tokens = applyStageTransition(tokens, deletedSources, currentText, stage.text, stage.source);
-        restoreFinalEqualities(tokens, originalChars, deletedSources, stageRank);
+        restoreFinalEqualities(tokens, originalChars, deletedSources);
         currentText = stage.text;
     });
 
