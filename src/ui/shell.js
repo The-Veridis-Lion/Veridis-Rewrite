@@ -82,7 +82,7 @@ export async function setupUI(renderTemplate) {
         throw new TypeError('setupUI requires a SillyTavern template renderer');
     }
     logger.debug('[setupUI] 开始初始化 UI');
-    $('#blai-purifier-popup, #blai-rule-edit-modal, #blai-risk-confirm-modal, #blai-risk-info-modal, #blai-deep-clean-workspace, #blai-feedback-workspace, #blai-rule-transfer-modal, #blai-preset-import-choice-modal, #blai-rule-search-modal, #blai-rule-history-modal, #blai-scope-tags-modal, #blai-scope-tag-editor-modal, #blai-diff-modal, #blai-subrule-edit-modal, #blai-ai-prompt-modal, #blai-loading-overlay, .blai-toast').remove();
+    $('#blai-purifier-popup, #blai-rule-edit-modal, #blai-risk-confirm-modal, #blai-risk-info-modal, #blai-deep-clean-workspace, #blai-feedback-workspace, #blai-rule-transfer-modal, #blai-preset-import-choice-modal, #blai-rule-search-modal, #blai-scope-tags-modal, #blai-scope-tag-editor-modal, #blai-diff-modal, #blai-subrule-edit-modal, #blai-ai-prompt-modal, #blai-loading-overlay, .blai-toast').remove();
 
     const ensureExtensionPanelEntry = () => {
         if ($('#blai-extension-settings-entry').length || !$('#extensions_settings').length) return;

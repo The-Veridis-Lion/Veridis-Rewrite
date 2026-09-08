@@ -615,8 +615,6 @@ export function openEditModal(index = -1, options = {}) {
     const settings = extension_settings[extensionName];
     const { source = 'main', returnMode = 'group', subRuleIndex = -1 } = options;
     rulesUiState.currentEditingIndex = index;
-    rulesUiState.editingSubruleSources = new WeakMap();
-    rulesUiState.editedSubrules = [];
     if (source === 'search') {
         rulesUiState.searchEditFlow.active = true;
         rulesUiState.searchEditFlow.returnMode = returnMode;
@@ -636,8 +634,7 @@ export function openEditModal(index = -1, options = {}) {
         $('#blai-edit-modal-title').html('<i class="fas fa-pen"></i> 编辑规则合集');
         $('#blai-edit-name').val(rule.name || '');
         rulesUiState.currentEditingSubrules = JSON.parse(JSON.stringify(rule.subRules || []));
-        rulesUiState.currentEditingSubrules.forEach((sub, subIndex) => {
-            rulesUiState.editingSubruleSources.set(sub, rule.subRules[subIndex]);
+        rulesUiState.currentEditingSubrules.forEach((sub) => {
             if (sub.enabled === undefined) sub.enabled = true;
             sub.isEditing = false;
         });
@@ -645,10 +642,4 @@ export function openEditModal(index = -1, options = {}) {
 
     renderSubrulesToModal();
     modal.css('display', 'flex');
-}
-
-export function renderRuleEditHistory(entries) {
-    $('#blai-rule-history-body').html(entries.length
-        ? entries.map(({ rule, subRule }, index) => `<button type="button" class="blai-rule-search-menu-item" data-rule-history-index="${index}">${safeHtml(rule.name || '未命名合集')}${subRule ? ` · ${safeHtml((subRule.targets || []).join(' / '))}` : ' · 合集'}</button>`).join('')
-        : '<p class="blai-rule-search-empty-text">暂无最近编辑记录</p>');
 }
