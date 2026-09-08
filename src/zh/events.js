@@ -5,7 +5,6 @@
 import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { markRulesDataDirty } from '../rules/state.js';
-import { showToast } from '../ui/notifications.js';
 import {
     closeLoadingOverlay,
     closeZhDictionaryModal,
@@ -29,10 +28,8 @@ export function bindZhEvents() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
     const settings = extension_settings[extensionName];
     const syncZhCompatToggle = () => {
-        const packageStatus = getZhDictionaryPackageStatus(settings);
-        const ready = settings.zhVariantCompatEnabled === true
-            ? isZhDictionaryReady(settings)
-            : packageStatus.ready;
+        const packageStatus = getZhDictionaryPackageStatus(settings, { hydrate: true });
+        const ready = packageStatus.ready;
         if (settings.zhVariantCompatEnabled === true && !ready) {
             settings.zhVariantCompatEnabled = false;
         }
@@ -42,23 +39,23 @@ export function bindZhEvents() {
             options.tw ? '台繁' : '',
             options.hk ? '港繁' : '',
         ].filter(Boolean).join('、') || '标准简繁';
-        $('#blai-zh-dict-status-chip').text(enabled ? '已启用' : packageStatus.ready ? '已安装' : '未安装');
-        $('#blai-zh-dict-install-open')
+        $('#blai-zh-dict-install-open').prop('hidden', ready);
+        $('#blai-zh-compat-toggle')
+            .prop('hidden', !ready)
             .attr('aria-pressed', String(enabled))
-            .text(enabled ? '停用简繁转换' : packageStatus.ready ? '启用简繁转换' : '下载并安装字典')
+            .attr('aria-label', enabled ? '关闭简繁转换' : '开启简繁转换')
             .attr('title', enabled
-                ? `简繁兼容已开启：${regionText} 变体参与匹配（点击关闭）`
-                : packageStatus.ready
-                    ? `简繁兼容已关闭：已安装增强词典，点击启用 ${regionText} 匹配`
-                    : '简繁兼容未安装：点击下载 OpenCC 增强词典包');
+                ? `关闭简繁转换（${regionText} 变体参与匹配）`
+                : `开启简繁转换（${regionText} 变体参与匹配）`)
+            .find('.blai-tools-switch-state')
+            .text(enabled ? '开启' : '关闭');
     };
-    const enableVerifiedZhCompat = (toastMessage = '简繁兼容已开启') => {
+    const enableVerifiedZhCompat = () => {
         if (!restoreZhDictionaryPackageFromCache(settings)) return false;
         settings.zhVariantCompatEnabled = true;
         markRulesDataDirty({ rulesUi: false });
         saveSettingsDebounced();
         syncZhCompatToggle();
-        showToast(toastMessage);
         return true;
     };
     const openZhDictionaryInstallPrompt = () => {
@@ -74,6 +71,7 @@ export function bindZhEvents() {
         settings.zhVariantCompatEnabled = false;
         saveSettingsDebounced();
         closeZhDictionaryModal();
+        $('#blai-zh-dict-install-status').prop('hidden', true).text('');
 
         zhDictionaryInstallAbortController = new AbortController();
         showZhDictionaryInstallOverlay(() => {
@@ -89,15 +87,15 @@ export function bindZhEvents() {
             markRulesDataDirty({ rulesUi: false });
             saveSettingsDebounced();
             syncZhCompatToggle();
-            showToast('增强简繁词典已安装并启用');
         } catch (error) {
             const message = markZhDictionaryInstallFailed(error);
             settings.zhVariantCompatEnabled = false;
             markRulesDataDirty({ rulesUi: false });
             saveSettingsDebounced();
             syncZhCompatToggle();
-            if (error?.name === 'AbortError') showToast('已取消词典下载');
-            else showToast(`词典安装失败：${message}`);
+            $('#blai-zh-dict-install-status')
+                .prop('hidden', false)
+                .text(error?.name === 'AbortError' ? '已取消词典下载。' : `词典安装失败：${message}`);
         } finally {
             zhDictionaryInstallAbortController = null;
             window.setTimeout(() => closeLoadingOverlay(), 260);
@@ -108,16 +106,23 @@ export function bindZhEvents() {
 
     $(document).off('click', '#blai-zh-dict-install-open').on('click', '#blai-zh-dict-install-open', function(e) {
         e.preventDefault();
+        if (isZhDictionaryReady(settings)) {
+            syncZhCompatToggle();
+            return;
+        }
+        openZhDictionaryInstallPrompt();
+    });
+
+    $(document).off('click', '#blai-zh-compat-toggle').on('click', '#blai-zh-compat-toggle', function(e) {
+        e.preventDefault();
         if (settings.zhVariantCompatEnabled === true && isZhDictionaryReady(settings)) {
             settings.zhVariantCompatEnabled = false;
             markRulesDataDirty({ rulesUi: false });
             saveSettingsDebounced();
             syncZhCompatToggle();
-            showToast('简繁兼容已关闭');
             return;
         }
-        if (enableVerifiedZhCompat()) return;
-        openZhDictionaryInstallPrompt();
+        if (!enableVerifiedZhCompat()) syncZhCompatToggle();
     });
 
     $(document).off('click', '#blai-zh-dict-close, #blai-zh-dict-cancel').on('click', '#blai-zh-dict-close, #blai-zh-dict-cancel', function(e) {

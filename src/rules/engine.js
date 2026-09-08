@@ -175,7 +175,7 @@ export function compileProcessors(rules = [], options = {}) {
             } else if (mode === 'regex') {
                 for (const t of targets) {
                     if (t) {
-                        const compiled = compileRegexTarget(t);
+                        const compiled = compileRegexTarget(t, { useZhVariantCompat, zhVariantOptions });
                         if (!compiled.ok) {
                             warn(`忽略非法正则表达式: ${t} (${compiled.error.message})`);
                             continue;
