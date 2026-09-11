@@ -14,6 +14,7 @@ const appContext = {
     setWorldInfoCache: null,
     getCurrentPersonaIdentity: null,
     veridisExternalId: '',
+    veridisExtensionFolderName: '',
     readExtensionManifest: null,
     getVeridisCommit: null,
     getSillyTavernVersion: null,

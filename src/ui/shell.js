@@ -77,9 +77,12 @@ export function showResponsivePage(pageId = 'overview') {
     $popup.find('#blai-character-bind-toggle').attr('aria-expanded', 'false');
 }
 
-export async function setupUI(renderTemplate) {
+export async function setupUI(renderTemplate, templateDirectory) {
     if (typeof renderTemplate !== 'function') {
         throw new TypeError('setupUI requires a SillyTavern template renderer');
+    }
+    if (typeof templateDirectory !== 'string' || !templateDirectory) {
+        throw new TypeError('setupUI requires the current extension template directory');
     }
     logger.debug('[setupUI] 开始初始化 UI');
     $('#blai-purifier-popup, #blai-rule-edit-modal, #blai-risk-confirm-modal, #blai-risk-info-modal, #blai-deep-clean-workspace, #blai-feedback-workspace, #blai-rule-transfer-modal, #blai-preset-import-choice-modal, #blai-rule-search-modal, #blai-scope-tags-modal, #blai-scope-tag-editor-modal, #blai-diff-modal, #blai-subrule-edit-modal, #blai-ai-prompt-modal, #blai-loading-overlay, .blai-toast').remove();
@@ -112,7 +115,7 @@ export async function setupUI(renderTemplate) {
     window.setTimeout(ensureExtensionPanelEntry, 500);
 
     const templateHtml = await renderTemplate(
-        'third-party/Veridis-Rewrite/templates',
+        templateDirectory,
         'purifier',
         {},
         false,

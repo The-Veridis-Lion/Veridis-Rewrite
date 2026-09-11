@@ -2,7 +2,6 @@
 import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 
-const extensionFolderName = 'Veridis-Rewrite';
 const remoteManifestRepository = 'The-Veridis-Lion/Veridis-Rewrite';
 
 let updateState = null;
@@ -181,6 +180,7 @@ export async function initializeUpdateStatus({ versionInfo, isGlobal } = {}) {
 async function updateAndReload() {
     if (updateInFlight || !updateState || updateState.kind === 'latest') return;
     const context = getAppContext().getSillyTavernContext?.();
+    const extensionFolderName = getAppContext().veridisExtensionFolderName;
     const getRequestHeaders = context?.getRequestHeaders;
     const $button = $('#blai-tools-version-section [data-update-action="update"]');
     if (typeof getRequestHeaders !== 'function') {
