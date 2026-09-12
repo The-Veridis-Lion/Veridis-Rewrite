@@ -3,7 +3,6 @@ import { getAppContext } from '../host/appContext.js';
 import { streamingRuntimeState } from '../host/streamingState.js';
 import { aiRewriteState } from './state.js';
 import { logger } from '../log.js';
-import { getMvuIntegrationSignal } from '../integrations/mvu.js';
 import { isAssistantMessage } from '../diff/tracking.js';
 import { getMessageDiffMeta } from '../diff/messageMeta.js';
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
@@ -716,10 +715,9 @@ function buildAiRewriteCandidate(payload, options = {}) {
     const frozenSnapshot = isAutomatic && payload && typeof payload === 'object' && typeof payload.snapshotText === 'string'
         ? payload.snapshotText
         : '';
-    const useLiveManualText = !isAutomatic && getMvuIntegrationSignal() === 'detected';
     const sourceText = isAutomatic
         ? (frozenSnapshot || currentText)
-        : (useLiveManualText ? currentText : (previous?.originalMes ?? currentText));
+        : (previous?.originalMes ?? currentText);
     if (!sourceText.trim()) return { task: null, reason: '目标消息为空' };
 
     const taskSettings = snapshotAiRewriteTaskSettings(settings, aiSettings);
@@ -762,7 +760,7 @@ function buildAiRewriteCandidate(payload, options = {}) {
             sentenceTargetCount: originalItems.length,
             itemLengths: originalItems.map((item) => item.text.length),
             isStreaming: streamingRuntimeState.isStreamingGeneration === true,
-            source: useLiveManualText ? 'live-message' : (!isAutomatic && previous ? 'retained-original' : 'host-original'),
+            source: !isAutomatic && previous ? 'retained-original' : 'host-original',
             rawSourceLength: currentText.length,
             sourceLength: sourceText.length,
             generationId: isAutomatic ? String(payload.generationId || '') : '',
