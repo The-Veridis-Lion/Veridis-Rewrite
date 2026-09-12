@@ -1,12 +1,5 @@
-/**
- * Owns Diff text comparison and HTML/cache-result construction only; it does not own tracked-message runtime state, persistence, message mutation, or live DOM projection.
- */
+/** On-demand Difference document presentation and shared Deep Clean text primitives; no message state. */
 
-/**
- * 将原始文本进行 HTML 转义，避免差异片段注入标签。
- * @param {string} [value=''] 需要转义的文本。
- * @returns {string} 已转义的安全 HTML 文本。
- */
 export function escapeHtml(value = '') {
     return String(value)
         .replace(/&/g, '&amp;')
@@ -18,27 +11,6 @@ export function escapeHtml(value = '') {
 
 const inlineDiffCellLimit = 1600000;
 const lineDiffCellLimit = 200000;
-const snippetWindowCharLimit = 900;
-const snippetJoinEqualChars = 96;
-
-/**
- * 生成两段文本的行内差异 HTML。
- * 先整体对齐文本，再对中间片段做 LCS 回溯，避免换行变化导致逐行错位。
- * @param {string} oldStr 原始文本。
- * @param {string} newStr 净化后文本。
- * @returns {string} 包含 <ins>/<del> 标记的差异 HTML。
- */
-export function getInlineDiff(oldStr, newStr) {
-    return renderTextDiffHtml(oldStr, newStr);
-}
-
-/**
- * Renders an arbitrary text pair with the shared diff algorithm, preserving all text and line breaks.
- * This is intentionally independent of message metadata, cache, DOM, and persistence.
- */
-export function renderTextDiffHtml(oldStr, newStr) {
-    return renderDiffOperations(getTextDiffOperations(oldStr, newStr));
-}
 
 function isDiffMatrixSafe(leftLength, rightLength, limit) {
     if (leftLength === 0 || rightLength === 0) return true;
@@ -231,16 +203,14 @@ export function getTextDiffOperations(oldStr, newStr, options = {}) {
     return operations;
 }
 
-function renderDiffOperation(operation) {
+function renderDiffOperation(operation, section) {
     if (!operation || !operation.text) return '';
     if (operation.type === 'delete' || operation.type === 'insert') {
         const attrs = [
             `class="blai-diff-change"`,
             `data-blai-diff-type="${operation.type === 'delete' ? 'delete' : 'insert'}"`,
         ];
-        if (['program', 'ai', 'manual'].includes(operation.source)) {
-            attrs.push(`data-blai-diff-source="${operation.source}"`);
-        }
+        if (['ai', 'program', 'manual'].includes(section)) attrs.push(`data-blai-diff-section="${section}"`);
         ['oldStart', 'oldEnd', 'newStart', 'newEnd'].forEach((key) => {
             if (Number.isFinite(Number(operation[key]))) attrs.push(`data-blai-${key.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)}="${Number(operation[key])}"`);
         });
@@ -251,103 +221,10 @@ function renderDiffOperation(operation) {
 }
 
 function renderDiffOperations(operations = []) {
-    return operations.map(renderDiffOperation).join('');
+    return operations.map(operation => renderDiffOperation(operation, operation.section)).join('');
 }
 
-function findPreviousBoundaryEnd(text = '', position = 0, pattern = /\r?\n/g) {
-    const source = String(text);
-    const cursor = Math.max(0, Math.min(source.length, Number(position) || 0));
-    const regex = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
-    let boundaryEnd = -1;
-    let match;
-    while ((match = regex.exec(source)) !== null) {
-        if (match.index >= cursor) break;
-        boundaryEnd = match.index + match[0].length;
-        if (match[0].length === 0) regex.lastIndex++;
-    }
-    return boundaryEnd;
-}
-
-function findNextBoundaryStart(text = '', position = 0, pattern = /\r?\n/g) {
-    const source = String(text);
-    const cursor = Math.max(0, Math.min(source.length, Number(position) || 0));
-    const regex = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
-    regex.lastIndex = cursor;
-    const match = regex.exec(source);
-    return match ? match.index : -1;
-}
-
-function hasParagraphBoundary(value = '') {
-    return /\r?\n[ \t]*\r?\n/.test(String(value));
-}
-
-function hasLineBoundary(value = '') {
-    return /\r?\n/.test(String(value));
-}
-
-function getLogicalWindowForChange(originalText = '', start = 0, end = start) {
-    const text = String(originalText);
-    const safeStart = Math.max(0, Math.min(text.length, Number(start) || 0));
-    const safeEnd = Math.max(safeStart, Math.min(text.length, Number(end) || safeStart));
-    const paragraphPattern = /\r?\n[ \t]*\r?\n/g;
-
-    const previousParagraphEnd = findPreviousBoundaryEnd(text, safeStart, paragraphPattern);
-    const nextParagraphStart = findNextBoundaryStart(text, safeEnd, paragraphPattern);
-    if (previousParagraphEnd >= 0 || nextParagraphStart >= 0) {
-        return {
-            start: previousParagraphEnd >= 0 ? previousParagraphEnd : 0,
-            end: nextParagraphStart >= 0 ? nextParagraphStart : text.length,
-        };
-    }
-
-    const previousLineEnd = findPreviousBoundaryEnd(text, safeStart, /\r?\n/g);
-    const nextLineStart = findNextBoundaryStart(text, safeEnd, /\r?\n/g);
-    return {
-        start: previousLineEnd >= 0 ? previousLineEnd : 0,
-        end: nextLineStart >= 0 ? nextLineStart : text.length,
-    };
-}
-
-function clampWindowToLimit(window, textLength) {
-    const start = Math.max(0, Math.min(textLength, Number(window?.start) || 0));
-    const end = Math.max(start, Math.min(textLength, Number(window?.end) || start));
-    const anchorStart = Math.max(start, Math.min(end, Number(window?.anchorStart) || start));
-    const anchorEnd = Math.max(anchorStart, Math.min(end, Number(window?.anchorEnd) || anchorStart));
-
-    if (end - start <= snippetWindowCharLimit) {
-        return { start, end, hasPrefixEllipsis: false, hasSuffixEllipsis: false };
-    }
-
-    const anchorLength = Math.max(1, anchorEnd - anchorStart);
-    if (anchorLength >= snippetWindowCharLimit) {
-        const nextEnd = Math.min(end, anchorStart + snippetWindowCharLimit);
-        return {
-            start: anchorStart,
-            end: nextEnd,
-            hasPrefixEllipsis: anchorStart > start,
-            hasSuffixEllipsis: nextEnd < end,
-        };
-    }
-
-    const beforeBudget = Math.floor((snippetWindowCharLimit - anchorLength) / 2);
-    let nextStart = Math.max(start, anchorStart - beforeBudget);
-    let nextEnd = nextStart + snippetWindowCharLimit;
-    if (nextEnd > end) {
-        nextEnd = end;
-        nextStart = Math.max(start, nextEnd - snippetWindowCharLimit);
-    }
-
-    return {
-        start: nextStart,
-        end: nextEnd,
-        hasPrefixEllipsis: nextStart > start,
-        hasSuffixEllipsis: nextEnd < end,
-    };
-}
-
-function annotateDiffOperations(operations = []) {
-    let oldOffset = 0;
-    let newOffset = 0;
+function annotateDiffOperations(operations = [], oldOffset = 0, newOffset = 0) {
     return operations.map((operation) => {
         const text = String(operation?.text || '');
         const annotated = {
@@ -366,324 +243,115 @@ function annotateDiffOperations(operations = []) {
     });
 }
 
-function applyDefaultSource(annotatedOperations = [], source = 'program') {
-    return annotatedOperations.map(operation => operation?.type === 'equal'
-        ? operation
-        : { ...operation, source });
+// The pre-rewrite viewer displayed the first content body. Keep canonical offsets
+// for related-rule inspection; this projection never changes stored text or scope.
+function projectDiffDisplayText(text) {
+    const match = /<content>([\s\S]*?)<\/content>/i.exec(text);
+    return match ? { text: match[1], offset: match.index + '<content>'.length } : { text, offset: 0 };
 }
 
-function applyStageTransition(tokens, deletedSources, fromText, toText, source) {
-    const nextTokens = [];
-    let oldCursor = 0;
-    for (const operation of getTextDiffOperations(fromText, toText)) {
-        const chars = Array.from(String(operation.text || ''));
-        if (operation.type === 'equal') {
-            nextTokens.push(...tokens.slice(oldCursor, oldCursor + chars.length));
-            oldCursor += chars.length;
-            continue;
-        }
-        if (operation.type === 'delete') {
-            tokens.slice(oldCursor, oldCursor + chars.length).forEach((token) => {
-                if (Number.isInteger(token.originalIndex)) deletedSources[token.originalIndex] = source;
-            });
-            oldCursor += chars.length;
-            continue;
-        }
-        chars.forEach(char => nextTokens.push({ char, originalIndex: null, source }));
+function sliceDisplayRun(run, start, end) {
+    const sliced = { ...run, text: run.text.slice(start, end) };
+    if (run.type !== 'insert' && Number.isFinite(run.oldStart)) {
+        sliced.oldStart = run.oldStart + start;
+        sliced.oldEnd = run.oldStart + end;
     }
-    return nextTokens;
-}
-
-function restoreFinalEqualities(tokens, originalChars, deletedSources) {
-    const anchors = [{ tokenPosition: -1, originalIndex: -1 }];
-    tokens.forEach((token, tokenPosition) => {
-        if (Number.isInteger(token.originalIndex)) {
-            anchors.push({ tokenPosition, originalIndex: token.originalIndex });
-        }
-    });
-    anchors.push({ tokenPosition: tokens.length, originalIndex: originalChars.length });
-
-    for (let anchorIndex = 0; anchorIndex < anchors.length - 1; anchorIndex++) {
-        const left = anchors[anchorIndex];
-        const right = anchors[anchorIndex + 1];
-        const oldStart = left.originalIndex + 1;
-        const oldChars = originalChars.slice(oldStart, right.originalIndex);
-        const newStart = left.tokenPosition + 1;
-        const intervalTokens = tokens.slice(newStart, right.tokenPosition);
-        if (oldChars.length === 0 || intervalTokens.length === 0) continue;
-
-        let oldCursor = 0;
-        let newCursor = 0;
-        for (const operation of getTextDiffOperations(
-            oldChars.join(''),
-            intervalTokens.map(token => token.char).join(''),
-        )) {
-            const length = Array.from(String(operation.text || '')).length;
-            if (operation.type === 'equal') {
-                for (let offset = 0; offset < length; offset++) {
-                    const originalIndex = oldStart + oldCursor + offset;
-                    const token = intervalTokens[newCursor + offset];
-                    // Exact equality cancels a change regardless of which stage inserted or deleted it.
-                    token.originalIndex = originalIndex;
-                    token.source = 'original';
-                    deletedSources[originalIndex] = undefined;
-                }
-                oldCursor += length;
-                newCursor += length;
-            } else if (operation.type === 'delete') {
-                oldCursor += length;
-            } else {
-                newCursor += length;
-            }
-        }
+    if (run.type !== 'delete' && Number.isFinite(run.newStart)) {
+        sliced.newStart = run.newStart + start;
+        sliced.newEnd = run.newStart + end;
     }
+    return sliced;
 }
 
-function buildCharacterOffsets(chars) {
-    const offsets = [0];
-    chars.forEach(char => offsets.push(offsets[offsets.length - 1] + char.length));
-    return offsets;
-}
-
-function pushComposedOperation(operations, operation) {
-    const previous = operations[operations.length - 1];
-    const sameSource = previous?.source === operation.source;
-    const contiguous = operation.type === 'equal'
-        ? previous?.oldEnd === operation.oldStart && previous?.newEnd === operation.newStart
-        : operation.type === 'insert'
-            ? previous?.oldStart === operation.oldStart && previous?.newEnd === operation.newStart
-            : previous?.newStart === operation.newStart && previous?.oldEnd === operation.oldStart;
-    if (previous?.type === operation.type && sameSource && contiguous) {
-        previous.text += operation.text;
-        previous.oldEnd = operation.oldEnd;
-        previous.newEnd = operation.newEnd;
-        return;
-    }
-    operations.push(operation);
-}
-
-function composeStageOperations(originalText, stages) {
-    const originalChars = Array.from(originalText);
-    let tokens = originalChars.map((char, originalIndex) => ({ char, originalIndex, source: 'original' }));
-    const deletedSources = new Array(originalChars.length);
-    let currentText = originalText;
-    stages.forEach((stage) => {
-        tokens = applyStageTransition(tokens, deletedSources, currentText, stage.text, stage.source);
-        restoreFinalEqualities(tokens, originalChars, deletedSources);
-        currentText = stage.text;
-    });
-
-    const finalChars = tokens.map(token => token.char);
-    const oldOffsets = buildCharacterOffsets(originalChars);
-    const newOffsets = buildCharacterOffsets(finalChars);
-    const operations = [];
-    let oldCursor = 0;
-    let newCursor = 0;
-
-    while (oldCursor < originalChars.length || newCursor < tokens.length) {
-        const token = tokens[newCursor];
-        if (token && token.originalIndex === oldCursor) {
-            pushComposedOperation(operations, {
-                type: 'equal',
-                text: token.char,
-                oldStart: oldOffsets[oldCursor],
-                oldEnd: oldOffsets[oldCursor + 1],
-                newStart: newOffsets[newCursor],
-                newEnd: newOffsets[newCursor + 1],
-            });
-            oldCursor += 1;
-            newCursor += 1;
-            continue;
+// Fold a pair into the current display runs. Deleted text stays at its document
+// position; only non-deleted text consumes the next pair's input. These are local
+// rendering spans, not per-character origins, persisted stages, or revision history.
+function applyDisplayPair(runs, pair) {
+    const before = projectDiffDisplayText(pair.oldText);
+    const after = projectDiffDisplayText(pair.newText);
+    const operations = annotateDiffOperations(getTextDiffOperations(before.text, after.text), before.offset, after.offset);
+    const result = [];
+    let runIndex = 0;
+    let runOffset = 0;
+    const retainDeletions = () => {
+        while (runs[runIndex]?.type === 'delete') {
+            result.push(runs[runIndex++]);
         }
-        if (token && token.originalIndex === null) {
-            pushComposedOperation(operations, {
-                type: 'insert',
-                text: token.char,
-                source: token.source,
-                oldStart: oldOffsets[oldCursor],
-                oldEnd: oldOffsets[oldCursor],
-                newStart: newOffsets[newCursor],
-                newEnd: newOffsets[newCursor + 1],
-            });
-            newCursor += 1;
-            continue;
-        }
-        if (oldCursor < originalChars.length) {
-            pushComposedOperation(operations, {
-                type: 'delete',
-                text: originalChars[oldCursor],
-                source: deletedSources[oldCursor] || 'program',
-                oldStart: oldOffsets[oldCursor],
-                oldEnd: oldOffsets[oldCursor + 1],
-                newStart: newOffsets[newCursor],
-                newEnd: newOffsets[newCursor],
-            });
-            oldCursor += 1;
-            continue;
-        }
-        break;
-    }
-    return operations;
-}
-
-function getChangeWindows(annotatedOperations = [], originalText = '') {
-    const text = String(originalText);
-    const windows = [];
-    for (const operation of annotatedOperations) {
-        if (!operation || operation.type === 'equal' || !operation.text) continue;
-        const anchorStart = operation.type === 'insert' ? operation.oldStart : operation.oldStart;
-        const anchorEnd = operation.type === 'insert' ? operation.oldStart : operation.oldEnd;
-        const logicalWindow = getLogicalWindowForChange(text, anchorStart, anchorEnd);
-        windows.push({
-            ...logicalWindow,
-            anchorStart,
-            anchorEnd,
-        });
-    }
-
-    windows.sort((a, b) => a.start - b.start || a.anchorStart - b.anchorStart);
-    const merged = [];
-    for (const window of windows) {
-        const previous = merged[merged.length - 1];
-        if (!previous) {
-            merged.push({ ...window });
-            continue;
-        }
-
-        const gap = Math.max(0, window.start - previous.end);
-        const gapText = gap > 0 ? text.slice(previous.end, window.start) : '';
-        const mergedAnchorSpan = Math.max(previous.anchorEnd, window.anchorEnd) - Math.min(previous.anchorStart, window.anchorStart);
-        const shouldMerge = (window.start <= previous.end && mergedAnchorSpan <= snippetWindowCharLimit)
-            || (gap <= snippetJoinEqualChars && !hasLineBoundary(gapText) && !hasParagraphBoundary(gapText) && mergedAnchorSpan <= snippetWindowCharLimit);
-
-        if (shouldMerge) {
-            previous.start = Math.min(previous.start, window.start);
-            previous.end = Math.max(previous.end, window.end);
-            previous.anchorStart = Math.min(previous.anchorStart, window.anchorStart);
-            previous.anchorEnd = Math.max(previous.anchorEnd, window.anchorEnd);
-        } else {
-            merged.push({ ...window });
-        }
-    }
-
-    return merged
-        .map(window => clampWindowToLimit(window, text.length));
-}
-
-function renderOperationSlice(operation, start, end) {
-    if (!operation || !operation.text || end <= start) return '';
-    const slicedText = operation.text.slice(start - operation.oldStart, end - operation.oldStart);
-    if (!slicedText) return '';
-    return renderDiffOperation({ ...operation, text: slicedText, oldStart: start, oldEnd: end });
-}
-
-function renderDiffWindow(annotatedOperations = [], window) {
-    if (!window || window.end < window.start) return '';
-    const parts = [];
-    if (window.hasPrefixEllipsis) parts.push('...');
-
-    for (const operation of annotatedOperations) {
-        if (!operation?.text) continue;
-
+    };
+    for (const operation of operations) {
+        retainDeletions();
         if (operation.type === 'insert') {
-            if (operation.oldStart >= window.start && operation.oldStart <= window.end) {
-                parts.push(renderDiffOperation(operation));
-            }
+            result.push({ ...operation, section: pair.section });
             continue;
         }
-
-        const overlapStart = Math.max(window.start, operation.oldStart);
-        const overlapEnd = Math.min(window.end, operation.oldEnd);
-        if (overlapEnd > overlapStart) {
-            parts.push(renderOperationSlice(operation, overlapStart, overlapEnd));
+        let consumed = 0;
+        while (consumed < operation.text.length) {
+            retainDeletions();
+            const run = runs[runIndex];
+            const length = Math.min(run.text.length - runOffset, operation.text.length - consumed);
+            const part = sliceDisplayRun(run, runOffset, runOffset + length);
+            result.push(operation.type === 'equal' ? part : {
+                ...operation,
+                text: part.text,
+                section: pair.section,
+                oldStart: operation.oldStart + consumed,
+                oldEnd: operation.oldStart + consumed + length,
+            });
+            consumed += length;
+            runOffset += length;
+            if (runOffset === run.text.length) {
+                runIndex++;
+                runOffset = 0;
+            }
         }
     }
-
-    if (window.hasSuffixEllipsis) parts.push('...');
-    const html = parts.join('');
-    if (!html.trim() || !/<(?:del|ins)\b/.test(html)) return '';
-    return `<div class="blai-diff-snippet">${html}</div>`;
+    retainDeletions();
+    return result;
 }
 
-function buildDiffSnippetsFromOperations(operations = [], originalText = '') {
-    const annotatedOperations = annotateDiffOperations(operations);
-    const sourcedOperations = applyDefaultSource(annotatedOperations);
-    return buildDiffSnippetsFromAnnotatedOperations(sourcedOperations, originalText);
-}
+/** One document-order presentation for Full and Snippet, independent of stage execution order. */
+export function renderDiffDocument(originalText, pairs, mode) {
+    const original = projectDiffDisplayText(originalText);
+    let runs = original.text ? [{ type: 'equal', text: original.text }] : [];
+    for (const pair of pairs) runs = applyDisplayPair(runs, pair);
 
-function buildDiffSnippetsFromAnnotatedOperations(annotatedOperations = [], originalText = '') {
-    return getChangeWindows(annotatedOperations, originalText)
-        .map(window => renderDiffWindow(annotatedOperations, window))
-        .filter(Boolean);
-}
-
-export function extractDiffDisplayText(rawText = '') {
-    const source = String(rawText ?? '');
-    const contentMatch = source.match(/<content>([\s\S]*?)<\/content>/i);
-    return contentMatch ? contentMatch[1].trim() : source;
-}
-
-export function buildDiffResultFromPair(rawText, cleanedText) {
-    if (typeof rawText !== 'string') return { cleanedText: rawText, snippets: [], fullDiff: "" };
-    if (typeof cleanedText !== 'string') throw new TypeError('Difference requires a stored Program string');
-    const normalizedCleanedText = cleanedText;
-    const displayText = extractDiffDisplayText(rawText);
-    const cleanedDisplayText = extractDiffDisplayText(normalizedCleanedText);
-    const displayOperations = getTextDiffOperations(displayText, cleanedDisplayText);
-    const snippets = buildDiffSnippetsFromOperations(displayOperations, displayText);
-    const fullDiff = buildFullDiffHtml(displayText, cleanedDisplayText);
-
-    return {
-        cleanedText: normalizedCleanedText,
-        snippets,
-        fullDiff,
-    };
-}
-
-export function buildDiffResultFromChain(rawText, programText, finalText) {
-    return buildDiffResultFromStages(rawText, programText, finalText, null, 'ai');
-}
-
-export function buildDiffResultFromStages(rawText, programText, aiText, manualText, finalSource = 'program') {
-    if (typeof rawText !== 'string') return { cleanedText: rawText, snippets: [], fullDiff: "" };
-    const hasAiStage = typeof aiText === 'string';
-    const aiBeforeProgram = hasAiStage && finalSource === 'program';
-    if (typeof programText !== 'string') throw new TypeError('Difference requires a stored Program string');
-    const normalizedProgramText = programText;
-    const automaticText = hasAiStage && !aiBeforeProgram ? aiText : normalizedProgramText;
-    const finalText = typeof manualText === 'string' ? manualText : automaticText;
-    const displayText = extractDiffDisplayText(rawText);
-    const finalDisplayText = extractDiffDisplayText(finalText);
-
-    if (displayText === finalDisplayText) {
-        return {
-            cleanedText: finalText,
-            snippets: [],
-            fullDiff: buildNormalFullDiffBlocks(displayText),
-        };
+    const displayText = runs.map(run => run.text).join('');
+    const paragraphSeparator = /(?:\r\n|\n|\r(?!\n))(?:[ \t]*(?:\r\n|\n|\r(?!\n)))+/g;
+    const separator = displayText.search(paragraphSeparator) >= 0 ? paragraphSeparator : /\r\n|\n|\r/g;
+    const paragraphs = [];
+    let paragraphStart = 0;
+    for (const match of displayText.matchAll(separator)) {
+        paragraphs.push({ start: paragraphStart, end: match.index });
+        paragraphStart = match.index + match[0].length;
     }
+    paragraphs.push({ start: paragraphStart, end: displayText.length });
 
-    const stages = [];
-    if (aiBeforeProgram) stages.push({ text: extractDiffDisplayText(aiText), source: 'ai' });
-    stages.push({ text: extractDiffDisplayText(normalizedProgramText), source: 'program' });
-    if (hasAiStage && !aiBeforeProgram) stages.push({ text: extractDiffDisplayText(aiText), source: 'ai' });
-    if (typeof manualText === 'string') stages.push({ text: finalDisplayText, source: 'manual' });
-    const sourceToFinalOperations = composeStageOperations(displayText, stages);
-
-    return {
-        cleanedText: finalText,
-        snippets: buildDiffSnippetsFromAnnotatedOperations(sourceToFinalOperations, displayText),
-        fullDiff: buildFullDiffBlocksFromOperations(sourceToFinalOperations),
-    };
-}
-
-function buildNormalFullDiffBlocks(value = '') {
-    return String(value)
-        .split('\n')
-        .map(part => part.trim())
-        .filter(Boolean)
-        .map(part => `<div class="blai-diff-full-normal">${escapeHtml(part)}</div>`)
-        .join('');
+    const blocks = [];
+    let runIndex = 0;
+    let runStart = 0;
+    for (const paragraph of paragraphs) {
+        // Separators and wrapper-adjacent blank lines are not prose blocks. Do not
+        // trim nonempty paragraph text: indentation and inline whitespace survive.
+        if (!/\S/u.test(displayText.slice(paragraph.start, paragraph.end))) continue;
+        const parts = [];
+        while (runIndex < runs.length && runStart < paragraph.end) {
+            const run = runs[runIndex];
+            const runEnd = runStart + run.text.length;
+            if (runEnd > paragraph.start) {
+                parts.push(sliceDisplayRun(run, Math.max(0, paragraph.start - runStart), Math.min(run.text.length, paragraph.end - runStart)));
+            }
+            if (runEnd > paragraph.end) break;
+            runStart = runEnd;
+            runIndex++;
+        }
+        const changed = parts.some(part => part.type !== 'equal' && part.text.length > 0);
+        if (mode !== 'full' && !changed) continue;
+        const className = mode === 'full'
+            ? (changed ? 'blai-diff-full-modified' : 'blai-diff-full-normal')
+            : 'blai-diff-snippet';
+        blocks.push(`<div class="${className}">${renderDiffOperations(parts)}</div>`);
+    }
+    return blocks;
 }
 
 export function renderFullTextDiffBlocks(operations = [], renderOperation = renderDiffOperation, classNames = {}) {
@@ -732,14 +400,4 @@ export function renderFullTextDiffBlocks(operations = [], renderOperation = rend
 
     flushBlock();
     return blocks.join('');
-}
-
-function buildFullDiffBlocksFromOperations(operations = []) {
-    return renderFullTextDiffBlocks(operations);
-}
-
-function buildFullDiffHtml(originalText, cleanedText) {
-    if (originalText === cleanedText) return buildNormalFullDiffBlocks(originalText);
-    const operations = applyDefaultSource(annotateDiffOperations(getTextDiffOperations(originalText, cleanedText)));
-    return buildFullDiffBlocksFromOperations(operations);
 }

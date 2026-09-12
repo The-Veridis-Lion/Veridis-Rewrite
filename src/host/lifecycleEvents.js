@@ -7,10 +7,12 @@ import {
     performIncrementalCleanse,
     getMessageIndexFromEvent,
 } from '../chat/cleanse.js';
-import { computeMessageSignature, diffRuntimeState, markDiffComparisonPending, refreshDiffCacheIfStale, resetDiffRuntimeState, restoreDiffStateFromChatMetadata } from '../diff/state.js';
+import { diffRuntimeState, refreshDiffViewer, resetDiffRuntimeState } from '../diff/state.js';
 import { isAssistantMessage } from '../diff/tracking.js';
 import { getMessageSwipeIndex, setCurrentSwipeText } from '../chat/messageBranch.js';
-import { clearMessageDiffMeta, writeMessageDiffManualFinal } from '../diff/messageMeta.js';
+import { clearMessageDiffMeta, deleteMessageDiffSwipe, isMessageDiffReverted } from '../diff/messageMeta.js';
+import { queueIncrementalChatSave } from '../chat/persistence.js';
+import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
 import { getCurrentCharacterContext, getCurrentChatIdentity } from './context.js';
 import { getMvuIntegrationSignal } from '../integrations/mvu.js';
 import { getActiveAiRewriteBranchKeyForMessage, handleAiRewriteGenerationStarted, hasInvalidAiRewriteTarget, isLiveAiRewriteTargetMessage, markAiRewriteFinalCleanseReady, recordAiRewriteRuntimeDebug, resetAiRewriteRuntimeState, validateAiRewriteMessageTarget } from '../aiRewrite/index.js';
@@ -44,11 +46,10 @@ export function bindHostLifecycleEvents() {
         else eventSource.makeLast(event_types.MESSAGE_RECEIVED, onMessageReceived);
         messageReceivedHasMvuPriority = needsMvuPriority;
     };
-    const markPendingFromPayload = (payload) => {
+    const projectDiffButtonFromPayload = (payload) => {
         const { chat } = getAppContext();
         const index = getMessageIndexFromEvent(payload);
         if (index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return;
-        markDiffComparisonPending(index, computeMessageSignature(chat[index]));
         injectDiffButtonsStreamingSafe([index]);
     };
 
@@ -126,7 +127,8 @@ export function bindHostLifecycleEvents() {
             return;
         }
         // Host continuation may reuse a branch; its new Original supersedes prior stages.
-        clearMessageDiffMeta(resolution.message);
+        if (!isMessageDiffReverted(resolution.message)) clearMessageDiffMeta(resolution.message);
+        refreshDiffViewer(resolution.messageIndex);
         const stablePayload = {
             automatic: true,
             generationId: resolution.generationId,
@@ -134,7 +136,7 @@ export function bindHostLifecycleEvents() {
             messageId: resolution.messageIndex,
             source,
         };
-        markPendingFromPayload(stablePayload);
+        projectDiffButtonFromPayload(stablePayload);
         const aiOwnsFinalCommit = markAiRewriteFinalCleanseReady(stablePayload);
         if (!aiOwnsFinalCommit) {
             runFinalStreamingCleanse(stablePayload, {
@@ -167,17 +169,12 @@ export function bindHostLifecycleEvents() {
                 delete msg.extra.display_text;
             }
             setCurrentSwipeText(msg, msg.mes);
-            const hasRetainedDiff = writeMessageDiffManualFinal(msg);
 
             const session = generationLifecycle.getActive();
             if (session?.messageId === index) generationLifecycle.clearStreamingProgram(session.generationId);
 
-            if (hasRetainedDiff) {
-                const signature = computeMessageSignature(msg);
-                markDiffComparisonPending(index, signature, { skipPersist: true });
-                refreshDiffCacheIfStale(index);
-                injectDiffButtonsStreamingSafe([index]);
-            }
+            refreshDiffViewer(index);
+            injectDiffButtonsStreamingSafe([index]);
         });
     }
 
@@ -272,6 +269,7 @@ export function bindHostLifecycleEvents() {
 
         const hasMaterializedSwipe = getMessageSwipeIndex(msg) >= 0;
         if (hasMaterializedSwipe) runFinalStreamingCleanse(index);
+        refreshDiffViewer(index);
     });
     if (event_types.MESSAGE_SWIPE_DELETED) eventSource.on(event_types.MESSAGE_SWIPE_DELETED, (payload) => {
         const messageId = Number.isInteger(payload?.messageId) && payload.messageId >= 0 ? payload.messageId : -1;
@@ -285,6 +283,11 @@ export function bindHostLifecycleEvents() {
         const activeBranchIndex = branchMatch ? Number(branchMatch[1]) : -1;
         const invalidatesActiveBranch = activeBranchIndex >= 0 && deletedSwipeIndex <= activeBranchIndex;
         if (invalidatesActiveBranch) cancelAutomaticGeneration('target-swipe-structure-changed');
+        if (deleteMessageDiffSwipe(msg, deletedSwipeIndex)) {
+            markHostChatDirtyFromIndex(messageId);
+            queueIncrementalChatSave();
+        }
+        if (diffRuntimeState.currentMessage === msg) resetDiffRuntimeState();
     });
     if (event_types.MESSAGE_DELETED) eventSource.on(event_types.MESSAGE_DELETED, (postDeleteChatLength) => {
         const { chat } = getAppContext();
@@ -311,6 +314,7 @@ export function bindHostLifecycleEvents() {
         if (reconciliation.cancel || invalidAiRewriteTarget) {
             cancelAutomaticGeneration(reconciliation.cancel ? reconciliation.reason : 'target-message-structure-changed');
         }
+        refreshDiffViewer();
     });
     if (event_types.PRESET_CHANGED) {
         eventSource.on(event_types.PRESET_CHANGED, (payload) => {
@@ -330,10 +334,7 @@ export function bindHostLifecycleEvents() {
             clearPendingShujukuRewrite();
             resetDiffRuntimeState();
             resetStreamingProcessorInstallFailureState();
-            diffRuntimeState.currentDiffIndex = undefined;
-            $('#blai-diff-modal').hide();
             applyCharacterPresetBinding(true);
-            restoreDiffStateFromChatMetadata();
             performGlobalChatMaintenance();
         });
     }

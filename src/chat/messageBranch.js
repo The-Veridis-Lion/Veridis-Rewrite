@@ -16,22 +16,10 @@ function deleteValue(target, key) {
 
 export function getMessageSwipeIndex(msg) {
     if (!isObject(msg) || !Array.isArray(msg.swipes)) return -1;
-    const raw = msg.swipe_id ?? msg.swipeId;
-    const index = Number(raw);
-    if (Number.isInteger(index)) {
-        if (index < 0 || index >= msg.swipes.length) return -1;
-        const swipe = msg.swipes[index];
-        return typeof swipe === 'string' || (isObject(swipe) && typeof swipe.mes === 'string')
-            ? index
-            : -1;
-    }
-
-    const currentMes = typeof msg.mes === 'string' ? msg.mes : '';
-    if (!currentMes) return -1;
-    return msg.swipes.findIndex((swipe) => {
-        if (typeof swipe === 'string') return swipe === currentMes;
-        return isObject(swipe) && swipe.mes === currentMes;
-    });
+    const index = msg.swipe_id;
+    if (!Number.isInteger(index) || index < 0 || index >= msg.swipes.length) return -1;
+    const swipe = msg.swipes[index];
+    return typeof swipe === 'string' || (isObject(swipe) && typeof swipe.mes === 'string') ? index : -1;
 }
 
 export function getMessageDiffBranchKey(msg) {
@@ -49,7 +37,7 @@ export function getMessageDiffBranchKey(msg) {
         && generationLifecycle.validate(session.generationId).ok) {
         return 'swipe:0';
     }
-    return 'main';
+    return msg?.swipes === undefined ? 'main' : null;
 }
 
 export function setCurrentSwipeText(msg, text) {
@@ -94,6 +82,9 @@ export function commitCurrentMessageText(msg, text, expectedBranchKey = '') {
     }
 
     const branchKey = getMessageDiffBranchKey(msg);
+    if (!branchKey) {
+        return { ok: false, changed: false, reason: 'swipe-slot-not-materialized', branchKey };
+    }
     if (expectedBranchKey && branchKey !== expectedBranchKey) {
         return { ok: false, changed: false, reason: 'message-branch-changed', branchKey };
     }

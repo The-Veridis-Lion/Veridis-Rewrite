@@ -5,7 +5,6 @@ import { programRuntimeState } from '../rules/state.js';
 import { applyScopedReplacements, buildProcessors } from '../rules/engine.js';
 import { isAllowedChatInputElement, isProtectedNode } from './protection.js';
 import { syncPersonaDescriptionProtectionControl } from '../ui/personaProtection.js';
-import { computeMessageSignature, markDiffComparisonPending } from '../diff/state.js';
 import { getLatestTrackableDiffIndices, isAssistantMessage } from '../diff/tracking.js';
 import { resolveMessageIndexFromDomNode } from './message.js';
 
@@ -23,12 +22,11 @@ function collectMessageNodes(node, bucket) {
     node.querySelectorAll?.('.mes').forEach((mes) => bucket.push(mes));
 }
 
-function primePendingComparisonForNode(messageNode, retainedDiffIndices, touchedMessageIndices, options = {}) {
+function collectDiffButtonIndex(messageNode, retainedDiffIndices, touchedMessageIndices) {
     const { chat } = getAppContext();
     const index = resolveMessageIndexFromDomNode(messageNode);
     if (index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return -1;
     if (!retainedDiffIndices.has(index) || touchedMessageIndices.has(index)) return -1;
-    markDiffComparisonPending(index, computeMessageSignature(chat[index]), options);
     touchedMessageIndices.add(index);
     return index;
 }
@@ -49,7 +47,7 @@ export function initDomObserver({ injectDiffButtons }) {
                         const messageNodes = [];
                         collectMessageNodes(node, messageNodes);
                         messageNodes.forEach((mesNode) => {
-                            primePendingComparisonForNode(mesNode, retainedDiffIndices, touchedMessageIndices, { skipPersist: true });
+                            collectDiffButtonIndex(mesNode, retainedDiffIndices, touchedMessageIndices);
                         });
                     }
                 }

@@ -4,7 +4,7 @@
  */
 import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
-import { diffRuntimeState } from '../diff/state.js';
+import { refreshDiffViewer } from '../diff/state.js';
 import { markRulesDataDirty, rulesUiState } from './state.js';
 import { buildRuleActivationConfirmMessage, getRuleActivationWarning, isRuleActivationWarningEnabled, normalizeRuleActivationSafety, parseInputToWords } from './model.js';
 import { validateRegexTargetInput } from './regex.js';
@@ -737,7 +737,7 @@ export function bindRuleEvents() {
                 $('#blai-rule-edit-modal').hide();
                 clearRuleSearchEditFlow();
                 if (isDirectSearchFlow) openRuleSearchModal();
-                else if (isRelatedFlow && diffRuntimeState.currentDiffIndex !== undefined) diffRuntimeState.diffModalRefresh(diffRuntimeState.currentDiffIndex);
+                else if (isRelatedFlow) refreshDiffViewer();
             });
             return;
         }

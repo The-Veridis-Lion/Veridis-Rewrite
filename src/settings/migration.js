@@ -182,7 +182,7 @@ export function ensureSettingsShape() {
     settings.scopeTags = mergeScopeTagsWithBuiltins(settings.scopeTags, settings.scopeTagBuiltinDismissed);
     if (!['protect', 'cleanse-inside'].includes(settings.scopeTagMode)) settings.scopeTagMode = 'protect';
     settings.enableVisualDiff = true;
-    if (!settings.diffViewMode) settings.diffViewMode = 'snippet';
+    if (!['snippet', 'full'].includes(settings.diffViewMode)) settings.diffViewMode = 'snippet';
     if (settings.diffButtonInExtraMenu === undefined) settings.diffButtonInExtraMenu = false;
     if (settings.showBottomDiffButton === undefined) settings.showBottomDiffButton = true;
     settings.diffTrackedMessageLimit = normalizeDiffTrackedMessageLimit(settings.diffTrackedMessageLimit);

@@ -3,7 +3,7 @@ import { refreshMessageDisplay } from '../chat/display.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
 import { applyScopedCompiledReplacements } from '../rules/engine.js';
-import { refreshDiffCacheIfStale } from '../diff/state.js';
+import { refreshDiffViewer } from '../diff/state.js';
 import { getMessageDiffMeta, writeMessageDiffAiStage, writeMessageDiffProgram } from '../diff/messageMeta.js';
 import { beginAtomicMessageDisplaySwap } from '../dom/message.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
@@ -44,8 +44,7 @@ function messageStagesEqual(left, right) {
     return left.originalMes === right.originalMes
         && left.programMes === right.programMes
         && left.aiMes === right.aiMes
-        && left.hasAiTrace === right.hasAiTrace
-        && left.finalSource === right.finalSource;
+        && left.reverted === right.reverted;
 }
 
 function commitRewriteText(taskLike, prepared, mode) {
@@ -84,7 +83,7 @@ function commitRewriteText(taskLike, prepared, mode) {
         const metadataChanged = mode === 'ai'
             ? writeMessageDiffAiStage(msg, branchKey, originalText, aiText, programText)
             : writeMessageDiffProgram(msg, branchKey, originalText, programText);
-        refreshDiffCacheIfStale(index, { finalization: 'ai' });
+        refreshDiffViewer(index);
 
         if (textChanged || metadataChanged) {
             markHostChatDirtyFromIndex(index);
@@ -139,9 +138,6 @@ function applyRewritePlan(task, selectedReplacements, mode) {
     let preservedTail = '';
     let trimProgramEnd = false;
     if (task.automatic !== true && previous) {
-        if (previous.finalSource !== 'program') {
-            return { appliedCount: 0, reason: 'message-program-stage-unavailable' };
-        }
         // MVU appends to trimEnd() + two newlines; retain that separator even
         // when the old stage's trailing newlines also form an exact prefix.
         const trimmedProgram = previous.programMes.trimEnd();
@@ -187,10 +183,9 @@ function applyRewritePlan(task, selectedReplacements, mode) {
     );
     const desiredStage = {
         originalMes: originalText,
-        aiMes: mode === 'ai' ? composition.text : '',
+        aiMes: mode === 'ai' ? composition.text : null,
         programMes: programText,
-        hasAiTrace: mode === 'ai',
-        finalSource: 'program',
+        reverted: false,
     };
     // External tail text belongs only to the live message, never to the stage chain.
     const finalText = (trimProgramEnd ? programText.trimEnd() : programText) + preservedTail;

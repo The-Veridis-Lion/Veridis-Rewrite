@@ -1,5 +1,5 @@
 /**
- * Owns diff viewer controls and diff-specific DOM bindings.
+ * Owns on-demand Difference modal rendering, actions, and existing DOM bindings.
  */
 import { extensionName, minTrackedDiffMessages, maxTrackedDiffMessages, normalizeDiffTrackedMessageLimit } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
@@ -8,12 +8,13 @@ import {
     cleanseMessageDataAtIndex,
 } from '../chat/cleanse.js';
 import { refreshMessageDisplay } from '../chat/display.js';
+import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
-import { clearTrackedDiffEntry, diffRuntimeState, getDiffComparisonForMessage, getDiffSnippetsForMessage, getDiffStateForMessage, refreshDiffCacheIfStale, syncTrackedIndicesToLatestAssistantMessages } from './state.js';
+import { diffRuntimeState, getCurrentDiffIndex, getDiffComparisonForMessage, refreshDiffViewer } from './state.js';
 import { injectDiffButtons } from './view.js';
-import { escapeHtml } from './compare.js';
+import { escapeHtml, renderDiffDocument } from './compare.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
-import { getMessageDiffMeta } from './messageMeta.js';
+import { getMessageDiffMeta, isMessageDiffReverted, setMessageDiffReverted } from './messageMeta.js';
 import { findRelatedRulesForDiffChange } from './relatedRules.js';
 import { requestManualAiRewriteForMessage } from '../aiRewrite/index.js';
 
@@ -22,20 +23,17 @@ export function recleanseDiffMessageAtIndex(index) {
     const msg = Array.isArray(chat) && Number.isInteger(index) && index >= 0 && index < chat.length
         ? chat[index]
         : null;
-    if (!msg || typeof msg !== 'object' || msg.__blai_is_reverted !== true) return false;
+    if (!isMessageDiffReverted(msg)) return false;
 
     const sourceMes = typeof msg.mes === 'string' ? msg.mes : '';
-    delete msg.__blai_is_reverted;
     return cleanseMessageDataAtIndex(index, {
         diffSourceMes: sourceMes,
-        allowManualFinal: true,
         explicitRecleanse: true,
     });
 }
 
 export function bindDiffEvents() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
-    const settings = extension_settings[extensionName];
     const getDiffMessageByIndex = (index) => {
         const { chat } = getAppContext();
         return Array.isArray(chat) && Number.isInteger(index) && index >= 0 && index < chat.length ? chat[index] : null;
@@ -71,9 +69,8 @@ export function bindDiffEvents() {
         if (next === previous) return;
 
         saveSettingsDebounced();
-        syncTrackedIndicesToLatestAssistantMessages({ cleanupHistoricalResidue: true });
         injectDiffButtons();
-        if (diffRuntimeState.currentDiffIndex !== undefined) renderDiffModalContent(diffRuntimeState.currentDiffIndex);
+        refreshDiffViewer();
     };
 
     const closeDiffRelatedModal = ({ clearSelection = true } = {}) => {
@@ -92,21 +89,16 @@ export function bindDiffEvents() {
     };
 
     const readDiffChangeNumber = (element, name) => {
-        const value = Number(element?.getAttribute?.(`data-blai-${name}`));
+        const raw = element?.getAttribute?.(`data-blai-${name}`);
+        const value = raw === null || raw === undefined ? NaN : Number(raw);
         return Number.isFinite(value) ? value : null;
     };
 
     const getAdjacentDiffChangeElement = (element, direction) => {
-        let node = element?.[direction] || null;
-        while (node) {
-            if (node.nodeType === Node.TEXT_NODE && String(node.textContent || '').trim() === '') {
-                node = node[direction];
-                continue;
-            }
-            if (node.nodeType === Node.ELEMENT_NODE && node.matches?.('del.blai-diff-change, ins.blai-diff-change')) return node;
-            return null;
-        }
-        return null;
+        const node = element?.[direction];
+        return node?.nodeType === Node.ELEMENT_NODE
+            && node.matches('del.blai-diff-change, ins.blai-diff-change')
+            && node.getAttribute('data-blai-diff-section') === element.getAttribute('data-blai-diff-section') ? node : null;
     };
 
     const getContextWindow = (text = '', start = 0, end = start, radius = 160) => {
@@ -117,8 +109,9 @@ export function bindDiffEvents() {
     };
 
     const buildDiffChangeFromElement = (element) => {
-        const index = diffRuntimeState.currentDiffIndex;
-        const pair = getDiffComparisonForMessage(index);
+        const index = getCurrentDiffIndex();
+        const section = element?.closest('[data-blai-diff-section]')?.getAttribute('data-blai-diff-section');
+        const pair = getDiffComparisonForMessage(index, section);
         if (!pair || !element) return null;
 
         const clickedType = element.getAttribute('data-blai-diff-type') || (element.tagName === 'DEL' ? 'delete' : 'insert');
@@ -145,9 +138,9 @@ export function bindDiffEvents() {
             oldEnd,
             newStart,
             newEnd,
-            oldSourceText: pair.sourceDisplayText || '',
-            oldContext: getContextWindow(pair.sourceDisplayText || '', oldStart, oldEnd),
-            newContext: getContextWindow(pair.cleanedDisplayText || '', newStart, newEnd),
+            oldSourceText: pair.oldText || '',
+            oldContext: getContextWindow(pair.oldText || '', oldStart, oldEnd),
+            newContext: getContextWindow(pair.newText || '', newStart, newEnd),
         };
     };
 
@@ -242,16 +235,17 @@ export function bindDiffEvents() {
     syncDiffLimitControlState();
 
     const syncDiffRevertToggleState = (msg) => {
-        const isReverted = msg?.__blai_is_reverted === true;
+        const isReverted = isMessageDiffReverted(msg);
+        const meta = getMessageDiffMeta(msg);
         const revertTitle = isReverted ? '重新净化文本' : '撤回净化并保护原文';
         $('#blai-diff-revert-icon').attr('class', isReverted ? 'fas fa-wand-magic-sparkles' : 'fas fa-rotate-left');
         $('#blai-diff-revert-text').text(isReverted ? '重新净化' : '撤回净化');
-        $('#blai-diff-revert-toggle').attr('title', revertTitle);
+        $('#blai-diff-revert-toggle').attr('title', revertTitle).prop('disabled', !meta);
         $('#blai-diff-mode-toggle').toggle(!isReverted);
     };
 
     const syncDiffAiRewriteButtonState = (msg) => {
-        const isReverted = msg?.__blai_is_reverted === true;
+        const isReverted = isMessageDiffReverted(msg);
         $('#blai-diff-ai-rewrite').attr('title', isReverted ? '请先重新净化文本' : '对当前消息手动执行 AI 改写');
     };
 
@@ -265,11 +259,11 @@ export function bindDiffEvents() {
     };
 
     const toggleCurrentDiffRevert = () => {
-        const index = diffRuntimeState.currentDiffIndex;
+        const index = getCurrentDiffIndex();
         const msg = getDiffMessageByIndex(index);
         if (!Number.isInteger(index) || index < 0 || !msg || typeof msg !== 'object') return;
 
-        if (msg.__blai_is_reverted === true) {
+        if (isMessageDiffReverted(msg)) {
             recleanseDiffMessageAtIndex(index);
         } else {
             const branchKey = getMessageDiffBranchKey(msg);
@@ -283,8 +277,8 @@ export function bindDiffEvents() {
             }
             clearMessageDisplayText(msg);
             syncCurrentSwipeExtra(msg);
-            msg.__blai_is_reverted = true;
-            clearTrackedDiffEntry(index);
+            setMessageDiffReverted(msg, true, branchKey);
+            markHostChatDirtyFromIndex(index);
         }
 
         closeDiffActionsMenu();
@@ -292,12 +286,12 @@ export function bindDiffEvents() {
     };
 
     const triggerCurrentDiffAiRewrite = () => {
-        const index = diffRuntimeState.currentDiffIndex;
+        const index = getCurrentDiffIndex();
         const msg = getDiffMessageByIndex(index);
         if (!Number.isInteger(index) || index < 0 || !msg || typeof msg !== 'object') {
             return;
         }
-        if (msg.__blai_is_reverted === true) {
+        if (isMessageDiffReverted(msg)) {
             return;
         }
 
@@ -311,49 +305,53 @@ export function bindDiffEvents() {
         diffRuntimeState.diffRelatedRuleMode = false;
         syncDiffRelatedModeState();
         $('#blai-diff-modal').hide();
+        diffRuntimeState.currentMessage = null;
     };
 
     function renderDiffModalContent(index) {
-        const settings = extension_settings[extensionName];
-        const mode = settings.diffViewMode || 'snippet';
         const msg = getDiffMessageByIndex(index);
-        const contentEl = $('#blai-diff-modal-content');
+        if (!msg) { closeDiffModal(); return; }
+        const meta = getMessageDiffMeta(msg);
+        const mode = extension_settings[extensionName].diffViewMode || 'snippet';
         closeDiffRelatedModal();
         syncDiffPreferenceMenuState();
         syncDiffModeToggleState(mode);
         syncDiffRevertToggleState(msg);
         syncDiffAiRewriteButtonState(msg);
-
-        if (msg?.__blai_is_reverted) {
-            contentEl.html('<div class="blai-diff-empty"><i class="fas fa-shield-halved" style="margin-right:6px;"></i>此消息已撤回并处于免净化保护状态，当前显示为原始文本。点击 <i class="fas fa-wand-magic-sparkles blai-diff-inline-icon"></i> 重新净化文本。</div>');
+        const contentEl = $('#blai-diff-modal-content');
+        if (meta?.reverted) {
+            const current = msg.mes === meta.originalMes ? '当前显示为原始文本。' : '当前文本与保留原文不同。';
+            contentEl.html(`<div class="blai-diff-empty"><i class="fas fa-shield-halved blai-diff-reverted-icon"></i>此消息已撤回并处于免净化保护状态，${current}点击 <i class="fas fa-wand-magic-sparkles blai-diff-inline-icon"></i> 重新净化文本。</div>`);
             return;
         }
-
-        refreshDiffCacheIfStale(index);
-        const state = getDiffStateForMessage(index);
-        const cached = getDiffSnippetsForMessage(index);
-
-        if (state.status !== 'ready') {
-            contentEl.html('<div class="blai-diff-loading"><i class="fas fa-spinner fa-spin"></i><span>Loading...</span></div>');
+        if (!meta) {
+            contentEl.html('<div class="blai-diff-empty">当前消息未触发差异。</div>');
             return;
         }
-        if (mode === 'full') {
-            contentEl.html(`<div class="blai-diff-full-text">${cached.fullDiff || '<div class="blai-diff-empty">当前消息未触发差异。</div>'}</div>`);
-        } else {
-            contentEl.html(cached.snippets.length > 0 ? cached.snippets.join('<hr class="blai-diff-divider">') : '<div class="blai-diff-empty">当前消息未触发差异。</div>');
-        }
+        const pairs = ['ai', 'program', 'manual'].flatMap(section => {
+            const pair = getDiffComparisonForMessage(index, section);
+            return pair ? [{ ...pair, section }] : [];
+        });
+        const rendered = renderDiffDocument(meta.originalMes, pairs, mode);
+        const notice = msg.mes !== meta.programMes
+            ? '<div class="blai-diff-empty">当前消息与记录的 Veridis 结果不同；下方展示记录的净化阶段。</div>' : '';
+        const empty = '<div class="blai-diff-empty">当前消息未触发差异。</div>';
+        contentEl.html(notice + (mode === 'full'
+            ? `<div class="blai-diff-full-text">${rendered.join('') || empty}</div>`
+            : rendered.join('<hr class="blai-diff-divider">') || empty));
     }
 
+    diffRuntimeState.diffModalClose = closeDiffModal;
     diffRuntimeState.diffModalRefresh = (index) => {
-        if (diffRuntimeState.currentDiffIndex === undefined) return;
-        if (index !== undefined && index !== diffRuntimeState.currentDiffIndex) return;
-        if ($('#blai-diff-modal').is(':visible')) renderDiffModalContent(diffRuntimeState.currentDiffIndex);
+        if ($('#blai-diff-modal').is(':visible')) renderDiffModalContent(index);
     };
 
     $(document).off('click', '.blai-diff-btn').on('click', '.blai-diff-btn', function() {
         const index = Number($(this).attr('data-index'));
         if (!Number.isInteger(index) || index < 0) return;
-        diffRuntimeState.currentDiffIndex = index;
+        const msg = getDiffMessageByIndex(index);
+        if (!msg) return;
+        diffRuntimeState.currentMessage = msg;
         closeDiffRelatedModal();
         renderDiffModalContent(index);
         closeDiffActionsMenu();
@@ -397,7 +395,7 @@ export function bindDiffEvents() {
         const settings = extension_settings[extensionName];
         settings.diffViewMode = settings.diffViewMode === 'full' ? 'snippet' : 'full';
         saveSettingsDebounced();
-        if (diffRuntimeState.currentDiffIndex !== undefined) renderDiffModalContent(diffRuntimeState.currentDiffIndex);
+        refreshDiffViewer();
     });
 
     $(document).off('click', '#blai-diff-related-mode-toggle').on('click', '#blai-diff-related-mode-toggle', function(e) {

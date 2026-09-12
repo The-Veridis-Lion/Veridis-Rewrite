@@ -4,7 +4,7 @@ import { streamingRuntimeState } from '../host/streamingState.js';
 import { aiRewriteState } from './state.js';
 import { logger } from '../log.js';
 import { isAssistantMessage } from '../diff/tracking.js';
-import { getMessageDiffMeta } from '../diff/messageMeta.js';
+import { getMessageDiffMeta, isMessageDiffReverted } from '../diff/messageMeta.js';
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
 import { getCurrentChatIdentity } from '../host/context.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
@@ -337,7 +337,7 @@ function applyAiProgramFallback(taskLike, reason = '') {
 
     const msg = chat[index];
     if (!isAssistantMessage(msg)) return { applied: false, reason: 'not-assistant-message' };
-    if (msg?.__blai_is_reverted) return { applied: false, reason: 'message-reverted' };
+    if (isMessageDiffReverted(msg)) return { applied: false, reason: 'message-reverted' };
     if (taskLike?.messageRef && msg !== taskLike.messageRef) return { applied: false, reason: 'message-ref-changed' };
     if (taskLike?.automatic === true) {
         const validation = validateAutomaticAiRewriteContent(taskLike, { source: 'program-fallback' });
@@ -691,7 +691,7 @@ function buildAiRewriteCandidate(payload, options = {}) {
 
     const msg = chat[index];
     if (!isAssistantMessage(msg)) return { task: null, reason: '目标消息不是助手消息' };
-    if (msg?.__blai_is_reverted) return { task: null, reason: '目标消息已撤回净化' };
+    if (isMessageDiffReverted(msg)) return { task: null, reason: '目标消息已撤回净化' };
     const isAutomatic = payload?.automatic === true;
     if (isAutomatic) {
         const validation = generationLifecycle.validate(payload.generationId, {

@@ -3,6 +3,7 @@ import { getAppContext } from '../host/appContext.js';
 import { getCurrentChatIdentity } from '../host/context.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
+import { isMessageDiffReverted } from '../diff/messageMeta.js';
 import { isAssistantMessage } from '../diff/tracking.js';
 import { compileProcessors } from '../rules/engine.js';
 import { getZhVariantCompatOptions, isZhDictionaryReady } from '../zh/dictionary.js';
@@ -109,7 +110,7 @@ export function getTaskFreshnessIssue(task) {
     }
     if (msg !== task.messageRef) return 'message-ref-changed';
     if (!isAssistantMessage(msg)) return 'not-assistant-message';
-    if (msg?.__blai_is_reverted) return 'message-reverted';
+    if (isMessageDiffReverted(msg)) return 'message-reverted';
     if (getMessageDiffBranchKey(msg) !== task.branchKey) return 'branch-changed';
     if (typeof msg.mes !== 'string') return 'message-text-missing';
     if (task.automatic !== true

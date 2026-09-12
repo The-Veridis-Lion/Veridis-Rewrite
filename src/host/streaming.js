@@ -3,7 +3,6 @@ import { getAppContext } from './appContext.js';
 import { streamingRuntimeState } from './streamingState.js';
 import { renderStreamingProgram } from '../dom/streaming.js';
 import { applyStreamingProgram } from '../rules/engine.js';
-import { computeMessageSignature, markDiffComparisonPending } from '../diff/state.js';
 import { isAssistantMessage } from '../diff/tracking.js';
 import { injectDiffButtons } from '../diff/view.js';
 import { generationLifecycle } from './generationLifecycle.js';
@@ -37,11 +36,10 @@ function getCurrentStreamingProcessor() {
     return typeof getter === 'function' ? getter() : null;
 }
 
-function markStreamingMessagePending(messageId) {
+function projectStreamingDiffButton(messageId) {
     const { chat } = getAppContext();
     const index = Number.isInteger(messageId) && messageId >= 0 ? messageId : -1;
     if (!Number.isInteger(index) || index < 0 || !Array.isArray(chat) || !isAssistantMessage(chat[index])) return;
-    markDiffComparisonPending(index, computeMessageSignature(chat[index]), { skipPersist: true });
     injectDiffButtonsStreamingSafe([index]);
 }
 
@@ -112,7 +110,7 @@ function installStreamingProcessorProgram(finalizeCommittedMessage) {
             if (isFinal === true) processorSession.streamingChoices.length = 0;
             if (programText !== committedText) {
                 renderStreamingProgram(numericMessageId, programText);
-                markStreamingMessagePending(numericMessageId);
+                projectStreamingDiffButton(numericMessageId);
             }
             if (committedText) {
                 maybeNotifyAiRewriteReadyFromStreamingText(numericMessageId, committedText, {

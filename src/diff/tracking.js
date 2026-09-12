@@ -28,11 +28,3 @@ export function getLatestTrackableDiffIndices(limit = getDiffTrackedMessageLimit
     const { chat } = getAppContext();
     return getLatestAssistantMessageIndices(chat, limit);
 }
-
-export function isTrackedDiffMessage(index) {
-    const { chat } = getAppContext();
-    const message = Array.isArray(chat) ? chat[index] : null;
-    return getLatestTrackableDiffIndices().includes(index)
-        && isAssistantMessage(message)
-        && message.__blai_is_reverted !== true;
-}

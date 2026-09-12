@@ -16,7 +16,6 @@ import { updateToolbarUI } from './src/presets/view.js';
 import { applyCharacterPresetBinding } from './src/presets/application.js';
 import { showRiskConfirmModal } from './src/ui/notifications.js';
 import { cleanupInvalidPresetBindings } from './src/presets/bindings.js';
-import { restoreDiffStateFromChatMetadata } from './src/diff/state.js';
 import { performGlobalChatMaintenance } from './src/chat/cleanse.js';
 import { buildPresetEntry, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetRules } from './src/presets/model.js';
 import { normalizeRuleActivationSafety } from './src/rules/model.js';
@@ -158,7 +157,6 @@ jQuery(() => {
         initRealtimeInterceptor();
         updateToolbarUI();
         applyCharacterPresetBinding(true);
-        restoreDiffStateFromChatMetadata();
         performGlobalChatMaintenance();
         logger.info('[屏蔽词净化助手] 启动初始化完成');
         void (async () => {
