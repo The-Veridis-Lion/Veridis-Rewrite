@@ -270,6 +270,7 @@ export function applyGemini31TemperatureMigration(aiRewrite) {
 
 export const defaultAiRewriteSettings = {
     enabled: true,
+    autoTriggerEnabled: true,
     enabledDefaultApplied: true,
     baseUrl: "",
     apiKey: "",

@@ -694,6 +694,7 @@ function buildAiRewriteCandidate(payload, options = {}) {
     if (isMessageDiffReverted(msg)) return { task: null, reason: '目标消息已撤回净化' };
     const isAutomatic = payload?.automatic === true;
     if (isAutomatic) {
+        if (aiSettings.autoTriggerEnabled !== true) return { task: null, reason: '自动 AI 改写未启用' };
         const validation = generationLifecycle.validate(payload.generationId, {
             chatId: getCurrentChatIdentity(),
             chat,

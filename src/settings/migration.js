@@ -59,6 +59,7 @@ function normalizeAiRewriteSettings(settings) {
         next.enabledDefaultApplied = true;
     }
     next.enabled = next.enabled === true;
+    next.autoTriggerEnabled = next.autoTriggerEnabled === true;
     next.enabledDefaultApplied = next.enabledDefaultApplied === true;
     delete next.streamingRoughPreview;
     next.baseUrl = String(next.baseUrl || '').trim();
