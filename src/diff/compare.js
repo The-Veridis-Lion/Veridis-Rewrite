@@ -1,4 +1,5 @@
 /** On-demand Difference document presentation and shared Deep Clean text primitives; no message state. */
+import { collectVariableUpdateRanges } from '../text/variableUpdates.js';
 
 export function escapeHtml(value = '') {
     return String(value)
@@ -246,19 +247,37 @@ function annotateDiffOperations(operations = [], oldOffset = 0, newOffset = 0) {
 // The pre-rewrite viewer displayed the first content body. Keep canonical offsets
 // for related-rule inspection; this projection never changes stored text or scope.
 function projectDiffDisplayText(text) {
-    const match = /<content>([\s\S]*?)<\/content>/i.exec(text);
-    return match ? { text: match[1], offset: match.index + '<content>'.length } : { text, offset: 0 };
+    const source = String(text ?? '');
+    const excluded = collectVariableUpdateRanges(source);
+    const searchable = excluded.reduceRight((value, range) =>
+        value.slice(0, range.start) + ' '.repeat(range.end - range.start) + value.slice(range.end), source);
+    const match = /<content>([\s\S]*?)<\/content>/i.exec(searchable);
+    const start = match ? match.index + '<content>'.length : 0;
+    const end = match ? start + match[1].length : source.length;
+    let projected = '';
+    const positions = [];
+    let cursor = start;
+    for (const range of excluded) {
+        if (range.end <= start || range.start >= end) continue;
+        for (; cursor < range.start; cursor++) { positions.push(cursor); projected += source[cursor]; }
+        cursor = Math.min(end, range.end);
+    }
+    for (; cursor < end; cursor++) { positions.push(cursor); projected += source[cursor]; }
+    positions.push(end);
+    return { text: projected, position: index => positions[index] };
 }
 
 function sliceDisplayRun(run, start, end) {
     const sliced = { ...run, text: run.text.slice(start, end) };
     if (run.type !== 'insert' && Number.isFinite(run.oldStart)) {
-        sliced.oldStart = run.oldStart + start;
-        sliced.oldEnd = run.oldStart + end;
+        sliced.oldIndex = (run.oldIndex ?? 0) + start;
+        sliced.oldStart = run.oldPosition ? run.oldPosition(sliced.oldIndex) : run.oldStart + start;
+        sliced.oldEnd = run.oldPosition ? run.oldPosition((run.oldIndex ?? 0) + end) : run.oldStart + end;
     }
     if (run.type !== 'delete' && Number.isFinite(run.newStart)) {
-        sliced.newStart = run.newStart + start;
-        sliced.newEnd = run.newStart + end;
+        sliced.newIndex = (run.newIndex ?? 0) + start;
+        sliced.newStart = run.newPosition ? run.newPosition(sliced.newIndex) : run.newStart + start;
+        sliced.newEnd = run.newPosition ? run.newPosition((run.newIndex ?? 0) + end) : run.newStart + end;
     }
     return sliced;
 }
@@ -269,7 +288,13 @@ function sliceDisplayRun(run, start, end) {
 function applyDisplayPair(runs, pair) {
     const before = projectDiffDisplayText(pair.oldText);
     const after = projectDiffDisplayText(pair.newText);
-    const operations = annotateDiffOperations(getTextDiffOperations(before.text, after.text), before.offset, after.offset);
+    const operations = annotateDiffOperations(getTextDiffOperations(before.text, after.text), 0, 0)
+        .map(operation => ({
+            ...operation, oldIndex: operation.oldStart, newIndex: operation.newStart,
+            oldPosition: before.position, newPosition: after.position,
+            oldStart: before.position(operation.oldStart), oldEnd: before.position(operation.oldEnd),
+            newStart: after.position(operation.newStart), newEnd: after.position(operation.newEnd),
+        }));
     const result = [];
     let runIndex = 0;
     let runOffset = 0;
@@ -294,8 +319,9 @@ function applyDisplayPair(runs, pair) {
                 ...operation,
                 text: part.text,
                 section: pair.section,
-                oldStart: operation.oldStart + consumed,
-                oldEnd: operation.oldStart + consumed + length,
+                oldIndex: operation.oldIndex + consumed,
+                oldStart: operation.oldPosition(operation.oldIndex + consumed),
+                oldEnd: operation.oldPosition(operation.oldIndex + consumed + length),
             });
             consumed += length;
             runOffset += length;

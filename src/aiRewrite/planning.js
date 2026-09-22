@@ -2,6 +2,7 @@ import { defaultAiRewriteSettings } from '../settings/defaults.js';
 import { mergeScopeTagsWithBuiltins } from '../scope/model.js';
 import { collectXmlCommentRanges, maskXmlCommentRanges } from './commentProtection.js';
 import { recordAiRewriteDebug } from './debug.js';
+import { collectVariableUpdateRanges } from '../text/variableUpdates.js';
 
 const responseGuard = `输出必须是一个 JSON 对象，键必须恰好为本次全部 rewrite_target 的 id。每个值必须是直接替换对应完整目标文本的完整结果字符串；空字符串表示删除整个目标文本。不得输出解释、代码块或标签外包装。`;
 
@@ -88,7 +89,7 @@ function redactSourceRange(text, start, end, protectedRanges) {
         const bodyEnd = Math.min(end, range.bodyEnd);
         if (bodyEnd <= bodyStart || bodyEnd <= cursor) return;
         output += text.slice(cursor, Math.max(cursor, bodyStart));
-        output += '[已保护内容]';
+        if (!range.omit) output += '[已保护内容]';
         cursor = bodyEnd;
     });
     output += text.slice(cursor, end);
@@ -136,10 +137,13 @@ function buildAnnotatedSource(originalText, items, settings, maxContextChars, ru
     const window = completeSource
         ? { start: 0, end: source.length }
         : getContextWindow(source, sortedItems, maxContextChars);
+    const variableRanges = collectVariableUpdateRanges(source);
     const commentRanges = aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
-    const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
+    const excludedRanges = [...variableRanges, ...commentRanges].sort((a, b) => a.start - b.start);
+    const scopeScanText = maskXmlCommentRanges(source, excludedRanges);
     const scopeRanges = settings.scopeTagMode === 'cleanse-inside' ? [] : collectScopeRanges(scopeScanText, settings);
     const protectedRanges = [
+        ...variableRanges.map(range => ({ bodyStart: range.start, bodyEnd: range.end, omit: true })),
         ...scopeRanges,
         ...commentRanges.map((range) => ({
             bodyStart: range.start + 4,

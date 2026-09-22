@@ -13,6 +13,7 @@ import { collectMvuStatusPlaceholderRanges, normalizeOptionalXmlTagNameInput } f
 import { getZhVariantCompatOptions, isZhDictionaryReady } from '../zh/dictionary.js';
 import { collectXmlCommentRanges, maskXmlCommentRanges } from './commentProtection.js';
 import { collectScopeRanges } from './planning.js';
+import { collectVariableUpdateRanges, omitVariableUpdates } from '../text/variableUpdates.js';
 
 export function getAiXmlScopeTag(aiSettings) {
     const tagName = normalizeOptionalXmlTagNameInput(aiSettings?.xmlScopeTag, 'content');
@@ -30,7 +31,10 @@ export function escapeRegExp(value = '') {
 
 export function collectAiXmlScopeSegments(text, aiSettings) {
     const source = String(text || '');
-    const commentRanges = aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
+    const commentRanges = [
+        ...collectVariableUpdateRanges(source),
+        ...(aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : []),
+    ].sort((a, b) => a.start - b.start);
     const searchSource = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const { wholeMessage, tagName } = getAiXmlScopeTag(aiSettings);
     if (wholeMessage) {
@@ -74,9 +78,9 @@ export function collectAiXmlScopeSegments(text, aiSettings) {
 export function getAiXmlScopedRequestText(text, aiSettings) {
     const source = String(text || '');
     const segments = collectAiXmlScopeSegments(source, aiSettings);
-    if (segments.length === 0) return source;
+    if (segments.length === 0) return omitVariableUpdates(source);
     return segments
-        .map((segment) => source.slice(segment.outerStart, segment.outerEnd))
+        .map((segment) => omitVariableUpdates(source.slice(segment.outerStart, segment.outerEnd)))
         .join('\n');
 }
 
@@ -220,7 +224,10 @@ export function collectAiMatches(text, settings, aiSettings, options = {}) {
     if (segments.length === 0) return [];
     const codeRanges = collectCodeRanges(source);
     const placeholderRanges = collectMvuStatusPlaceholderRanges(source);
-    const commentRanges = aiSettings.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
+    const commentRanges = [
+        ...collectVariableUpdateRanges(source),
+        ...(aiSettings.protectXmlComments === true ? collectXmlCommentRanges(source) : []),
+    ].sort((a, b) => a.start - b.start);
     const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const scopeRanges = collectScopeRanges(scopeScanText, settings);
     const scopeTagMode = settings.scopeTagMode === 'cleanse-inside' ? 'cleanse-inside' : 'protect';
@@ -326,7 +333,10 @@ function collectEditableRanges(text, settings, aiSettings) {
     const xmlSegments = collectAiXmlScopeSegments(source, aiSettings);
     if (xmlSegments.length === 0) return [];
 
-    const commentRanges = aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
+    const commentRanges = [
+        ...collectVariableUpdateRanges(source),
+        ...(aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : []),
+    ].sort((a, b) => a.start - b.start);
     const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const scopeRanges = collectScopeRanges(scopeScanText, settings);
     const scopeTagMode = settings?.scopeTagMode === 'cleanse-inside' ? 'cleanse-inside' : 'protect';
