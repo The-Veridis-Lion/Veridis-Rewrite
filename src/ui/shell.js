@@ -117,7 +117,7 @@ export async function setupUI(renderTemplate, templateDirectory) {
     const templateHtml = await renderTemplate(
         templateDirectory,
         'purifier',
-        {},
+        { logoUrl: new URL('../../images/veridis-logo.png', import.meta.url).href },
         false,
         false,
     );
