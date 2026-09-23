@@ -29,7 +29,7 @@ export function escapeRegExp(value = '') {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function collectAiXmlScopeSegments(text, aiSettings) {
+export function collectAiXmlScopeSegments(text, aiSettings, { includeEmpty = false } = {}) {
     const source = String(text || '');
     const commentRanges = [
         ...collectVariableUpdateRanges(source),
@@ -60,7 +60,7 @@ export function collectAiXmlScopeSegments(text, aiSettings) {
         const endIndex = endMatch?.index ?? -1;
         if (endIndex < 0) break;
 
-        if (endIndex > bodyStart) {
+        if (includeEmpty || endIndex > bodyStart) {
             segments.push({
                 index: segments.length,
                 start: bodyStart,

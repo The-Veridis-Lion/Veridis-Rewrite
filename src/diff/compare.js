@@ -1,5 +1,5 @@
 /** On-demand Difference document presentation and shared Deep Clean text primitives; no message state. */
-import { collectVariableUpdateRanges } from '../text/variableUpdates.js';
+import { splitTextRangeIntoSentences } from '../text/sentences.js';
 
 export function escapeHtml(value = '') {
     return String(value)
@@ -10,197 +10,110 @@ export function escapeHtml(value = '') {
         .replace(/'/g, '&#39;');
 }
 
-const inlineDiffCellLimit = 1600000;
-const lineDiffCellLimit = 200000;
-
-function isDiffMatrixSafe(leftLength, rightLength, limit) {
-    if (leftLength === 0 || rightLength === 0) return true;
-    return leftLength <= Math.floor(limit / rightLength);
-}
-
 function pushDiffOperation(operations, type, text = '') {
     if (!text) return;
     const last = operations[operations.length - 1];
+    // Keep replacements in delete/insert order for related-rule selection.
+    if (type === 'delete' && last?.type === 'insert') {
+        operations.pop();
+        pushDiffOperation(operations, 'delete', text);
+        pushDiffOperation(operations, 'insert', last.text);
+        return;
+    }
     if (last && last.type === type) last.text += text;
     else operations.push({ type, text });
 }
 
-function buildCharDiffOperations(oldChars, newChars) {
-    const m = oldChars.length;
-    const n = newChars.length;
-    const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            if (oldChars[i - 1] === newChars[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1] + 1;
-            } else {
-                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+// Linear-space Myers bisection. Both frontiers follow exact equal code points;
+// there is no size/deadline cutoff that can turn an unexamined middle into edits.
+function findMiddleSplit(left, right, a, b, c, d) {
+    const m = b - a;
+    const n = d - c;
+    const maxDepth = Math.ceil((m + n) / 2);
+    const offset = maxDepth + 1;
+    const forward = new Int32Array(2 * maxDepth + 3).fill(-1);
+    const reverse = new Int32Array(2 * maxDepth + 3).fill(-1);
+    forward[offset + 1] = reverse[offset + 1] = 0;
+    const delta = m - n;
+    const odd = delta % 2 !== 0;
+    let forwardStart = 0;
+    let forwardEnd = 0;
+    let reverseStart = 0;
+    let reverseEnd = 0;
+    for (let depth = 0; depth < maxDepth; depth++) {
+        for (let k = -depth + forwardStart; k <= depth - forwardEnd; k += 2) {
+            const slot = offset + k;
+            let x = k === -depth || (k !== depth && forward[slot - 1] < forward[slot + 1])
+                ? forward[slot + 1] : forward[slot - 1] + 1;
+            let y = x - k;
+            while (x < m && y < n && left[a + x] === right[c + y]) { x++; y++; }
+            forward[slot] = x;
+            if (x > m) forwardEnd += 2;
+            else if (y > n) forwardStart += 2;
+            else if (odd) {
+                const other = offset + delta - k;
+                if (other >= 0 && other < reverse.length && reverse[other] !== -1
+                    && x >= m - reverse[other]) return [a + x, c + y];
+            }
+        }
+        for (let k = -depth + reverseStart; k <= depth - reverseEnd; k += 2) {
+            const slot = offset + k;
+            let x = k === -depth || (k !== depth && reverse[slot - 1] < reverse[slot + 1])
+                ? reverse[slot + 1] : reverse[slot - 1] + 1;
+            let y = x - k;
+            while (x < m && y < n && left[b - x - 1] === right[d - y - 1]) { x++; y++; }
+            reverse[slot] = x;
+            if (x > m) reverseEnd += 2;
+            else if (y > n) reverseStart += 2;
+            else if (!odd) {
+                const other = offset + delta - k;
+                if (other >= 0 && other < forward.length && forward[other] !== -1
+                    && forward[other] >= m - x) {
+                    const forwardX = forward[other];
+                    return [a + forwardX, c + forwardX - (delta - k)];
+                }
             }
         }
     }
+    // Exhausting all depths proves there is no equality in this region.
+    return null;
+}
 
-    let i = m;
-    let j = n;
-    const reversed = [];
-    while (i > 0 || j > 0) {
-        if (i > 0 && j > 0 && oldChars[i - 1] === newChars[j - 1]) {
-            reversed.push({ type: 'equal', text: oldChars[i - 1] });
-            i--; j--;
-        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-            reversed.push({ type: 'insert', text: newChars[j - 1] });
-            j--;
-        } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-            reversed.push({ type: 'delete', text: oldChars[i - 1] });
-            i--;
-        }
-    }
-
+/** Exact, deterministic pair diff shared with Deep Clean; no provenance or state. */
+export function getTextDiffOperations(oldStr, newStr) {
+    const left = Array.from(String(oldStr ?? ''));
+    const right = Array.from(String(newStr ?? ''));
     const operations = [];
-    for (const operation of reversed.reverse()) {
-        pushDiffOperation(operations, operation.type, operation.text);
-    }
-    return operations;
-}
-
-function splitLineTokens(value = '') {
-    return String(value).match(/[^\n]*\n|[^\n]+/g) || [];
-}
-
-function buildTokenDiffOperations(oldTokens, newTokens) {
-    const m = oldTokens.length;
-    const n = newTokens.length;
-    const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            if (oldTokens[i - 1] === newTokens[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1] + 1;
-            } else {
-                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-            }
+    // Explicit work stack avoids a call-stack limit on adversarial input.
+    const pending = [{ a: 0, b: left.length, c: 0, d: right.length }];
+    while (pending.length) {
+        const task = pending.pop();
+        if (task.type) {
+            pushDiffOperation(operations, task.type, task.text);
+            continue;
         }
-    }
-
-    let i = m;
-    let j = n;
-    const reversed = [];
-    while (i > 0 || j > 0) {
-        if (i > 0 && j > 0 && oldTokens[i - 1] === newTokens[j - 1]) {
-            reversed.push({ type: 'equal', text: oldTokens[i - 1] });
-            i--; j--;
-        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-            reversed.push({ type: 'insert', text: newTokens[j - 1] });
-            j--;
-        } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-            reversed.push({ type: 'delete', text: oldTokens[i - 1] });
-            i--;
+        let { a, b, c, d } = task;
+        const start = a;
+        while (a < b && c < d && left[a] === right[c]) { a++; c++; }
+        pushDiffOperation(operations, 'equal', left.slice(start, a).join(''));
+        const end = b;
+        while (a < b && c < d && left[b - 1] === right[d - 1]) { b--; d--; }
+        if (b < end) pending.push({ type: 'equal', text: left.slice(b, end).join('') });
+        if (a === b || c === d) {
+            pushDiffOperation(operations, 'delete', left.slice(a, b).join(''));
+            pushDiffOperation(operations, 'insert', right.slice(c, d).join(''));
+            continue;
         }
-    }
-
-    const operations = [];
-    for (const operation of reversed.reverse()) {
-        pushDiffOperation(operations, operation.type, operation.text);
-    }
-    return operations;
-}
-
-function appendReplacementOperations(operations, deletedText, insertedText) {
-    if (!deletedText && !insertedText) return;
-    const deletedLength = Array.from(deletedText).length;
-    const insertedLength = Array.from(insertedText).length;
-
-    if (deletedText && insertedText && isDiffMatrixSafe(deletedLength, insertedLength, inlineDiffCellLimit)) {
-        getTextDiffOperations(deletedText, insertedText, { allowLineFallback: false })
-            .forEach(operation => pushDiffOperation(operations, operation.type, operation.text));
-        return;
-    }
-
-    pushDiffOperation(operations, 'delete', deletedText);
-    pushDiffOperation(operations, 'insert', insertedText);
-}
-
-function buildLineBlockDiffOperations(oldStr, newStr) {
-    const oldTokens = splitLineTokens(oldStr);
-    const newTokens = splitLineTokens(newStr);
-
-    if (oldTokens.length === 0) return newStr ? [{ type: 'insert', text: newStr }] : [];
-    if (newTokens.length === 0) return oldStr ? [{ type: 'delete', text: oldStr }] : [];
-    if (!isDiffMatrixSafe(oldTokens.length, newTokens.length, lineDiffCellLimit)) {
-        return [
-            { type: 'delete', text: oldStr },
-            { type: 'insert', text: newStr },
-        ];
-    }
-
-    const lineOperations = buildTokenDiffOperations(oldTokens, newTokens);
-    const operations = [];
-    let deletedText = '';
-    let insertedText = '';
-
-    const flushReplacement = () => {
-        appendReplacementOperations(operations, deletedText, insertedText);
-        deletedText = '';
-        insertedText = '';
-    };
-
-    for (const operation of lineOperations) {
-        if (operation.type === 'equal') {
-            flushReplacement();
-            pushDiffOperation(operations, 'equal', operation.text);
-        } else if (operation.type === 'delete') {
-            deletedText += operation.text;
+        const split = findMiddleSplit(left, right, a, b, c, d);
+        if (split) {
+            const [x, y] = split;
+            pending.push({ a: x, b, c: y, d });
+            pending.push({ a, b: x, c, d: y });
         } else {
-            insertedText += operation.text;
+            pushDiffOperation(operations, 'delete', left.slice(a, b).join(''));
+            pushDiffOperation(operations, 'insert', right.slice(c, d).join(''));
         }
     }
-
-    flushReplacement();
-    return operations;
-}
-
-/**
- * Computes the shared ordered text Diff operations without rendering or touching message state.
- * Deep Clean uses this same pure owner to derive its interactive review blocks.
- */
-export function getTextDiffOperations(oldStr, newStr, options = {}) {
-    const oldText = String(oldStr ?? '');
-    const newText = String(newStr ?? '');
-    if (oldText === newText) return oldText ? [{ type: 'equal', text: oldText }] : [];
-    if (!oldText) return newText ? [{ type: 'insert', text: newText }] : [];
-    if (!newText) return oldText ? [{ type: 'delete', text: oldText }] : [];
-
-    const oldChars = Array.from(oldText);
-    const newChars = Array.from(newText);
-    let start = 0;
-    while (start < oldChars.length && start < newChars.length && oldChars[start] === newChars[start]) {
-        start++;
-    }
-
-    let endOld = oldChars.length - 1;
-    let endNew = newChars.length - 1;
-    while (endOld >= start && endNew >= start && oldChars[endOld] === newChars[endNew]) {
-        endOld--;
-        endNew--;
-    }
-
-    const operations = [];
-    pushDiffOperation(operations, 'equal', oldChars.slice(0, start).join(''));
-
-    const midOld = oldChars.slice(start, endOld + 1);
-    const midNew = newChars.slice(start, endNew + 1);
-    const allowLineFallback = options.allowLineFallback !== false;
-    const middleOperations = isDiffMatrixSafe(midOld.length, midNew.length, inlineDiffCellLimit)
-        ? buildCharDiffOperations(midOld, midNew)
-        : allowLineFallback
-            ? buildLineBlockDiffOperations(midOld.join(''), midNew.join(''))
-            : [
-                { type: 'delete', text: midOld.join('') },
-                { type: 'insert', text: midNew.join('') },
-            ];
-
-    middleOperations.forEach(operation => pushDiffOperation(operations, operation.type, operation.text));
-    pushDiffOperation(operations, 'equal', oldChars.slice(endOld + 1).join(''));
     return operations;
 }
 
@@ -211,7 +124,7 @@ function renderDiffOperation(operation, section) {
             `class="blai-diff-change"`,
             `data-blai-diff-type="${operation.type === 'delete' ? 'delete' : 'insert'}"`,
         ];
-        if (['ai', 'program', 'manual'].includes(section)) attrs.push(`data-blai-diff-section="${section}"`);
+        if (['ai', 'program'].includes(section)) attrs.push(`data-blai-diff-section="${section}"`);
         ['oldStart', 'oldEnd', 'newStart', 'newEnd'].forEach((key) => {
             if (Number.isFinite(Number(operation[key]))) attrs.push(`data-blai-${key.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)}="${Number(operation[key])}"`);
         });
@@ -244,138 +157,123 @@ function annotateDiffOperations(operations = [], oldOffset = 0, newOffset = 0) {
     });
 }
 
-// The pre-rewrite viewer displayed the first content body. Keep canonical offsets
-// for related-rule inspection; this projection never changes stored text or scope.
-function projectDiffDisplayText(text) {
-    const source = String(text ?? '');
-    const excluded = collectVariableUpdateRanges(source);
-    const searchable = excluded.reduceRight((value, range) =>
-        value.slice(0, range.start) + ' '.repeat(range.end - range.start) + value.slice(range.end), source);
-    const match = /<content>([\s\S]*?)<\/content>/i.exec(searchable);
-    const start = match ? match.index + '<content>'.length : 0;
-    const end = match ? start + match[1].length : source.length;
-    let projected = '';
-    const positions = [];
-    let cursor = start;
-    for (const range of excluded) {
-        if (range.end <= start || range.start >= end) continue;
-        for (; cursor < range.start; cursor++) { positions.push(cursor); projected += source[cursor]; }
-        cursor = Math.min(end, range.end);
-    }
-    for (; cursor < end; cursor++) { positions.push(cursor); projected += source[cursor]; }
-    positions.push(end);
-    return { text: projected, position: index => positions[index] };
-}
-
 function sliceDisplayRun(run, start, end) {
-    const sliced = { ...run, text: run.text.slice(start, end) };
-    if (run.type !== 'insert' && Number.isFinite(run.oldStart)) {
-        sliced.oldIndex = (run.oldIndex ?? 0) + start;
-        sliced.oldStart = run.oldPosition ? run.oldPosition(sliced.oldIndex) : run.oldStart + start;
-        sliced.oldEnd = run.oldPosition ? run.oldPosition((run.oldIndex ?? 0) + end) : run.oldStart + end;
-    }
-    if (run.type !== 'delete' && Number.isFinite(run.newStart)) {
-        sliced.newIndex = (run.newIndex ?? 0) + start;
-        sliced.newStart = run.newPosition ? run.newPosition(sliced.newIndex) : run.newStart + start;
-        sliced.newEnd = run.newPosition ? run.newPosition((run.newIndex ?? 0) + end) : run.newStart + end;
-    }
-    return sliced;
+    return {
+        ...run,
+        text: run.text.slice(start, end),
+        oldStart: run.oldStart + (run.type === 'insert' ? 0 : start),
+        oldEnd: run.oldStart + (run.type === 'insert' ? 0 : end),
+        newStart: run.newStart + (run.type === 'delete' ? 0 : start),
+        newEnd: run.newStart + (run.type === 'delete' ? 0 : end),
+    };
 }
 
-// Fold a pair into the current display runs. Deleted text stays at its document
-// position; only non-deleted text consumes the next pair's input. These are local
-// rendering spans, not per-character origins, persisted stages, or revision history.
-function applyDisplayPair(runs, pair) {
-    const before = projectDiffDisplayText(pair.oldText);
-    const after = projectDiffDisplayText(pair.newText);
-    const operations = annotateDiffOperations(getTextDiffOperations(before.text, after.text), 0, 0)
-        .map(operation => ({
-            ...operation, oldIndex: operation.oldStart, newIndex: operation.newStart,
-            oldPosition: before.position, newPosition: after.position,
-            oldStart: before.position(operation.oldStart), oldEnd: before.position(operation.oldEnd),
-            newStart: after.position(operation.newStart), newEnd: after.position(operation.newEnd),
-        }));
-    const result = [];
-    let runIndex = 0;
-    let runOffset = 0;
-    const retainDeletions = () => {
-        while (runs[runIndex]?.type === 'delete') {
-            result.push(runs[runIndex++]);
+// Projection retains interval coordinates, never cross-stage character origins.
+// Joining bodies before alignment preserves ordered duplicates even when an entire
+// scope block is inserted/deleted; ordinal block pairing would shift every pair.
+function projectScopedText(text, ranges) {
+    let offset = 0;
+    const spans = ranges.map(range => {
+        const span = { start: offset, end: offset + range.end - range.start, sourceStart: range.start };
+        offset = span.end;
+        return span;
+    });
+    const position = (index, end = false) => {
+        let low = 0;
+        let high = spans.length;
+        while (low < high) {
+            const middle = (low + high) >>> 1;
+            if (spans[middle].end < index || (!end && spans[middle].end === index)) low = middle + 1;
+            else high = middle;
         }
+        const span = spans[low];
+        return span ? span.sourceStart + index - span.start : (ranges.at(-1)?.end ?? 0);
     };
+    return { text: ranges.map(range => text.slice(range.start, range.end)).join(''), spans, position };
+}
+
+function getSnippetPairOperations(pair) {
+    if (!pair.oldRanges?.length && !pair.newRanges?.length) {
+        return annotateDiffOperations(getTextDiffOperations(pair.oldText, pair.newText));
+    }
+    const before = projectScopedText(pair.oldText, pair.oldRanges || []);
+    const after = projectScopedText(pair.newText, pair.newRanges || []);
+    const operations = annotateDiffOperations(getTextDiffOperations(before.text, after.text));
+    const mapped = [];
+    let oldSpan = 0;
+    let newSpan = 0;
     for (const operation of operations) {
-        retainDeletions();
-        if (operation.type === 'insert') {
-            result.push({ ...operation, section: pair.section });
+        const boundaries = [0, operation.text.length];
+        if (operation.type !== 'insert') {
+            while (oldSpan < before.spans.length && before.spans[oldSpan].end < operation.oldEnd) {
+                const boundary = before.spans[oldSpan++].end - operation.oldStart;
+                if (boundary > 0) boundaries.push(boundary);
+            }
+        }
+        if (operation.type !== 'delete') {
+            while (newSpan < after.spans.length && after.spans[newSpan].end < operation.newEnd) {
+                const boundary = after.spans[newSpan++].end - operation.newStart;
+                if (boundary > 0) boundaries.push(boundary);
+            }
+        }
+        boundaries.sort((a, b) => a - b);
+        for (let i = 1; i < boundaries.length; i++) {
+            if (boundaries[i] === boundaries[i - 1]) continue;
+            const part = sliceDisplayRun(operation, boundaries[i - 1], boundaries[i]);
+            mapped.push({
+                ...part,
+                oldStart: before.position(part.oldStart),
+                oldEnd: before.position(part.oldEnd, part.type !== 'insert'),
+                newStart: after.position(part.newStart),
+                newEnd: after.position(part.newEnd, part.type !== 'delete'),
+            });
+        }
+    }
+    return mapped;
+}
+
+/** The existing Full/Snippet renderer, now consuming independent recorded pairs. */
+export function renderDiffDocument(pairs, mode) {
+    const blocks = [];
+    for (const pair of pairs) {
+        const runs = (mode === 'full'
+            ? annotateDiffOperations(getTextDiffOperations(pair.oldText, pair.newText))
+            : getSnippetPairOperations(pair))
+            .map(operation => ({ ...operation, section: pair.section }));
+        if (mode === 'full') {
+            const changed = runs.some(run => run.type !== 'equal');
+            blocks.push(`<div class="${changed ? 'blai-diff-full-modified' : 'blai-diff-full-normal'}">${renderDiffOperations(runs)}</div>`);
             continue;
         }
-        let consumed = 0;
-        while (consumed < operation.text.length) {
-            retainDeletions();
-            const run = runs[runIndex];
-            const length = Math.min(run.text.length - runOffset, operation.text.length - consumed);
-            const part = sliceDisplayRun(run, runOffset, runOffset + length);
-            result.push(operation.type === 'equal' ? part : {
-                ...operation,
-                text: part.text,
-                section: pair.section,
-                oldIndex: operation.oldIndex + consumed,
-                oldStart: operation.oldPosition(operation.oldIndex + consumed),
-                oldEnd: operation.oldPosition(operation.oldIndex + consumed + length),
-            });
-            consumed += length;
-            runOffset += length;
-            if (runOffset === run.text.length) {
+        // Sentence boundaries provide local context only; omitted newline gaps
+        // are restored as units so whitespace-only changes are never discarded.
+        const displayText = runs.map(run => run.text).join('');
+        const units = [];
+        let cursor = 0;
+        for (const range of splitTextRangeIntoSentences(displayText, { start: 0, end: displayText.length })) {
+            if (cursor < range.start) units.push({ start: cursor, end: range.start });
+            units.push(range);
+            cursor = range.end;
+        }
+        if (cursor < displayText.length) units.push({ start: cursor, end: displayText.length });
+        let runIndex = 0;
+        let runStart = 0;
+        for (const unit of units) {
+            const parts = [];
+            while (runIndex < runs.length && runStart < unit.end) {
+                const run = runs[runIndex];
+                const runEnd = runStart + run.text.length;
+                if (runEnd > unit.start) {
+                    parts.push(sliceDisplayRun(run, Math.max(0, unit.start - runStart), Math.min(run.text.length, unit.end - runStart)));
+                }
+                if (runEnd > unit.end) break;
+                runStart = runEnd;
                 runIndex++;
-                runOffset = 0;
+            }
+            if (parts.some(part => part.type !== 'equal')) {
+                blocks.push(`<div class="blai-diff-snippet">${renderDiffOperations(parts)}</div>`);
             }
         }
-    }
-    retainDeletions();
-    return result;
-}
-
-/** One document-order presentation for Full and Snippet, independent of stage execution order. */
-export function renderDiffDocument(originalText, pairs, mode) {
-    const original = projectDiffDisplayText(originalText);
-    let runs = original.text ? [{ type: 'equal', text: original.text }] : [];
-    for (const pair of pairs) runs = applyDisplayPair(runs, pair);
-
-    const displayText = runs.map(run => run.text).join('');
-    const paragraphSeparator = /(?:\r\n|\n|\r(?!\n))(?:[ \t]*(?:\r\n|\n|\r(?!\n)))+/g;
-    const separator = displayText.search(paragraphSeparator) >= 0 ? paragraphSeparator : /\r\n|\n|\r/g;
-    const paragraphs = [];
-    let paragraphStart = 0;
-    for (const match of displayText.matchAll(separator)) {
-        paragraphs.push({ start: paragraphStart, end: match.index });
-        paragraphStart = match.index + match[0].length;
-    }
-    paragraphs.push({ start: paragraphStart, end: displayText.length });
-
-    const blocks = [];
-    let runIndex = 0;
-    let runStart = 0;
-    for (const paragraph of paragraphs) {
-        // Separators and wrapper-adjacent blank lines are not prose blocks. Do not
-        // trim nonempty paragraph text: indentation and inline whitespace survive.
-        if (!/\S/u.test(displayText.slice(paragraph.start, paragraph.end))) continue;
-        const parts = [];
-        while (runIndex < runs.length && runStart < paragraph.end) {
-            const run = runs[runIndex];
-            const runEnd = runStart + run.text.length;
-            if (runEnd > paragraph.start) {
-                parts.push(sliceDisplayRun(run, Math.max(0, paragraph.start - runStart), Math.min(run.text.length, paragraph.end - runStart)));
-            }
-            if (runEnd > paragraph.end) break;
-            runStart = runEnd;
-            runIndex++;
-        }
-        const changed = parts.some(part => part.type !== 'equal' && part.text.length > 0);
-        if (mode !== 'full' && !changed) continue;
-        const className = mode === 'full'
-            ? (changed ? 'blai-diff-full-modified' : 'blai-diff-full-normal')
-            : 'blai-diff-snippet';
-        blocks.push(`<div class="${className}">${renderDiffOperations(parts)}</div>`);
     }
     return blocks;
 }

@@ -13,8 +13,8 @@ import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { diffRuntimeState, getCurrentDiffIndex, getDiffComparisonForMessage, refreshDiffViewer } from './state.js';
 import { injectDiffButtons } from './view.js';
 import { escapeHtml, renderDiffDocument } from './compare.js';
+import { collectAiXmlScopeSegments } from '../aiRewrite/matching.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
-import { omitVariableUpdates } from '../text/variableUpdates.js';
 import { getMessageDiffMeta, isMessageDiffReverted, setMessageDiffReverted } from './messageMeta.js';
 import { findRelatedRulesForDiffChange } from './relatedRules.js';
 import { requestManualAiRewriteForMessage } from '../aiRewrite/index.js';
@@ -241,7 +241,7 @@ export function bindDiffEvents() {
         const revertTitle = isReverted ? '重新净化文本' : '撤回净化并保护原文';
         $('#blai-diff-revert-icon').attr('class', isReverted ? 'fas fa-wand-magic-sparkles' : 'fas fa-rotate-left');
         $('#blai-diff-revert-text').text(isReverted ? '重新净化' : '撤回净化');
-        $('#blai-diff-revert-toggle').attr('title', revertTitle).prop('disabled', !meta);
+        $('#blai-diff-revert-toggle').attr('title', revertTitle).prop('disabled', !meta || (!isReverted && msg.mes !== meta.programMes));
         $('#blai-diff-mode-toggle').toggle(!isReverted);
     };
 
@@ -269,7 +269,7 @@ export function bindDiffEvents() {
         } else {
             const branchKey = getMessageDiffBranchKey(msg);
             const diffMeta = getMessageDiffMeta(msg, branchKey);
-            if (!diffMeta) {
+            if (!diffMeta || msg.mes !== diffMeta.programMes) {
                 return;
             }
             const commitResult = commitCurrentMessageText(msg, diffMeta.originalMes, branchKey);
@@ -329,12 +329,17 @@ export function bindDiffEvents() {
             contentEl.html('<div class="blai-diff-empty">当前消息未触发差异。</div>');
             return;
         }
-        const pairs = ['ai', 'program', 'manual'].flatMap(section => {
+        const pairs = ['ai', 'program'].flatMap(section => {
             const pair = getDiffComparisonForMessage(index, section);
-            return pair ? [{ ...pair, section }] : [];
+            if (!pair) return [];
+            const aiSettings = extension_settings[extensionName].aiRewrite;
+            return [{ ...pair, section, ...(mode === 'full' ? {} : {
+                oldRanges: collectAiXmlScopeSegments(pair.oldText, aiSettings, { includeEmpty: true }),
+                newRanges: collectAiXmlScopeSegments(pair.newText, aiSettings, { includeEmpty: true }),
+            }) }];
         });
-        const rendered = renderDiffDocument(meta.originalMes, pairs, mode);
-        const notice = omitVariableUpdates(msg.mes) !== omitVariableUpdates(meta.programMes)
+        const rendered = renderDiffDocument(pairs, mode);
+        const notice = msg.mes !== meta.programMes
             ? '<div class="blai-diff-empty">当前消息与记录的 Veridis 结果不同；下方展示记录的净化阶段。</div>' : '';
         const empty = '<div class="blai-diff-empty">当前消息未触发差异。</div>';
         contentEl.html(notice + (mode === 'full'
