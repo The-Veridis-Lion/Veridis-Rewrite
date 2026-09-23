@@ -96,22 +96,24 @@
                             <div class="blai-ai-columns">
                                 <main class="blai-ai-primary-column">
                                     <section class="blai-ai-section" aria-labelledby="blai-ai-connection-title">
-                                        <header class="blai-ai-section-header">
+                                        <header class="blai-ai-section-header blai-ai-connection-header">
                                             <div>
                                                 <h2 id="blai-ai-connection-title">API 连接</h2>
                                                 <p>连接到兼容的模型后端。</p>
                                             </div>
-                                            <label class="blai-ai-switch">
-                                                <input type="checkbox" id="blai-ai-enabled">
-                                                <span class="blai-ai-switch-track" aria-hidden="true"></span>
-                                                <span>启用改写</span>
-                                            </label>
+                                            <div class="blai-ai-rewrite-switches" role="group" aria-label="AI 改写开关">
+                                                <label class="blai-ai-switch">
+                                                    <input type="checkbox" id="blai-ai-enabled">
+                                                    <span class="blai-ai-switch-track" aria-hidden="true"></span>
+                                                    <span>启用改写</span>
+                                                </label>
+                                                <label class="blai-ai-switch">
+                                                    <input type="checkbox" id="blai-ai-auto-trigger-enabled">
+                                                    <span class="blai-ai-switch-track" aria-hidden="true"></span>
+                                                    <span>自动触发 AI 改写</span>
+                                                </label>
+                                            </div>
                                         </header>
-                                        <label class="blai-ai-switch">
-                                            <input type="checkbox" id="blai-ai-auto-trigger-enabled">
-                                            <span class="blai-ai-switch-track" aria-hidden="true"></span>
-                                            <span>自动触发 AI 改写</span>
-                                        </label>
                                         <div class="blai-ai-connection-grid">
                                             <label class="blai-ai-control blai-ai-api-preset-field">
                                                 <span class="blai-ai-control-label">API 预设</span>

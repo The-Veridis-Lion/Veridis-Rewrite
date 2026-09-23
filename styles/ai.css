@@ -448,6 +448,12 @@ body #toast-container > .blai-ai-rewrite-toast.blai-ai-rewrite-progress-toast > 
     accent-color: var(--accent-color) !important;
 }
 
+#blai-purifier-popup.blai-app-shell .blai-ai-rewrite-switches {
+    flex: 0 0 auto !important;
+    display: grid !important;
+    gap: 4px !important;
+}
+
 #blai-purifier-popup.blai-app-shell .blai-ai-switch {
     flex: 0 0 auto !important;
     display: inline-flex !important;
@@ -725,6 +731,14 @@ body #toast-container > .blai-ai-rewrite-toast.blai-ai-rewrite-progress-toast > 
 
 @media (max-width: 600px) {#blai-purifier-popup.blai-app-shell .blai-ai-section-header {
     gap: 10px !important;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup.blai-app-shell .blai-ai-connection-header {
+    flex-direction: column !important;
+}}
+
+@media (max-width: 600px) {#blai-purifier-popup.blai-app-shell .blai-ai-rewrite-switches .blai-ai-switch {
+    min-height: 28px !important;
 }}
 
 @media (max-width: 600px) {#blai-purifier-popup.blai-app-shell .blai-ai-prompt-input {
