@@ -168,68 +168,47 @@ function sliceDisplayRun(run, start, end) {
     };
 }
 
-// Projection retains interval coordinates, never cross-stage character origins.
-// Joining bodies before alignment preserves ordered duplicates even when an entire
-// scope block is inserted/deleted; ordinal block pairing would shift every pair.
-function projectScopedText(text, ranges) {
-    let offset = 0;
-    const spans = ranges.map(range => {
-        const span = { start: offset, end: offset + range.end - range.start, sourceStart: range.start };
-        offset = span.end;
-        return span;
-    });
-    const position = (index, end = false) => {
-        let low = 0;
-        let high = spans.length;
-        while (low < high) {
-            const middle = (low + high) >>> 1;
-            if (spans[middle].end < index || (!end && spans[middle].end === index)) low = middle + 1;
-            else high = middle;
-        }
-        const span = spans[low];
-        return span ? span.sourceStart + index - span.start : (ranges.at(-1)?.end ?? 0);
-    };
-    return { text: ranges.map(range => text.slice(range.start, range.end)).join(''), spans, position };
-}
-
 function getSnippetPairOperations(pair) {
+    // Align complete stages before selecting bodies. A changed scope boundary
+    // must not turn prose retained in both stages into an insertion/deletion.
+    const operations = annotateDiffOperations(getTextDiffOperations(pair.oldText, pair.newText));
     if (!pair.oldRanges?.length && !pair.newRanges?.length) {
-        return annotateDiffOperations(getTextDiffOperations(pair.oldText, pair.newText));
+        return operations;
     }
-    const before = projectScopedText(pair.oldText, pair.oldRanges || []);
-    const after = projectScopedText(pair.newText, pair.newRanges || []);
-    const operations = annotateDiffOperations(getTextDiffOperations(before.text, after.text));
-    const mapped = [];
-    let oldSpan = 0;
-    let newSpan = 0;
+    const sides = [
+        { ranges: pair.oldRanges || [], index: 0, start: 'oldStart', end: 'oldEnd', skip: 'insert' },
+        { ranges: pair.newRanges || [], index: 0, start: 'newStart', end: 'newEnd', skip: 'delete' },
+    ];
+    const selected = [];
     for (const operation of operations) {
-        const boundaries = [0, operation.text.length];
-        if (operation.type !== 'insert') {
-            while (oldSpan < before.spans.length && before.spans[oldSpan].end < operation.oldEnd) {
-                const boundary = before.spans[oldSpan++].end - operation.oldStart;
-                if (boundary > 0) boundaries.push(boundary);
+        const intervals = [];
+        for (const side of sides) {
+            if (operation.type === side.skip) continue;
+            const start = operation[side.start];
+            const end = operation[side.end];
+            while (side.index < side.ranges.length && side.ranges[side.index].end <= start) side.index++;
+            for (let i = side.index; i < side.ranges.length && side.ranges[i].start < end; i++) {
+                const range = side.ranges[i];
+                const from = Math.max(start, range.start);
+                const to = Math.min(end, range.end);
+                if (from < to) intervals.push({ start: from - start, end: to - start });
             }
         }
-        if (operation.type !== 'delete') {
-            while (newSpan < after.spans.length && after.spans[newSpan].end < operation.newEnd) {
-                const boundary = after.spans[newSpan++].end - operation.newStart;
-                if (boundary > 0) boundaries.push(boundary);
+        // Equal context can be selected by either side; emit each interval once.
+        // This merges coordinates within one operation, never repeated text.
+        intervals.sort((a, b) => a.start - b.start || a.end - b.end);
+        let current = null;
+        for (const interval of intervals) {
+            if (current && interval.start <= current.end) {
+                current.end = Math.max(current.end, interval.end);
+            } else {
+                if (current) selected.push(sliceDisplayRun(operation, current.start, current.end));
+                current = interval;
             }
         }
-        boundaries.sort((a, b) => a - b);
-        for (let i = 1; i < boundaries.length; i++) {
-            if (boundaries[i] === boundaries[i - 1]) continue;
-            const part = sliceDisplayRun(operation, boundaries[i - 1], boundaries[i]);
-            mapped.push({
-                ...part,
-                oldStart: before.position(part.oldStart),
-                oldEnd: before.position(part.oldEnd, part.type !== 'insert'),
-                newStart: after.position(part.newStart),
-                newEnd: after.position(part.newEnd, part.type !== 'delete'),
-            });
-        }
+        if (current) selected.push(sliceDisplayRun(operation, current.start, current.end));
     }
-    return mapped;
+    return selected;
 }
 
 /** The existing Full/Snippet renderer, now consuming independent recorded pairs. */
