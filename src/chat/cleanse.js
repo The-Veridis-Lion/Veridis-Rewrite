@@ -10,7 +10,8 @@ import { refreshDiffViewer } from '../diff/state.js';
 import { ensureMessageDiffButton, injectDiffButtons } from '../diff/view.js';
 import { getMessageDomNode } from '../dom/message.js';
 import { commitCurrentMessageText, getMessageDiffBranchKey } from './messageBranch.js';
-import { getMessageDiffMeta, migrateChatDiffMetadata, writeMessageDiffProgram } from '../diff/messageMeta.js';
+import { getMessageDiffMeta, isMessageDiffReverted, migrateChatDiffMetadata, writeMessageDiffProgram } from '../diff/messageMeta.js';
+import { maintainDiffRetention } from '../diff/retention.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
 import { applyScopedReplacements, buildProcessors } from '../rules/engine.js';
 import { queueIncrementalChatSave } from './persistence.js';
@@ -90,7 +91,7 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     const msg = chat[index];
     if (!msg || typeof msg.mes !== 'string') return false;
     if (!isAssistantMessage(msg)) return false;
-    if (options.explicitRecleanse !== true && getMessageDiffMeta(msg)) {
+    if (options.explicitRecleanse !== true && (getMessageDiffMeta(msg) || isMessageDiffReverted(msg))) {
         refreshDiffViewer(index);
         return false;
     }
@@ -132,6 +133,7 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     }
 
     const { metadataChanged } = syncMessageDiffMetadata(msg, sourceMes, msg.mes);
+    maintainDiffRetention();
     if (metadataChanged) changed = true;
     refreshDiffViewer(index);
 
@@ -171,7 +173,7 @@ export function performIncrementalCleanse(payload, options = {}) {
     if (!assistant) return;
     const beforeText = typeof msg.mes === 'string' ? msg.mes : '';
     const beforeDisplayText = msg?.extra?.display_text ?? msg?.mes;
-    if (getMessageDiffMeta(msg)) {
+    if (getMessageDiffMeta(msg) || isMessageDiffReverted(msg)) {
         refreshDiffViewer(index);
         injectDiffButtons([index]);
         return {
@@ -220,5 +222,6 @@ export function performGlobalChatMaintenance() {
         markHostChatDirtyFromIndex(0);
         queueIncrementalChatSave();
     }
+    maintainDiffRetention();
     injectDiffButtons();
 }

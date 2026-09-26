@@ -1,4 +1,4 @@
-/** Owns one replaceable Original -> optional AI -> Program record per message branch. */
+/** Owns each branch's replaceable stage record and text-free revert protection after eviction. */
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
 import { extensionName } from '../settings/defaults.js';
 
@@ -6,6 +6,10 @@ const branchMetaKey = '__blai_diff_branch_meta';
 
 function isObject(value) {
     return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isProtectionOnly(entry) {
+    return isObject(entry) && entry.reverted === true && Object.keys(entry).length === 1;
 }
 
 function isCanonical(entry) {
@@ -52,7 +56,30 @@ export function setMessageDiffReverted(msg, reverted, branchKey = getMessageDiff
 }
 
 export function isMessageDiffReverted(msg) {
-    return getMessageDiffMeta(msg)?.reverted === true;
+    return msg?.[branchMetaKey]?.[getMessageDiffBranchKey(msg)]?.reverted === true;
+}
+
+/** Evict stage texts outside the window, retaining only explicit revert protection. */
+export function pruneChatDiffMetadata(chat, retainedIndices) {
+    if (!Array.isArray(chat)) return -1;
+    const retained = new Set(retainedIndices);
+    let firstChanged = -1;
+    for (let index = 0; index < chat.length; index++) {
+        const msg = chat[index];
+        const container = msg?.[branchMetaKey];
+        if (retained.has(index) || msg?.is_user === true || !isObject(container)) continue;
+        for (const [key, entry] of Object.entries(container)) {
+            if (isProtectionOnly(entry)) continue;
+            if (entry?.reverted === true) container[key] = { reverted: true };
+            else delete container[key];
+            if (firstChanged < 0) firstChanged = index;
+        }
+        if (Object.keys(container).length === 0) {
+            delete msg[branchMetaKey];
+            if (firstChanged < 0) firstChanged = index;
+        }
+    }
+    return firstChanged;
 }
 
 export function clearMessageDiffMeta(msg, branchKey = getMessageDiffBranchKey(msg)) {
@@ -90,7 +117,7 @@ export function migrateChatDiffMetadata(chat, chatMetadata) {
         const container = msg[branchMetaKey];
         if (isObject(container)) {
             for (const [key, entry] of Object.entries(container)) {
-                if (isCanonical(entry)) continue;
+                if (isCanonical(entry) || isProtectionOnly(entry)) continue;
                 const hasAi = entry?.hasAiTrace === true;
                 const compatible = isObject(entry)
                     && (Object.hasOwn(entry, 'hasAiTrace') || Object.hasOwn(entry, 'finalSource'))

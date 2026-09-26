@@ -12,7 +12,9 @@ import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { diffRuntimeState, getCurrentDiffIndex, getDiffComparisonForMessage, refreshDiffViewer } from './state.js';
 import { injectDiffButtons } from './view.js';
-import { escapeHtml, renderDiffDocument } from './compare.js';
+import { maintainDiffRetention } from './retention.js';
+import { escapeHtml } from './compare.js';
+import { renderDiffDocumentInBackground } from './background.js';
 import { collectAiXmlScopeSegments } from '../aiRewrite/matching.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
 import { getMessageDiffMeta, isMessageDiffReverted, setMessageDiffReverted } from './messageMeta.js';
@@ -35,6 +37,11 @@ export function recleanseDiffMessageAtIndex(index) {
 
 export function bindDiffEvents() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
+    let comparisonController = null;
+    const cancelComparison = () => {
+        comparisonController?.abort();
+        comparisonController = null;
+    };
     const getDiffMessageByIndex = (index) => {
         const { chat } = getAppContext();
         return Array.isArray(chat) && Number.isInteger(index) && index >= 0 && index < chat.length ? chat[index] : null;
@@ -70,6 +77,7 @@ export function bindDiffEvents() {
         if (next === previous) return;
 
         saveSettingsDebounced();
+        maintainDiffRetention();
         injectDiffButtons();
         refreshDiffViewer();
     };
@@ -241,7 +249,7 @@ export function bindDiffEvents() {
         const revertTitle = isReverted ? '重新净化文本' : '撤回净化并保护原文';
         $('#blai-diff-revert-icon').attr('class', isReverted ? 'fas fa-wand-magic-sparkles' : 'fas fa-rotate-left');
         $('#blai-diff-revert-text').text(isReverted ? '重新净化' : '撤回净化');
-        $('#blai-diff-revert-toggle').attr('title', revertTitle).prop('disabled', !meta || (!isReverted && msg.mes !== meta.programMes));
+        $('#blai-diff-revert-toggle').attr('title', revertTitle).prop('disabled', !isReverted && (!meta || msg.mes !== meta.programMes));
         $('#blai-diff-mode-toggle').toggle(!isReverted);
     };
 
@@ -301,6 +309,7 @@ export function bindDiffEvents() {
     };
 
     const closeDiffModal = () => {
+        cancelComparison();
         closeDiffActionsMenu();
         closeDiffRelatedModal();
         diffRuntimeState.diffRelatedRuleMode = false;
@@ -309,7 +318,8 @@ export function bindDiffEvents() {
         diffRuntimeState.currentMessage = null;
     };
 
-    function renderDiffModalContent(index) {
+    async function renderDiffModalContent(index) {
+        cancelComparison();
         const msg = getDiffMessageByIndex(index);
         if (!msg) { closeDiffModal(); return; }
         const meta = getMessageDiffMeta(msg);
@@ -320,8 +330,8 @@ export function bindDiffEvents() {
         syncDiffRevertToggleState(msg);
         syncDiffAiRewriteButtonState(msg);
         const contentEl = $('#blai-diff-modal-content');
-        if (meta?.reverted) {
-            const current = msg.mes === meta.originalMes ? '当前显示为原始文本。' : '当前文本与保留原文不同。';
+        if (isMessageDiffReverted(msg)) {
+            const current = !meta ? '历史对比文本已超出保留范围。' : msg.mes === meta.originalMes ? '当前显示为原始文本。' : '当前文本与保留原文不同。';
             contentEl.html(`<div class="blai-diff-empty"><i class="fas fa-shield-halved blai-diff-reverted-icon"></i>此消息已撤回并处于免净化保护状态，${current}点击 <i class="fas fa-wand-magic-sparkles blai-diff-inline-icon"></i> 重新净化文本。</div>`);
             return;
         }
@@ -338,7 +348,22 @@ export function bindDiffEvents() {
                 newRanges: collectAiXmlScopeSegments(pair.newText, aiSettings, { includeEmpty: true }),
             }) }];
         });
-        const rendered = renderDiffDocument(pairs, mode);
+        const controller = new AbortController();
+        comparisonController = controller;
+        const branchKey = getMessageDiffBranchKey(msg);
+        contentEl.html('<div class="blai-diff-empty">正在比较文本…</div>');
+        let rendered;
+        try {
+            rendered = await renderDiffDocumentInBackground(pairs, mode, { signal: controller.signal });
+        } catch (error) {
+            if (controller.signal.aborted) return;
+            contentEl.html(`<div class="blai-diff-empty">文本比较失败：${escapeHtml(error.message)}</div>`);
+            return;
+        } finally {
+            if (comparisonController === controller) comparisonController = null;
+        }
+        if (controller.signal.aborted || diffRuntimeState.currentMessage !== msg
+            || getDiffMessageByIndex(index) !== msg || getMessageDiffBranchKey(msg) !== branchKey) return;
         const notice = msg.mes !== meta.programMes
             ? '<div class="blai-diff-empty">当前消息与记录的 Veridis 结果不同；下方展示记录的净化阶段。</div>' : '';
         const empty = '<div class="blai-diff-empty">当前消息未触发差异。</div>';
