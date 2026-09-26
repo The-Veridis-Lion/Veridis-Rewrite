@@ -3,6 +3,7 @@ import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
 import { extensionName } from '../settings/defaults.js';
 
 const branchMetaKey = '__blai_diff_branch_meta';
+const messageProtectionKey = 'message';
 
 function isObject(value) {
     return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -36,9 +37,12 @@ function writeBranchMeta(msg, branchKey, next) {
     if (!isObject(msg) || !branchKey) return false;
     if (!isCanonical(next)) throw new TypeError('Difference requires canonical stage texts and revert state');
     const previous = getMessageDiffMeta(msg, branchKey);
-    if (previous && Object.keys(next).every(key => previous[key] === next[key])) return false;
+    const clearsMessageProtection = !next.reverted && isProtectionOnly(msg[branchMetaKey]?.[messageProtectionKey]);
+    if (!clearsMessageProtection && previous && Object.keys(next).every(key => previous[key] === next[key])) return false;
     if (!isObject(msg[branchMetaKey])) msg[branchMetaKey] = {};
     msg[branchMetaKey][branchKey] = next;
+    // Explicit recleanse releases the legacy message-wide choice after a successful commit.
+    if (clearsMessageProtection) delete msg[branchMetaKey][messageProtectionKey];
     return true;
 }
 
@@ -56,7 +60,9 @@ export function setMessageDiffReverted(msg, reverted, branchKey = getMessageDiff
 }
 
 export function isMessageDiffReverted(msg) {
-    return msg?.[branchMetaKey]?.[getMessageDiffBranchKey(msg)]?.reverted === true;
+    const container = msg?.[branchMetaKey];
+    return isProtectionOnly(container?.[messageProtectionKey])
+        || container?.[getMessageDiffBranchKey(msg)]?.reverted === true;
 }
 
 /** Evict stage texts outside the window, retaining only explicit revert protection. */
@@ -133,16 +139,17 @@ export function migrateChatDiffMetadata(chat, chatMetadata) {
                 } else delete container[key];
                 changed = true;
             }
-            // A message-wide marker cannot identify one of several Swipes.
-            const soleBranch = msg.swipes === undefined ? 'main'
-                : Array.isArray(msg.swipes) && msg.swipes.length === 1 ? 'swipe:0' : null;
-            if (msg.__blai_is_reverted === true && soleBranch && isCanonical(container[soleBranch])) {
-                container[soleBranch].reverted = true;
-            }
             if (Object.keys(container).length === 0) {
                 delete msg[branchMetaKey];
                 changed = true;
             }
+        }
+        // The legacy gate applied to the message, across all Swipes, until recleanse.
+        // Transfer that scope without requiring or reconstructing comparison texts.
+        if (msg.__blai_is_reverted === true) {
+            if (!isObject(msg[branchMetaKey])) msg[branchMetaKey] = {};
+            msg[branchMetaKey][messageProtectionKey] = { reverted: true };
+            changed = true;
         }
         for (const key of [
             '__blai_is_reverted', '__blai_original_mes', '__blai_diff_source_signature',

@@ -14,6 +14,7 @@ import { diffRuntimeState, getCurrentDiffIndex, getDiffComparisonForMessage, ref
 import { injectDiffButtons } from './view.js';
 import { maintainDiffRetention } from './retention.js';
 import { escapeHtml } from './compare.js';
+import { omitVariableUpdates } from '../text/variableUpdates.js';
 import { renderDiffDocumentInBackground } from './background.js';
 import { collectAiXmlScopeSegments } from '../aiRewrite/matching.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
@@ -364,7 +365,7 @@ export function bindDiffEvents() {
         }
         if (controller.signal.aborted || diffRuntimeState.currentMessage !== msg
             || getDiffMessageByIndex(index) !== msg || getMessageDiffBranchKey(msg) !== branchKey) return;
-        const notice = msg.mes !== meta.programMes
+        const notice = omitVariableUpdates(msg.mes) !== omitVariableUpdates(meta.programMes)
             ? '<div class="blai-diff-empty">当前消息与记录的 Veridis 结果不同；下方展示记录的净化阶段。</div>' : '';
         const empty = '<div class="blai-diff-empty">当前消息未触发差异。</div>';
         contentEl.html(notice + (mode === 'full'

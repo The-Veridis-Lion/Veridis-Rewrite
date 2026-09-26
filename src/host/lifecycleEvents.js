@@ -9,7 +9,7 @@ import {
 } from '../chat/cleanse.js';
 import { diffRuntimeState, refreshDiffViewer, resetDiffRuntimeState } from '../diff/state.js';
 import { isAssistantMessage } from '../diff/tracking.js';
-import { getMessageSwipeIndex, setCurrentSwipeText } from '../chat/messageBranch.js';
+import { setCurrentSwipeText } from '../chat/messageBranch.js';
 import { clearMessageDiffMeta, deleteMessageDiffSwipe, isMessageDiffReverted } from '../diff/messageMeta.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
@@ -267,8 +267,8 @@ export function bindHostLifecycleEvents() {
             });
         }
 
-        const hasMaterializedSwipe = getMessageSwipeIndex(msg) >= 0;
-        if (hasMaterializedSwipe) runFinalStreamingCleanse(index);
+        // Swipe navigation precedes any new generation; receipt/streaming owns finalization.
+        projectDiffButtonFromPayload(index);
         refreshDiffViewer(index);
     });
     if (event_types.MESSAGE_SWIPE_DELETED) eventSource.on(event_types.MESSAGE_SWIPE_DELETED, (payload) => {

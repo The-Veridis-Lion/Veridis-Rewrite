@@ -1,5 +1,6 @@
 /** On-demand Difference document presentation and shared Deep Clean text primitives; no message state. */
 import { splitTextRangeIntoSentences } from '../text/sentences.js';
+import { collectVariableUpdateRanges } from '../text/variableUpdates.js';
 
 export function escapeHtml(value = '') {
     return String(value)
@@ -138,23 +139,56 @@ function renderDiffOperations(operations = []) {
     return operations.map(operation => renderDiffOperation(operation, operation.section)).join('');
 }
 
-function annotateDiffOperations(operations = [], oldOffset = 0, newOffset = 0) {
-    return operations.map((operation) => {
-        const text = String(operation?.text || '');
-        const annotated = {
-            ...operation,
-            text,
-            oldStart: oldOffset,
-            oldEnd: oldOffset,
-            newStart: newOffset,
-            newEnd: newOffset,
-        };
-        if (operation?.type !== 'insert') oldOffset += text.length;
-        if (operation?.type !== 'delete') newOffset += text.length;
-        annotated.oldEnd = oldOffset;
-        annotated.newEnd = newOffset;
-        return annotated;
-    });
+function projectDifferenceText(value) {
+    const source = String(value ?? '');
+    const spans = [];
+    const parts = [];
+    let sourceStart = 0;
+    let offset = 0;
+    for (const range of [...collectVariableUpdateRanges(source), { start: source.length, end: source.length }]) {
+        if (sourceStart < range.start) {
+            const text = source.slice(sourceStart, range.start);
+            spans.push({ sourceStart, start: offset, end: offset + text.length });
+            parts.push(text);
+            offset += text.length;
+        }
+        sourceStart = range.end;
+    }
+    return { text: parts.join(''), spans, sourceLength: source.length };
+}
+
+function getDifferencePairOperations(pair) {
+    const oldProjection = projectDifferenceText(pair.oldText);
+    const newProjection = projectDifferenceText(pair.newText);
+    const sides = [
+        { projection: oldProjection, prefix: 'old', skip: 'insert', index: 0, offset: 0 },
+        { projection: newProjection, prefix: 'new', skip: 'delete', index: 0, offset: 0 },
+    ];
+    const runs = [];
+    for (const operation of getTextDiffOperations(oldProjection.text, newProjection.text)) {
+        let cursor = 0;
+        while (cursor < operation.text.length) {
+            let length = operation.text.length - cursor;
+            const coordinates = {};
+            for (const side of sides) {
+                const { spans, sourceLength } = side.projection;
+                while (side.index < spans.length && spans[side.index].end <= side.offset) side.index++;
+                const span = spans[side.index];
+                coordinates[`${side.prefix}Start`] = span
+                    ? span.sourceStart + side.offset - span.start : sourceLength;
+                if (operation.type !== side.skip) length = Math.min(length, span.end - side.offset);
+            }
+            for (const side of sides) {
+                const consumed = operation.type === side.skip ? 0 : length;
+                coordinates[`${side.prefix}End`] = coordinates[`${side.prefix}Start`] + consumed;
+                side.offset += consumed;
+            }
+            // Split at every omitted block on either side, keeping each run's raw offsets contiguous.
+            runs.push({ ...operation, text: operation.text.slice(cursor, cursor + length), ...coordinates });
+            cursor += length;
+        }
+    }
+    return runs;
 }
 
 function sliceDisplayRun(run, start, end) {
@@ -168,10 +202,9 @@ function sliceDisplayRun(run, start, end) {
     };
 }
 
-function getSnippetPairOperations(pair) {
+function getSnippetPairOperations(pair, operations) {
     // Align complete stages before selecting bodies. A changed scope boundary
     // must not turn prose retained in both stages into an insertion/deletion.
-    const operations = annotateDiffOperations(getTextDiffOperations(pair.oldText, pair.newText));
     if (!pair.oldRanges?.length && !pair.newRanges?.length) {
         return operations;
     }
@@ -215,9 +248,10 @@ function getSnippetPairOperations(pair) {
 export function renderDiffDocument(pairs, mode) {
     const blocks = [];
     for (const pair of pairs) {
+        const operations = getDifferencePairOperations(pair);
         const runs = (mode === 'full'
-            ? annotateDiffOperations(getTextDiffOperations(pair.oldText, pair.newText))
-            : getSnippetPairOperations(pair))
+            ? operations
+            : getSnippetPairOperations(pair, operations))
             .map(operation => ({ ...operation, section: pair.section }));
         if (mode === 'full') {
             const changed = runs.some(run => run.type !== 'equal');
