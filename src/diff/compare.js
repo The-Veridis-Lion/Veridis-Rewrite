@@ -1,12 +1,7 @@
-/**
- * Owns Diff text comparison and HTML/cache-result construction only; it does not own tracked-message runtime state, persistence, message mutation, or live DOM projection.
- */
+/** On-demand Difference document presentation and shared Deep Clean text primitives; no message state. */
+import { splitTextRangeIntoSentences } from '../text/sentences.js';
+import { collectVariableUpdateRanges } from '../text/variableUpdates.js';
 
-/**
- * 将原始文本进行 HTML 转义，避免差异片段注入标签。
- * @param {string} [value=''] 需要转义的文本。
- * @returns {string} 已转义的安全 HTML 文本。
- */
 export function escapeHtml(value = '') {
     return String(value)
         .replace(/&/g, '&amp;')
@@ -16,231 +11,121 @@ export function escapeHtml(value = '') {
         .replace(/'/g, '&#39;');
 }
 
-const inlineDiffCellLimit = 1600000;
-const lineDiffCellLimit = 200000;
-const snippetWindowCharLimit = 900;
-const snippetJoinEqualChars = 96;
-
-/**
- * 生成两段文本的行内差异 HTML。
- * 先整体对齐文本，再对中间片段做 LCS 回溯，避免换行变化导致逐行错位。
- * @param {string} oldStr 原始文本。
- * @param {string} newStr 净化后文本。
- * @returns {string} 包含 <ins>/<del> 标记的差异 HTML。
- */
-export function getInlineDiff(oldStr, newStr) {
-    return renderTextDiffHtml(oldStr, newStr);
-}
-
-/**
- * Renders an arbitrary text pair with the shared diff algorithm, preserving all text and line breaks.
- * This is intentionally independent of message metadata, cache, DOM, and persistence.
- */
-export function renderTextDiffHtml(oldStr, newStr) {
-    return renderDiffOperations(getTextDiffOperations(oldStr, newStr));
-}
-
-function isDiffMatrixSafe(leftLength, rightLength, limit) {
-    if (leftLength === 0 || rightLength === 0) return true;
-    return leftLength <= Math.floor(limit / rightLength);
-}
-
 function pushDiffOperation(operations, type, text = '') {
     if (!text) return;
     const last = operations[operations.length - 1];
+    // Keep replacements in delete/insert order for related-rule selection.
+    if (type === 'delete' && last?.type === 'insert') {
+        operations.pop();
+        pushDiffOperation(operations, 'delete', text);
+        pushDiffOperation(operations, 'insert', last.text);
+        return;
+    }
     if (last && last.type === type) last.text += text;
     else operations.push({ type, text });
 }
 
-function buildCharDiffOperations(oldChars, newChars) {
-    const m = oldChars.length;
-    const n = newChars.length;
-    const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            if (oldChars[i - 1] === newChars[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1] + 1;
-            } else {
-                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+// Linear-space Myers bisection. Both frontiers follow exact equal code points;
+// there is no size/deadline cutoff that can turn an unexamined middle into edits.
+function findMiddleSplit(left, right, a, b, c, d) {
+    const m = b - a;
+    const n = d - c;
+    const maxDepth = Math.ceil((m + n) / 2);
+    const offset = maxDepth + 1;
+    const forward = new Int32Array(2 * maxDepth + 3).fill(-1);
+    const reverse = new Int32Array(2 * maxDepth + 3).fill(-1);
+    forward[offset + 1] = reverse[offset + 1] = 0;
+    const delta = m - n;
+    const odd = delta % 2 !== 0;
+    let forwardStart = 0;
+    let forwardEnd = 0;
+    let reverseStart = 0;
+    let reverseEnd = 0;
+    for (let depth = 0; depth < maxDepth; depth++) {
+        for (let k = -depth + forwardStart; k <= depth - forwardEnd; k += 2) {
+            const slot = offset + k;
+            let x = k === -depth || (k !== depth && forward[slot - 1] < forward[slot + 1])
+                ? forward[slot + 1] : forward[slot - 1] + 1;
+            let y = x - k;
+            while (x < m && y < n && left[a + x] === right[c + y]) { x++; y++; }
+            forward[slot] = x;
+            if (x > m) forwardEnd += 2;
+            else if (y > n) forwardStart += 2;
+            else if (odd) {
+                const other = offset + delta - k;
+                if (other >= 0 && other < reverse.length && reverse[other] !== -1
+                    && x >= m - reverse[other]) return [a + x, c + y];
+            }
+        }
+        for (let k = -depth + reverseStart; k <= depth - reverseEnd; k += 2) {
+            const slot = offset + k;
+            let x = k === -depth || (k !== depth && reverse[slot - 1] < reverse[slot + 1])
+                ? reverse[slot + 1] : reverse[slot - 1] + 1;
+            let y = x - k;
+            while (x < m && y < n && left[b - x - 1] === right[d - y - 1]) { x++; y++; }
+            reverse[slot] = x;
+            if (x > m) reverseEnd += 2;
+            else if (y > n) reverseStart += 2;
+            else if (!odd) {
+                const other = offset + delta - k;
+                if (other >= 0 && other < forward.length && forward[other] !== -1
+                    && forward[other] >= m - x) {
+                    const forwardX = forward[other];
+                    return [a + forwardX, c + forwardX - (delta - k)];
+                }
             }
         }
     }
+    // Exhausting all depths proves there is no equality in this region.
+    return null;
+}
 
-    let i = m;
-    let j = n;
-    const reversed = [];
-    while (i > 0 || j > 0) {
-        if (i > 0 && j > 0 && oldChars[i - 1] === newChars[j - 1]) {
-            reversed.push({ type: 'equal', text: oldChars[i - 1] });
-            i--; j--;
-        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-            reversed.push({ type: 'insert', text: newChars[j - 1] });
-            j--;
-        } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-            reversed.push({ type: 'delete', text: oldChars[i - 1] });
-            i--;
-        }
-    }
-
+/** Exact, deterministic pair diff shared with Deep Clean; no provenance or state. */
+export function getTextDiffOperations(oldStr, newStr) {
+    const left = Array.from(String(oldStr ?? ''));
+    const right = Array.from(String(newStr ?? ''));
     const operations = [];
-    for (const operation of reversed.reverse()) {
-        pushDiffOperation(operations, operation.type, operation.text);
-    }
-    return operations;
-}
-
-function splitLineTokens(value = '') {
-    return String(value).match(/[^\n]*\n|[^\n]+/g) || [];
-}
-
-function buildTokenDiffOperations(oldTokens, newTokens) {
-    const m = oldTokens.length;
-    const n = newTokens.length;
-    const dp = Array.from({ length: m + 1 }, () => new Int32Array(n + 1));
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            if (oldTokens[i - 1] === newTokens[j - 1]) {
-                dp[i][j] = dp[i - 1][j - 1] + 1;
-            } else {
-                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-            }
+    // Explicit work stack avoids a call-stack limit on adversarial input.
+    const pending = [{ a: 0, b: left.length, c: 0, d: right.length }];
+    while (pending.length) {
+        const task = pending.pop();
+        if (task.type) {
+            pushDiffOperation(operations, task.type, task.text);
+            continue;
         }
-    }
-
-    let i = m;
-    let j = n;
-    const reversed = [];
-    while (i > 0 || j > 0) {
-        if (i > 0 && j > 0 && oldTokens[i - 1] === newTokens[j - 1]) {
-            reversed.push({ type: 'equal', text: oldTokens[i - 1] });
-            i--; j--;
-        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-            reversed.push({ type: 'insert', text: newTokens[j - 1] });
-            j--;
-        } else if (i > 0 && (j === 0 || dp[i][j - 1] < dp[i - 1][j])) {
-            reversed.push({ type: 'delete', text: oldTokens[i - 1] });
-            i--;
+        let { a, b, c, d } = task;
+        const start = a;
+        while (a < b && c < d && left[a] === right[c]) { a++; c++; }
+        pushDiffOperation(operations, 'equal', left.slice(start, a).join(''));
+        const end = b;
+        while (a < b && c < d && left[b - 1] === right[d - 1]) { b--; d--; }
+        if (b < end) pending.push({ type: 'equal', text: left.slice(b, end).join('') });
+        if (a === b || c === d) {
+            pushDiffOperation(operations, 'delete', left.slice(a, b).join(''));
+            pushDiffOperation(operations, 'insert', right.slice(c, d).join(''));
+            continue;
         }
-    }
-
-    const operations = [];
-    for (const operation of reversed.reverse()) {
-        pushDiffOperation(operations, operation.type, operation.text);
-    }
-    return operations;
-}
-
-function appendReplacementOperations(operations, deletedText, insertedText) {
-    if (!deletedText && !insertedText) return;
-    const deletedLength = Array.from(deletedText).length;
-    const insertedLength = Array.from(insertedText).length;
-
-    if (deletedText && insertedText && isDiffMatrixSafe(deletedLength, insertedLength, inlineDiffCellLimit)) {
-        getTextDiffOperations(deletedText, insertedText, { allowLineFallback: false })
-            .forEach(operation => pushDiffOperation(operations, operation.type, operation.text));
-        return;
-    }
-
-    pushDiffOperation(operations, 'delete', deletedText);
-    pushDiffOperation(operations, 'insert', insertedText);
-}
-
-function buildLineBlockDiffOperations(oldStr, newStr) {
-    const oldTokens = splitLineTokens(oldStr);
-    const newTokens = splitLineTokens(newStr);
-
-    if (oldTokens.length === 0) return newStr ? [{ type: 'insert', text: newStr }] : [];
-    if (newTokens.length === 0) return oldStr ? [{ type: 'delete', text: oldStr }] : [];
-    if (!isDiffMatrixSafe(oldTokens.length, newTokens.length, lineDiffCellLimit)) {
-        return [
-            { type: 'delete', text: oldStr },
-            { type: 'insert', text: newStr },
-        ];
-    }
-
-    const lineOperations = buildTokenDiffOperations(oldTokens, newTokens);
-    const operations = [];
-    let deletedText = '';
-    let insertedText = '';
-
-    const flushReplacement = () => {
-        appendReplacementOperations(operations, deletedText, insertedText);
-        deletedText = '';
-        insertedText = '';
-    };
-
-    for (const operation of lineOperations) {
-        if (operation.type === 'equal') {
-            flushReplacement();
-            pushDiffOperation(operations, 'equal', operation.text);
-        } else if (operation.type === 'delete') {
-            deletedText += operation.text;
+        const split = findMiddleSplit(left, right, a, b, c, d);
+        if (split) {
+            const [x, y] = split;
+            pending.push({ a: x, b, c: y, d });
+            pending.push({ a, b: x, c, d: y });
         } else {
-            insertedText += operation.text;
+            pushDiffOperation(operations, 'delete', left.slice(a, b).join(''));
+            pushDiffOperation(operations, 'insert', right.slice(c, d).join(''));
         }
     }
-
-    flushReplacement();
     return operations;
 }
 
-/**
- * Computes the shared ordered text Diff operations without rendering or touching message state.
- * Deep Clean uses this same pure owner to derive its interactive review blocks.
- */
-export function getTextDiffOperations(oldStr, newStr, options = {}) {
-    const oldText = String(oldStr ?? '');
-    const newText = String(newStr ?? '');
-    if (oldText === newText) return oldText ? [{ type: 'equal', text: oldText }] : [];
-    if (!oldText) return newText ? [{ type: 'insert', text: newText }] : [];
-    if (!newText) return oldText ? [{ type: 'delete', text: oldText }] : [];
-
-    const oldChars = Array.from(oldText);
-    const newChars = Array.from(newText);
-    let start = 0;
-    while (start < oldChars.length && start < newChars.length && oldChars[start] === newChars[start]) {
-        start++;
-    }
-
-    let endOld = oldChars.length - 1;
-    let endNew = newChars.length - 1;
-    while (endOld >= start && endNew >= start && oldChars[endOld] === newChars[endNew]) {
-        endOld--;
-        endNew--;
-    }
-
-    const operations = [];
-    pushDiffOperation(operations, 'equal', oldChars.slice(0, start).join(''));
-
-    const midOld = oldChars.slice(start, endOld + 1);
-    const midNew = newChars.slice(start, endNew + 1);
-    const allowLineFallback = options.allowLineFallback !== false;
-    const middleOperations = isDiffMatrixSafe(midOld.length, midNew.length, inlineDiffCellLimit)
-        ? buildCharDiffOperations(midOld, midNew)
-        : allowLineFallback
-            ? buildLineBlockDiffOperations(midOld.join(''), midNew.join(''))
-            : [
-                { type: 'delete', text: midOld.join('') },
-                { type: 'insert', text: midNew.join('') },
-            ];
-
-    middleOperations.forEach(operation => pushDiffOperation(operations, operation.type, operation.text));
-    pushDiffOperation(operations, 'equal', oldChars.slice(endOld + 1).join(''));
-    return operations;
-}
-
-function renderDiffOperation(operation) {
+function renderDiffOperation(operation, section) {
     if (!operation || !operation.text) return '';
     if (operation.type === 'delete' || operation.type === 'insert') {
         const attrs = [
             `class="blai-diff-change"`,
             `data-blai-diff-type="${operation.type === 'delete' ? 'delete' : 'insert'}"`,
         ];
-        if (['program', 'ai', 'manual'].includes(operation.source)) {
-            attrs.push(`data-blai-diff-source="${operation.source}"`);
-        }
+        if (['ai', 'program'].includes(section)) attrs.push(`data-blai-diff-section="${section}"`);
         ['oldStart', 'oldEnd', 'newStart', 'newEnd'].forEach((key) => {
             if (Number.isFinite(Number(operation[key]))) attrs.push(`data-blai-${key.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`)}="${Number(operation[key])}"`);
         });
@@ -251,440 +136,159 @@ function renderDiffOperation(operation) {
 }
 
 function renderDiffOperations(operations = []) {
-    return operations.map(renderDiffOperation).join('');
+    return operations.map(operation => renderDiffOperation(operation, operation.section)).join('');
 }
 
-function findPreviousBoundaryEnd(text = '', position = 0, pattern = /\r?\n/g) {
-    const source = String(text);
-    const cursor = Math.max(0, Math.min(source.length, Number(position) || 0));
-    const regex = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
-    let boundaryEnd = -1;
-    let match;
-    while ((match = regex.exec(source)) !== null) {
-        if (match.index >= cursor) break;
-        boundaryEnd = match.index + match[0].length;
-        if (match[0].length === 0) regex.lastIndex++;
-    }
-    return boundaryEnd;
-}
-
-function findNextBoundaryStart(text = '', position = 0, pattern = /\r?\n/g) {
-    const source = String(text);
-    const cursor = Math.max(0, Math.min(source.length, Number(position) || 0));
-    const regex = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
-    regex.lastIndex = cursor;
-    const match = regex.exec(source);
-    return match ? match.index : -1;
-}
-
-function hasParagraphBoundary(value = '') {
-    return /\r?\n[ \t]*\r?\n/.test(String(value));
-}
-
-function hasLineBoundary(value = '') {
-    return /\r?\n/.test(String(value));
-}
-
-function getLogicalWindowForChange(originalText = '', start = 0, end = start) {
-    const text = String(originalText);
-    const safeStart = Math.max(0, Math.min(text.length, Number(start) || 0));
-    const safeEnd = Math.max(safeStart, Math.min(text.length, Number(end) || safeStart));
-    const paragraphPattern = /\r?\n[ \t]*\r?\n/g;
-
-    const previousParagraphEnd = findPreviousBoundaryEnd(text, safeStart, paragraphPattern);
-    const nextParagraphStart = findNextBoundaryStart(text, safeEnd, paragraphPattern);
-    if (previousParagraphEnd >= 0 || nextParagraphStart >= 0) {
-        return {
-            start: previousParagraphEnd >= 0 ? previousParagraphEnd : 0,
-            end: nextParagraphStart >= 0 ? nextParagraphStart : text.length,
-        };
-    }
-
-    const previousLineEnd = findPreviousBoundaryEnd(text, safeStart, /\r?\n/g);
-    const nextLineStart = findNextBoundaryStart(text, safeEnd, /\r?\n/g);
-    return {
-        start: previousLineEnd >= 0 ? previousLineEnd : 0,
-        end: nextLineStart >= 0 ? nextLineStart : text.length,
-    };
-}
-
-function clampWindowToLimit(window, textLength) {
-    const start = Math.max(0, Math.min(textLength, Number(window?.start) || 0));
-    const end = Math.max(start, Math.min(textLength, Number(window?.end) || start));
-    const anchorStart = Math.max(start, Math.min(end, Number(window?.anchorStart) || start));
-    const anchorEnd = Math.max(anchorStart, Math.min(end, Number(window?.anchorEnd) || anchorStart));
-
-    if (end - start <= snippetWindowCharLimit) {
-        return { start, end, hasPrefixEllipsis: false, hasSuffixEllipsis: false };
-    }
-
-    const anchorLength = Math.max(1, anchorEnd - anchorStart);
-    if (anchorLength >= snippetWindowCharLimit) {
-        const nextEnd = Math.min(end, anchorStart + snippetWindowCharLimit);
-        return {
-            start: anchorStart,
-            end: nextEnd,
-            hasPrefixEllipsis: anchorStart > start,
-            hasSuffixEllipsis: nextEnd < end,
-        };
-    }
-
-    const beforeBudget = Math.floor((snippetWindowCharLimit - anchorLength) / 2);
-    let nextStart = Math.max(start, anchorStart - beforeBudget);
-    let nextEnd = nextStart + snippetWindowCharLimit;
-    if (nextEnd > end) {
-        nextEnd = end;
-        nextStart = Math.max(start, nextEnd - snippetWindowCharLimit);
-    }
-
-    return {
-        start: nextStart,
-        end: nextEnd,
-        hasPrefixEllipsis: nextStart > start,
-        hasSuffixEllipsis: nextEnd < end,
-    };
-}
-
-function annotateDiffOperations(operations = []) {
-    let oldOffset = 0;
-    let newOffset = 0;
-    return operations.map((operation) => {
-        const text = String(operation?.text || '');
-        const annotated = {
-            ...operation,
-            text,
-            oldStart: oldOffset,
-            oldEnd: oldOffset,
-            newStart: newOffset,
-            newEnd: newOffset,
-        };
-        if (operation?.type !== 'insert') oldOffset += text.length;
-        if (operation?.type !== 'delete') newOffset += text.length;
-        annotated.oldEnd = oldOffset;
-        annotated.newEnd = newOffset;
-        return annotated;
-    });
-}
-
-function applyDefaultSource(annotatedOperations = [], source = 'program') {
-    return annotatedOperations.map(operation => operation?.type === 'equal'
-        ? operation
-        : { ...operation, source });
-}
-
-function applyStageTransition(tokens, deletedSources, fromText, toText, source) {
-    const nextTokens = [];
-    let oldCursor = 0;
-    for (const operation of getTextDiffOperations(fromText, toText)) {
-        const chars = Array.from(String(operation.text || ''));
-        if (operation.type === 'equal') {
-            nextTokens.push(...tokens.slice(oldCursor, oldCursor + chars.length));
-            oldCursor += chars.length;
-            continue;
-        }
-        if (operation.type === 'delete') {
-            tokens.slice(oldCursor, oldCursor + chars.length).forEach((token) => {
-                if (Number.isInteger(token.originalIndex)) deletedSources[token.originalIndex] = source;
-            });
-            oldCursor += chars.length;
-            continue;
-        }
-        chars.forEach(char => nextTokens.push({ char, originalIndex: null, source }));
-    }
-    return nextTokens;
-}
-
-function restoreFinalEqualities(tokens, originalChars, deletedSources, stageRank) {
-    const anchors = [{ tokenPosition: -1, originalIndex: -1 }];
-    tokens.forEach((token, tokenPosition) => {
-        if (Number.isInteger(token.originalIndex)) {
-            anchors.push({ tokenPosition, originalIndex: token.originalIndex });
-        }
-    });
-    anchors.push({ tokenPosition: tokens.length, originalIndex: originalChars.length });
-
-    for (let anchorIndex = 0; anchorIndex < anchors.length - 1; anchorIndex++) {
-        const left = anchors[anchorIndex];
-        const right = anchors[anchorIndex + 1];
-        const oldStart = left.originalIndex + 1;
-        const oldChars = originalChars.slice(oldStart, right.originalIndex);
-        const newStart = left.tokenPosition + 1;
-        const intervalTokens = tokens.slice(newStart, right.tokenPosition);
-        if (oldChars.length === 0 || intervalTokens.length === 0) continue;
-
-        let oldCursor = 0;
-        let newCursor = 0;
-        for (const operation of getTextDiffOperations(
-            oldChars.join(''),
-            intervalTokens.map(token => token.char).join(''),
-        )) {
-            const length = Array.from(String(operation.text || '')).length;
-            if (operation.type === 'equal') {
-                for (let offset = 0; offset < length; offset++) {
-                    const originalIndex = oldStart + oldCursor + offset;
-                    const token = intervalTokens[newCursor + offset];
-                    if ((stageRank[token.source] || 0) <= (stageRank[deletedSources[originalIndex]] || 0)) continue;
-                    token.originalIndex = originalIndex;
-                    token.source = 'original';
-                    deletedSources[originalIndex] = undefined;
-                }
-                oldCursor += length;
-                newCursor += length;
-            } else if (operation.type === 'delete') {
-                oldCursor += length;
-            } else {
-                newCursor += length;
-            }
-        }
-    }
-}
-
-function buildCharacterOffsets(chars) {
-    const offsets = [0];
-    chars.forEach(char => offsets.push(offsets[offsets.length - 1] + char.length));
-    return offsets;
-}
-
-function pushComposedOperation(operations, operation) {
-    const previous = operations[operations.length - 1];
-    const sameSource = previous?.source === operation.source;
-    const contiguous = operation.type === 'equal'
-        ? previous?.oldEnd === operation.oldStart && previous?.newEnd === operation.newStart
-        : operation.type === 'insert'
-            ? previous?.oldStart === operation.oldStart && previous?.newEnd === operation.newStart
-            : previous?.newStart === operation.newStart && previous?.oldEnd === operation.oldStart;
-    if (previous?.type === operation.type && sameSource && contiguous) {
-        previous.text += operation.text;
-        previous.oldEnd = operation.oldEnd;
-        previous.newEnd = operation.newEnd;
-        return;
-    }
-    operations.push(operation);
-}
-
-function composeStageOperations(originalText, stages) {
-    const originalChars = Array.from(originalText);
-    let tokens = originalChars.map((char, originalIndex) => ({ char, originalIndex, source: 'original' }));
-    const deletedSources = new Array(originalChars.length);
-    const stageRank = Object.fromEntries(stages.map((stage, index) => [stage.source, index + 1]));
-    let currentText = originalText;
-    stages.forEach((stage) => {
-        tokens = applyStageTransition(tokens, deletedSources, currentText, stage.text, stage.source);
-        restoreFinalEqualities(tokens, originalChars, deletedSources, stageRank);
-        currentText = stage.text;
-    });
-
-    const finalChars = tokens.map(token => token.char);
-    const oldOffsets = buildCharacterOffsets(originalChars);
-    const newOffsets = buildCharacterOffsets(finalChars);
-    const operations = [];
-    let oldCursor = 0;
-    let newCursor = 0;
-
-    while (oldCursor < originalChars.length || newCursor < tokens.length) {
-        const token = tokens[newCursor];
-        if (token && token.originalIndex === oldCursor) {
-            pushComposedOperation(operations, {
-                type: 'equal',
-                text: token.char,
-                oldStart: oldOffsets[oldCursor],
-                oldEnd: oldOffsets[oldCursor + 1],
-                newStart: newOffsets[newCursor],
-                newEnd: newOffsets[newCursor + 1],
-            });
-            oldCursor += 1;
-            newCursor += 1;
-            continue;
-        }
-        if (token && token.originalIndex === null) {
-            pushComposedOperation(operations, {
-                type: 'insert',
-                text: token.char,
-                source: token.source,
-                oldStart: oldOffsets[oldCursor],
-                oldEnd: oldOffsets[oldCursor],
-                newStart: newOffsets[newCursor],
-                newEnd: newOffsets[newCursor + 1],
-            });
-            newCursor += 1;
-            continue;
-        }
-        if (oldCursor < originalChars.length) {
-            pushComposedOperation(operations, {
-                type: 'delete',
-                text: originalChars[oldCursor],
-                source: deletedSources[oldCursor] || 'program',
-                oldStart: oldOffsets[oldCursor],
-                oldEnd: oldOffsets[oldCursor + 1],
-                newStart: newOffsets[newCursor],
-                newEnd: newOffsets[newCursor],
-            });
-            oldCursor += 1;
-            continue;
-        }
-        break;
-    }
-    return operations;
-}
-
-function getChangeWindows(annotatedOperations = [], originalText = '') {
-    const text = String(originalText);
-    const windows = [];
-    for (const operation of annotatedOperations) {
-        if (!operation || operation.type === 'equal' || !operation.text) continue;
-        const anchorStart = operation.type === 'insert' ? operation.oldStart : operation.oldStart;
-        const anchorEnd = operation.type === 'insert' ? operation.oldStart : operation.oldEnd;
-        const logicalWindow = getLogicalWindowForChange(text, anchorStart, anchorEnd);
-        windows.push({
-            ...logicalWindow,
-            anchorStart,
-            anchorEnd,
-        });
-    }
-
-    windows.sort((a, b) => a.start - b.start || a.anchorStart - b.anchorStart);
-    const merged = [];
-    for (const window of windows) {
-        const previous = merged[merged.length - 1];
-        if (!previous) {
-            merged.push({ ...window });
-            continue;
-        }
-
-        const gap = Math.max(0, window.start - previous.end);
-        const gapText = gap > 0 ? text.slice(previous.end, window.start) : '';
-        const mergedAnchorSpan = Math.max(previous.anchorEnd, window.anchorEnd) - Math.min(previous.anchorStart, window.anchorStart);
-        const shouldMerge = (window.start <= previous.end && mergedAnchorSpan <= snippetWindowCharLimit)
-            || (gap <= snippetJoinEqualChars && !hasLineBoundary(gapText) && !hasParagraphBoundary(gapText) && mergedAnchorSpan <= snippetWindowCharLimit);
-
-        if (shouldMerge) {
-            previous.start = Math.min(previous.start, window.start);
-            previous.end = Math.max(previous.end, window.end);
-            previous.anchorStart = Math.min(previous.anchorStart, window.anchorStart);
-            previous.anchorEnd = Math.max(previous.anchorEnd, window.anchorEnd);
-        } else {
-            merged.push({ ...window });
-        }
-    }
-
-    return merged
-        .map(window => clampWindowToLimit(window, text.length));
-}
-
-function renderOperationSlice(operation, start, end) {
-    if (!operation || !operation.text || end <= start) return '';
-    const slicedText = operation.text.slice(start - operation.oldStart, end - operation.oldStart);
-    if (!slicedText) return '';
-    return renderDiffOperation({ ...operation, text: slicedText, oldStart: start, oldEnd: end });
-}
-
-function renderDiffWindow(annotatedOperations = [], window) {
-    if (!window || window.end < window.start) return '';
+function projectDifferenceText(value) {
+    const source = String(value ?? '');
+    const spans = [];
     const parts = [];
-    if (window.hasPrefixEllipsis) parts.push('...');
+    let sourceStart = 0;
+    let offset = 0;
+    for (const range of [...collectVariableUpdateRanges(source), { start: source.length, end: source.length }]) {
+        if (sourceStart < range.start) {
+            const text = source.slice(sourceStart, range.start);
+            spans.push({ sourceStart, start: offset, end: offset + text.length });
+            parts.push(text);
+            offset += text.length;
+        }
+        sourceStart = range.end;
+    }
+    return { text: parts.join(''), spans, sourceLength: source.length };
+}
 
-    for (const operation of annotatedOperations) {
-        if (!operation?.text) continue;
-
-        if (operation.type === 'insert') {
-            if (operation.oldStart >= window.start && operation.oldStart <= window.end) {
-                parts.push(renderDiffOperation(operation));
+function getDifferencePairOperations(pair) {
+    const oldProjection = projectDifferenceText(pair.oldText);
+    const newProjection = projectDifferenceText(pair.newText);
+    const sides = [
+        { projection: oldProjection, prefix: 'old', skip: 'insert', index: 0, offset: 0 },
+        { projection: newProjection, prefix: 'new', skip: 'delete', index: 0, offset: 0 },
+    ];
+    const runs = [];
+    for (const operation of getTextDiffOperations(oldProjection.text, newProjection.text)) {
+        let cursor = 0;
+        while (cursor < operation.text.length) {
+            let length = operation.text.length - cursor;
+            const coordinates = {};
+            for (const side of sides) {
+                const { spans, sourceLength } = side.projection;
+                while (side.index < spans.length && spans[side.index].end <= side.offset) side.index++;
+                const span = spans[side.index];
+                coordinates[`${side.prefix}Start`] = span
+                    ? span.sourceStart + side.offset - span.start : sourceLength;
+                if (operation.type !== side.skip) length = Math.min(length, span.end - side.offset);
             }
+            for (const side of sides) {
+                const consumed = operation.type === side.skip ? 0 : length;
+                coordinates[`${side.prefix}End`] = coordinates[`${side.prefix}Start`] + consumed;
+                side.offset += consumed;
+            }
+            // Split at every omitted block on either side, keeping each run's raw offsets contiguous.
+            runs.push({ ...operation, text: operation.text.slice(cursor, cursor + length), ...coordinates });
+            cursor += length;
+        }
+    }
+    return runs;
+}
+
+function sliceDisplayRun(run, start, end) {
+    return {
+        ...run,
+        text: run.text.slice(start, end),
+        oldStart: run.oldStart + (run.type === 'insert' ? 0 : start),
+        oldEnd: run.oldStart + (run.type === 'insert' ? 0 : end),
+        newStart: run.newStart + (run.type === 'delete' ? 0 : start),
+        newEnd: run.newStart + (run.type === 'delete' ? 0 : end),
+    };
+}
+
+function getSnippetPairOperations(pair, operations) {
+    // Align complete stages before selecting bodies. A changed scope boundary
+    // must not turn prose retained in both stages into an insertion/deletion.
+    if (!pair.oldRanges?.length && !pair.newRanges?.length) {
+        return operations;
+    }
+    const sides = [
+        { ranges: pair.oldRanges || [], index: 0, start: 'oldStart', end: 'oldEnd', skip: 'insert' },
+        { ranges: pair.newRanges || [], index: 0, start: 'newStart', end: 'newEnd', skip: 'delete' },
+    ];
+    const selected = [];
+    for (const operation of operations) {
+        const intervals = [];
+        for (const side of sides) {
+            if (operation.type === side.skip) continue;
+            const start = operation[side.start];
+            const end = operation[side.end];
+            while (side.index < side.ranges.length && side.ranges[side.index].end <= start) side.index++;
+            for (let i = side.index; i < side.ranges.length && side.ranges[i].start < end; i++) {
+                const range = side.ranges[i];
+                const from = Math.max(start, range.start);
+                const to = Math.min(end, range.end);
+                if (from < to) intervals.push({ start: from - start, end: to - start });
+            }
+        }
+        // Equal context can be selected by either side; emit each interval once.
+        // This merges coordinates within one operation, never repeated text.
+        intervals.sort((a, b) => a.start - b.start || a.end - b.end);
+        let current = null;
+        for (const interval of intervals) {
+            if (current && interval.start <= current.end) {
+                current.end = Math.max(current.end, interval.end);
+            } else {
+                if (current) selected.push(sliceDisplayRun(operation, current.start, current.end));
+                current = interval;
+            }
+        }
+        if (current) selected.push(sliceDisplayRun(operation, current.start, current.end));
+    }
+    return selected;
+}
+
+/** The existing Full/Snippet renderer, now consuming independent recorded pairs. */
+export function renderDiffDocument(pairs, mode) {
+    const blocks = [];
+    for (const pair of pairs) {
+        const operations = getDifferencePairOperations(pair);
+        const runs = (mode === 'full'
+            ? operations
+            : getSnippetPairOperations(pair, operations))
+            .map(operation => ({ ...operation, section: pair.section }));
+        if (mode === 'full') {
+            const changed = runs.some(run => run.type !== 'equal');
+            blocks.push(`<div class="${changed ? 'blai-diff-full-modified' : 'blai-diff-full-normal'}">${renderDiffOperations(runs)}</div>`);
             continue;
         }
-
-        const overlapStart = Math.max(window.start, operation.oldStart);
-        const overlapEnd = Math.min(window.end, operation.oldEnd);
-        if (overlapEnd > overlapStart) {
-            parts.push(renderOperationSlice(operation, overlapStart, overlapEnd));
+        // Sentence boundaries provide local context only; omitted newline gaps
+        // are restored as units so whitespace-only changes are never discarded.
+        const displayText = runs.map(run => run.text).join('');
+        const units = [];
+        let cursor = 0;
+        for (const range of splitTextRangeIntoSentences(displayText, { start: 0, end: displayText.length })) {
+            if (cursor < range.start) units.push({ start: cursor, end: range.start });
+            units.push(range);
+            cursor = range.end;
+        }
+        if (cursor < displayText.length) units.push({ start: cursor, end: displayText.length });
+        let runIndex = 0;
+        let runStart = 0;
+        for (const unit of units) {
+            const parts = [];
+            while (runIndex < runs.length && runStart < unit.end) {
+                const run = runs[runIndex];
+                const runEnd = runStart + run.text.length;
+                if (runEnd > unit.start) {
+                    parts.push(sliceDisplayRun(run, Math.max(0, unit.start - runStart), Math.min(run.text.length, unit.end - runStart)));
+                }
+                if (runEnd > unit.end) break;
+                runStart = runEnd;
+                runIndex++;
+            }
+            if (parts.some(part => part.type !== 'equal')) {
+                blocks.push(`<div class="blai-diff-snippet">${renderDiffOperations(parts)}</div>`);
+            }
         }
     }
-
-    if (window.hasSuffixEllipsis) parts.push('...');
-    const html = parts.join('');
-    if (!html.trim() || !/<(?:del|ins)\b/.test(html)) return '';
-    return `<div class="blai-diff-snippet">${html}</div>`;
-}
-
-function buildDiffSnippetsFromOperations(operations = [], originalText = '') {
-    const annotatedOperations = annotateDiffOperations(operations);
-    const sourcedOperations = applyDefaultSource(annotatedOperations);
-    return buildDiffSnippetsFromAnnotatedOperations(sourcedOperations, originalText);
-}
-
-function buildDiffSnippetsFromAnnotatedOperations(annotatedOperations = [], originalText = '') {
-    return getChangeWindows(annotatedOperations, originalText)
-        .map(window => renderDiffWindow(annotatedOperations, window))
-        .filter(Boolean);
-}
-
-export function extractDiffDisplayText(rawText = '') {
-    const source = String(rawText ?? '');
-    const contentMatch = source.match(/<content>([\s\S]*?)<\/content>/i);
-    return contentMatch ? contentMatch[1].trim() : source;
-}
-
-export function buildDiffResultFromPair(rawText, cleanedText) {
-    if (typeof rawText !== 'string') return { cleanedText: rawText, snippets: [], fullDiff: "" };
-    if (typeof cleanedText !== 'string') throw new TypeError('Difference requires a stored Program string');
-    const normalizedCleanedText = cleanedText;
-    const displayText = extractDiffDisplayText(rawText);
-    const cleanedDisplayText = extractDiffDisplayText(normalizedCleanedText);
-    const displayOperations = getTextDiffOperations(displayText, cleanedDisplayText);
-    const snippets = buildDiffSnippetsFromOperations(displayOperations, displayText);
-    const fullDiff = buildFullDiffHtml(displayText, cleanedDisplayText);
-
-    return {
-        cleanedText: normalizedCleanedText,
-        snippets,
-        fullDiff,
-    };
-}
-
-export function buildDiffResultFromChain(rawText, programText, finalText) {
-    return buildDiffResultFromStages(rawText, programText, finalText, null, 'ai');
-}
-
-export function buildDiffResultFromStages(rawText, programText, aiText, manualText, finalSource = 'program') {
-    if (typeof rawText !== 'string') return { cleanedText: rawText, snippets: [], fullDiff: "" };
-    const hasAiStage = typeof aiText === 'string';
-    const aiBeforeProgram = hasAiStage && finalSource === 'program';
-    if (typeof programText !== 'string') throw new TypeError('Difference requires a stored Program string');
-    const normalizedProgramText = programText;
-    const automaticText = hasAiStage && !aiBeforeProgram ? aiText : normalizedProgramText;
-    const finalText = typeof manualText === 'string' ? manualText : automaticText;
-    const displayText = extractDiffDisplayText(rawText);
-    const finalDisplayText = extractDiffDisplayText(finalText);
-
-    if (displayText === finalDisplayText) {
-        return {
-            cleanedText: finalText,
-            snippets: [],
-            fullDiff: buildNormalFullDiffBlocks(displayText),
-        };
-    }
-
-    const stages = [];
-    if (aiBeforeProgram) stages.push({ text: extractDiffDisplayText(aiText), source: 'ai' });
-    stages.push({ text: extractDiffDisplayText(normalizedProgramText), source: 'program' });
-    if (hasAiStage && !aiBeforeProgram) stages.push({ text: extractDiffDisplayText(aiText), source: 'ai' });
-    if (typeof manualText === 'string') stages.push({ text: finalDisplayText, source: 'manual' });
-    const sourceToFinalOperations = composeStageOperations(displayText, stages);
-
-    return {
-        cleanedText: finalText,
-        snippets: buildDiffSnippetsFromAnnotatedOperations(sourceToFinalOperations, displayText),
-        fullDiff: buildFullDiffBlocksFromOperations(sourceToFinalOperations),
-    };
-}
-
-function buildNormalFullDiffBlocks(value = '') {
-    return String(value)
-        .split('\n')
-        .map(part => part.trim())
-        .filter(Boolean)
-        .map(part => `<div class="blai-diff-full-normal">${escapeHtml(part)}</div>`)
-        .join('');
+    return blocks;
 }
 
 export function renderFullTextDiffBlocks(operations = [], renderOperation = renderDiffOperation, classNames = {}) {
@@ -733,14 +337,4 @@ export function renderFullTextDiffBlocks(operations = [], renderOperation = rend
 
     flushBlock();
     return blocks.join('');
-}
-
-function buildFullDiffBlocksFromOperations(operations = []) {
-    return renderFullTextDiffBlocks(operations);
-}
-
-function buildFullDiffHtml(originalText, cleanedText) {
-    if (originalText === cleanedText) return buildNormalFullDiffBlocks(originalText);
-    const operations = applyDefaultSource(annotateDiffOperations(getTextDiffOperations(originalText, cleanedText)));
-    return buildFullDiffBlocksFromOperations(operations);
 }

@@ -80,52 +80,52 @@
 }
 
 .blai-diff-legend {
-    display: flex !important;
-    align-items: center !important;
-    flex-wrap: wrap !important;
-    gap: 8px 16px !important;
-    padding: 9px 16px !important;
-    border-bottom: 1px solid var(--border-color) !important;
-    color: var(--text-secondary) !important;
-    font-size: 12px !important;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 12px;
 }
 
 .blai-diff-legend-item {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    white-space: nowrap !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
 }
 
 .blai-diff-legend-item i {
-    width: 9px !important;
-    height: 9px !important;
-    border-radius: 999px !important;
-    background: var(--text-secondary) !important;
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    background: var(--text-secondary);
 }
 
 .blai-diff-legend-item[data-source="program"] {
-    color: var(--blai-diff-source-program-color) !important;
+    color: var(--blai-diff-source-program-color);
 }
 
 .blai-diff-legend-item[data-source="ai"] {
-    color: var(--blai-diff-source-ai-color) !important;
+    color: var(--blai-diff-source-ai-color);
 }
 
 .blai-diff-legend-item[data-source="manual"] {
-    color: var(--blai-diff-source-manual-color) !important;
+    color: var(--blai-diff-source-manual-color);
 }
 
 .blai-diff-legend-item[data-source="program"] i {
-    background: var(--blai-diff-source-program-color) !important;
+    background: var(--blai-diff-source-program-color);
 }
 
 .blai-diff-legend-item[data-source="ai"] i {
-    background: var(--blai-diff-source-ai-color) !important;
+    background: var(--blai-diff-source-ai-color);
 }
 
 .blai-diff-legend-item[data-source="manual"] i {
-    background: var(--blai-diff-source-manual-color) !important;
+    background: var(--blai-diff-source-manual-color);
 }
 
 .blai-diff-header-actions {
@@ -197,6 +197,10 @@
     flex: 0 0 16px !important;
     width: 16px !important;
     text-align: center !important;
+}
+
+.blai-diff-reverted-icon {
+    margin-right: 6px;
 }
 
 .blai-diff-inline-icon {
@@ -318,6 +322,21 @@
     color: var(--text-secondary) !important;
 }
 
+[data-blai-diff-section="program"] {
+    --blai-diff-stage-color: var(--blai-diff-source-program-color);
+    --blai-diff-stage-background: var(--blai-diff-source-program-background);
+}
+
+[data-blai-diff-section="ai"] {
+    --blai-diff-stage-color: var(--blai-diff-source-ai-color);
+    --blai-diff-stage-background: var(--blai-diff-source-ai-background);
+}
+
+[data-blai-diff-section="manual"] {
+    --blai-diff-stage-color: var(--blai-diff-source-manual-color);
+    --blai-diff-stage-background: var(--blai-diff-source-manual-background);
+}
+
 .blai-diff-snippet {
     display: block !important;
     line-height: 1.8 !important;
@@ -330,47 +349,23 @@
 }
 
 .blai-diff-snippet del {
-    color: var(--status-danger) !important;
-    background: transparent !important;
-    text-decoration: line-through !important;
-    text-decoration-thickness: 2px !important;
-    padding: 2px 4px !important;
-    border-radius: 4px !important;
-    margin: 0 2px !important;
+    color: var(--blai-diff-stage-color, var(--status-danger));
+    background: transparent;
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin: 0 2px;
 }
 
 .blai-diff-snippet ins {
-    color: var(--status-success) !important;
-    background: color-mix(in srgb, var(--status-success) 16%, transparent) !important;
-    text-decoration: none !important;
-    padding: 2px 4px !important;
-    border-radius: 4px !important;
-    margin: 0 2px !important;
-    font-weight: bold !important;
-}
-
-.blai-diff-snippet :is(ins, del)[data-blai-diff-source="program"] {
-    color: var(--blai-diff-source-program-color) !important;
-}
-
-.blai-diff-snippet ins[data-blai-diff-source="program"] {
-    background: var(--blai-diff-source-program-background) !important;
-}
-
-.blai-diff-snippet :is(ins, del)[data-blai-diff-source="ai"] {
-    color: var(--blai-diff-source-ai-color) !important;
-}
-
-.blai-diff-snippet ins[data-blai-diff-source="ai"] {
-    background: var(--blai-diff-source-ai-background) !important;
-}
-
-.blai-diff-snippet :is(ins, del)[data-blai-diff-source="manual"] {
-    color: var(--blai-diff-source-manual-color) !important;
-}
-
-.blai-diff-snippet ins[data-blai-diff-source="manual"] {
-    background: var(--blai-diff-source-manual-background) !important;
+    color: var(--blai-diff-stage-color, var(--status-success));
+    background: var(--blai-diff-stage-background, color-mix(in srgb, var(--status-success) 16%, transparent));
+    text-decoration: none;
+    padding: 2px 4px;
+    border-radius: 4px;
+    margin: 0 2px;
+    font-weight: bold;
 }
 
 .blai-diff-full-text {

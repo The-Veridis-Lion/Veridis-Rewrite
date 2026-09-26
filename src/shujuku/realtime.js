@@ -17,6 +17,7 @@ import {
 
 let pendingShujukuRewrite = null;
 let activeShujukuRewritePromise = null;
+let shujukuRewriteEpoch = 0;
 
 function readMessageIsolationKey(message) {
     return typeof message?.TavernDB_ACU_Identity === 'string'
@@ -233,6 +234,8 @@ function collectShujukuCellTargetsFromOperations(operations, tableData) {
             if (operation.headers !== undefined && operation.headers[columnIndex] !== header) continue;
             if (typeof currentValue !== 'string' || operation.cells[columnIndex] !== currentValue) continue;
             targets.push({
+                sheetKey: operation.sheetKey,
+                rowId: operation.rowId,
                 tableName: sheet.name,
                 rowIndex,
                 columnIndex,
@@ -390,33 +393,60 @@ function isAutomaticShujukuRewriteEnabled() {
     return getAppContext().extension_settings?.[extensionName]?.shujukuAutoProgramRewriteEnabled === true;
 }
 
-async function rewriteEligibleShujukuCells(api, targets) {
+async function rewriteEligibleShujukuCells(api, targets, messageIndex, messageRef) {
+    const chatRef = getAppContext().chat;
+    const chatIdentity = getCurrentChatIdentity();
+    const isolationKey = readPinnedShujukuActiveIsolationKey();
+    const messageIsolationKey = readMessageIsolationKey(messageRef);
+    const epoch = shujukuRewriteEpoch;
+    const isCurrent = () => epoch === shujukuRewriteEpoch
+        && getAppContext().chat === chatRef
+        && readPinnedShujukuActiveIsolationKey() === isolationKey
+        && readMessageIsolationKey(messageRef) === messageIsolationKey
+        && getCurrentLatestAssistantMessage(messageIndex, messageRef, chatIdentity) === messageRef;
     const rowBatches = [];
     for (const target of targets) {
         const rewritten = applyScopedReplacements(target.value);
         if (rewritten === target.value) continue;
 
         let batch = rowBatches.find(candidate => (
-            candidate.tableName === target.tableName && candidate.rowIndex === target.rowIndex
+            candidate.sheetKey === target.sheetKey && candidate.rowId === target.rowId
         ));
         if (!batch) {
             batch = {
+                sheetKey: target.sheetKey,
+                rowId: target.rowId,
                 tableName: target.tableName,
-                rowIndex: target.rowIndex,
                 data: {},
+                targets: [],
                 changedCount: 0,
             };
             rowBatches.push(batch);
         }
         batch.data[target.canonicalHeader] = rewritten;
+        batch.targets.push(target);
         batch.changedCount++;
     }
 
     let changes = 0;
     for (const batch of rowBatches) {
+        if (!isCurrent()) break;
+        const tableData = api.exportTableAsJson();
+        const sheet = tableData?.[batch.sheetKey];
+        if (!sheet || sheet.name !== batch.tableName || !hasUniqueTableName(tableData, batch.tableName)
+            || !Array.isArray(sheet.content) || !Array.isArray(sheet.content[0])) break;
+        const rowIndex = findUniqueRowIndex(sheet.content, batch.rowId);
+        const row = sheet.content[rowIndex];
+        if (rowIndex < 1 || batch.targets.some(target => (
+            sheet.content[0][target.columnIndex] !== target.canonicalHeader
+            || sheet.content[0].indexOf(target.canonicalHeader) !== target.columnIndex
+            || sheet.sourceData?.hiddenPhysicalColumns?.includes(target.canonicalHeader)
+            || row[target.columnIndex] !== target.value
+        ))) break;
+        // No await separates live identity/value validation from dispatch. Upstream owns the call thereafter.
         const saved = await api.updateRow({
             tableName: batch.tableName,
-            rowIndex: batch.rowIndex,
+            rowIndex,
             data: batch.data,
             skipNotify: true,
         });
@@ -437,6 +467,7 @@ export function markLatestMessageShujukuRewritePending(messageIndex, source = 'm
     const lateV1MigrationExpected = targetIsolationKey !== null
         && isSupportedLateV1Isolation(chat, targetIsolationKey);
     registerShujukuTableUpdateCallback();
+    clearPendingShujukuRewrite();
     pendingShujukuRewrite = {
         messageRef: message,
         messageIndex,
@@ -459,7 +490,7 @@ async function processPendingShujukuRewrite() {
         pending.chatIdentity,
         pending.lateV1MigrationExpected,
     );
-    if (!message) {
+    if (!message || readPinnedShujukuActiveIsolationKey() !== pending.targetIsolationKey) {
         if (pendingShujukuRewrite === pending) pendingShujukuRewrite = null;
         return;
     }
@@ -488,7 +519,7 @@ async function processPendingShujukuRewrite() {
         }
 
         if (pendingShujukuRewrite === pending) pendingShujukuRewrite = null;
-        const changedCount = await rewriteEligibleShujukuCells(api, targets);
+        const changedCount = await rewriteEligibleShujukuCells(api, targets, pending.messageIndex, message);
         if (changedCount > 0) {
             recordAiRewriteDebug('shujuku-program-commit', {
                 source: 'shujuku-auto',
@@ -541,6 +572,7 @@ export function registerShujukuTableUpdateCallback() {
 
 export function clearPendingShujukuRewrite() {
     pendingShujukuRewrite = null;
+    shujukuRewriteEpoch++;
 }
 
 export async function rewriteLatestMessageShujukuCells(messageIndex) {
@@ -564,7 +596,7 @@ export async function rewriteLatestMessageShujukuCells(messageIndex) {
             });
             return 0;
         }
-        const changedCount = await rewriteEligibleShujukuCells(api, targets);
+        const changedCount = await rewriteEligibleShujukuCells(api, targets, messageIndex, message);
         if (changedCount > 0) {
             recordAiRewriteDebug('shujuku-program-commit', {
                 source: 'shujuku-direct',

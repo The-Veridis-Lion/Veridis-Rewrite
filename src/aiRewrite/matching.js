@@ -5,6 +5,7 @@
  * persist chat data.
  */
 
+import { splitTextRangeIntoSentences as splitEditableRangeIntoSentences } from '../text/sentences.js';
 import { logger } from '../log.js';
 import { buildSimpleTargetPattern, buildTargetLiteralPattern, pickReplacement, resolveProcessorReplacement } from '../rules/engine.js';
 import { compileRegexTarget } from '../rules/regex.js';
@@ -12,6 +13,7 @@ import { collectMvuStatusPlaceholderRanges, normalizeOptionalXmlTagNameInput } f
 import { getZhVariantCompatOptions, isZhDictionaryReady } from '../zh/dictionary.js';
 import { collectXmlCommentRanges, maskXmlCommentRanges } from './commentProtection.js';
 import { collectScopeRanges } from './planning.js';
+import { collectVariableUpdateRanges, omitVariableUpdates } from '../text/variableUpdates.js';
 
 export function getAiXmlScopeTag(aiSettings) {
     const tagName = normalizeOptionalXmlTagNameInput(aiSettings?.xmlScopeTag, 'content');
@@ -27,9 +29,12 @@ export function escapeRegExp(value = '') {
     return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function collectAiXmlScopeSegments(text, aiSettings) {
+export function collectAiXmlScopeSegments(text, aiSettings, { includeEmpty = false } = {}) {
     const source = String(text || '');
-    const commentRanges = aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
+    const commentRanges = [
+        ...collectVariableUpdateRanges(source),
+        ...(aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : []),
+    ].sort((a, b) => a.start - b.start);
     const searchSource = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const { wholeMessage, tagName } = getAiXmlScopeTag(aiSettings);
     if (wholeMessage) {
@@ -55,7 +60,7 @@ export function collectAiXmlScopeSegments(text, aiSettings) {
         const endIndex = endMatch?.index ?? -1;
         if (endIndex < 0) break;
 
-        if (endIndex > bodyStart) {
+        if (includeEmpty || endIndex > bodyStart) {
             segments.push({
                 index: segments.length,
                 start: bodyStart,
@@ -73,9 +78,9 @@ export function collectAiXmlScopeSegments(text, aiSettings) {
 export function getAiXmlScopedRequestText(text, aiSettings) {
     const source = String(text || '');
     const segments = collectAiXmlScopeSegments(source, aiSettings);
-    if (segments.length === 0) return source;
+    if (segments.length === 0) return omitVariableUpdates(source);
     return segments
-        .map((segment) => source.slice(segment.outerStart, segment.outerEnd))
+        .map((segment) => omitVariableUpdates(source.slice(segment.outerStart, segment.outerEnd)))
         .join('\n');
 }
 
@@ -120,44 +125,6 @@ function subtractRanges(sourceRanges, excludedRanges) {
     }
 
     return remaining;
-}
-
-const sentenceTerminators = new Set(['。', '！', '？', '!', '?']);
-const sentenceContinuationPunctuation = new Set(['。', '！', '？', '!', '?', '…']);
-
-function splitEditableRangeIntoSentences(text, range) {
-    const sentences = [];
-    let sentenceStart = range.start;
-    let cursor = range.start;
-    const pushSentence = (end) => {
-        if (sentenceStart < end) sentences.push({ start: sentenceStart, end });
-        sentenceStart = end;
-    };
-
-    while (cursor < range.end) {
-        const char = text[cursor];
-        if (char === '\r' || char === '\n') {
-            pushSentence(cursor);
-            cursor += char === '\r' && text[cursor + 1] === '\n' ? 2 : 1;
-            sentenceStart = cursor;
-            continue;
-        }
-        // A single sentence-final period is distinct from an ellipsis or a decimal.
-        const isPeriodTerminator = char === '.'
-            && text[cursor - 1] !== '.'
-            && text[cursor + 1] !== '.'
-            && (cursor + 1 === range.end || /[\s”’」』）)*]/u.test(text[cursor + 1]));
-        if (sentenceTerminators.has(char) || isPeriodTerminator) {
-            let end = cursor + 1;
-            while (end < range.end && sentenceContinuationPunctuation.has(text[end])) end += 1;
-            pushSentence(end);
-            cursor = end;
-            continue;
-        }
-        cursor += 1;
-    }
-    pushSentence(range.end);
-    return sentences;
 }
 
 function collectCodeRanges(text) {
@@ -257,7 +224,10 @@ export function collectAiMatches(text, settings, aiSettings, options = {}) {
     if (segments.length === 0) return [];
     const codeRanges = collectCodeRanges(source);
     const placeholderRanges = collectMvuStatusPlaceholderRanges(source);
-    const commentRanges = aiSettings.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
+    const commentRanges = [
+        ...collectVariableUpdateRanges(source),
+        ...(aiSettings.protectXmlComments === true ? collectXmlCommentRanges(source) : []),
+    ].sort((a, b) => a.start - b.start);
     const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const scopeRanges = collectScopeRanges(scopeScanText, settings);
     const scopeTagMode = settings.scopeTagMode === 'cleanse-inside' ? 'cleanse-inside' : 'protect';
@@ -363,7 +333,10 @@ function collectEditableRanges(text, settings, aiSettings) {
     const xmlSegments = collectAiXmlScopeSegments(source, aiSettings);
     if (xmlSegments.length === 0) return [];
 
-    const commentRanges = aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : [];
+    const commentRanges = [
+        ...collectVariableUpdateRanges(source),
+        ...(aiSettings?.protectXmlComments === true ? collectXmlCommentRanges(source) : []),
+    ].sort((a, b) => a.start - b.start);
     const scopeScanText = commentRanges.length > 0 ? maskXmlCommentRanges(source, commentRanges) : source;
     const scopeRanges = collectScopeRanges(scopeScanText, settings);
     const scopeTagMode = settings?.scopeTagMode === 'cleanse-inside' ? 'cleanse-inside' : 'protect';

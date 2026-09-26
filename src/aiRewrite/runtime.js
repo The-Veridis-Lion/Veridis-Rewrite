@@ -3,9 +3,8 @@ import { getAppContext } from '../host/appContext.js';
 import { streamingRuntimeState } from '../host/streamingState.js';
 import { aiRewriteState } from './state.js';
 import { logger } from '../log.js';
-import { getMvuIntegrationSignal } from '../integrations/mvu.js';
 import { isAssistantMessage } from '../diff/tracking.js';
-import { getMessageDiffMeta } from '../diff/messageMeta.js';
+import { getMessageDiffMeta, isMessageDiffReverted } from '../diff/messageMeta.js';
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
 import { getCurrentChatIdentity } from '../host/context.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
@@ -338,7 +337,7 @@ function applyAiProgramFallback(taskLike, reason = '') {
 
     const msg = chat[index];
     if (!isAssistantMessage(msg)) return { applied: false, reason: 'not-assistant-message' };
-    if (msg?.__blai_is_reverted) return { applied: false, reason: 'message-reverted' };
+    if (isMessageDiffReverted(msg)) return { applied: false, reason: 'message-reverted' };
     if (taskLike?.messageRef && msg !== taskLike.messageRef) return { applied: false, reason: 'message-ref-changed' };
     if (taskLike?.automatic === true) {
         const validation = validateAutomaticAiRewriteContent(taskLike, { source: 'program-fallback' });
@@ -692,9 +691,10 @@ function buildAiRewriteCandidate(payload, options = {}) {
 
     const msg = chat[index];
     if (!isAssistantMessage(msg)) return { task: null, reason: '目标消息不是助手消息' };
-    if (msg?.__blai_is_reverted) return { task: null, reason: '目标消息已撤回净化' };
+    if (isMessageDiffReverted(msg)) return { task: null, reason: '目标消息已撤回净化' };
     const isAutomatic = payload?.automatic === true;
     if (isAutomatic) {
+        if (aiSettings.autoTriggerEnabled !== true) return { task: null, reason: '自动 AI 改写未启用' };
         const validation = generationLifecycle.validate(payload.generationId, {
             chatId: getCurrentChatIdentity(),
             chat,
@@ -716,10 +716,9 @@ function buildAiRewriteCandidate(payload, options = {}) {
     const frozenSnapshot = isAutomatic && payload && typeof payload === 'object' && typeof payload.snapshotText === 'string'
         ? payload.snapshotText
         : '';
-    const useLiveManualText = !isAutomatic && getMvuIntegrationSignal() === 'detected';
     const sourceText = isAutomatic
         ? (frozenSnapshot || currentText)
-        : (useLiveManualText ? currentText : (previous?.originalMes ?? currentText));
+        : (previous?.originalMes ?? currentText);
     if (!sourceText.trim()) return { task: null, reason: '目标消息为空' };
 
     const taskSettings = snapshotAiRewriteTaskSettings(settings, aiSettings);
@@ -762,7 +761,7 @@ function buildAiRewriteCandidate(payload, options = {}) {
             sentenceTargetCount: originalItems.length,
             itemLengths: originalItems.map((item) => item.text.length),
             isStreaming: streamingRuntimeState.isStreamingGeneration === true,
-            source: useLiveManualText ? 'live-message' : (!isAutomatic && previous ? 'retained-original' : 'host-original'),
+            source: !isAutomatic && previous ? 'retained-original' : 'host-original',
             rawSourceLength: currentText.length,
             sourceLength: sourceText.length,
             generationId: isAutomatic ? String(payload.generationId || '') : '',

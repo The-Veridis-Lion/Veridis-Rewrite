@@ -3,14 +3,15 @@
  * mutation and Diff metadata coordination; host DOM rendering is delegated to display.js.
  */
 import { extensionName } from '../settings/defaults.js';
-import { getAppContext } from '../host/appContext.js';
+import { getAppContext, getCurrentChatMetadata } from '../host/appContext.js';
 import { logger } from '../log.js';
-import { getLatestTrackableDiffIndices, isAssistantMessage } from '../diff/tracking.js';
-import { computeMessageSignature, diffRuntimeState, refreshDiffCacheIfStale, markDiffComparisonPending, syncTrackedIndicesToLatestAssistantMessages, clearTrackedDiffEntry } from '../diff/state.js';
+import { isAssistantMessage } from '../diff/tracking.js';
+import { refreshDiffViewer } from '../diff/state.js';
 import { ensureMessageDiffButton, injectDiffButtons } from '../diff/view.js';
 import { getMessageDomNode } from '../dom/message.js';
 import { commitCurrentMessageText, getMessageDiffBranchKey } from './messageBranch.js';
-import { clearAllMessageDiffMeta, isMessageAiFinal, isMessageFinalizedForCurrentBranch, isMessageManualFinal, writeMessageDiffProgram } from '../diff/messageMeta.js';
+import { getMessageDiffMeta, isMessageDiffReverted, migrateChatDiffMetadata, writeMessageDiffProgram } from '../diff/messageMeta.js';
+import { maintainDiffRetention } from '../diff/retention.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
 import { applyScopedReplacements, buildProcessors } from '../rules/engine.js';
 import { queueIncrementalChatSave } from './persistence.js';
@@ -80,7 +81,7 @@ export function syncMessageDiffMetadata(msg, sourceMes, cleanedMes) {
 }
 
 /**
- * 清理指定索引消息的数据并更新差异缓存。
+ * 清理指定索引消息，记录阶段并刷新已打开的差异视图。
  * @param {number} index 消息索引。
  * @returns {boolean} 是否发生数据变更。
  */
@@ -88,22 +89,12 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
     const { chat } = getAppContext();
     if (!Array.isArray(chat) || index < 0 || index >= chat.length) return false;
     const msg = chat[index];
-    if (!msg || typeof msg !== 'object') return false;
-    if (msg.__blai_is_reverted) return false;
-
-    const isAssistant = isAssistantMessage(msg);
-    if (!isAssistant) {
-        clearTrackedDiffEntry(index);
+    if (!msg || typeof msg.mes !== 'string') return false;
+    if (!isAssistantMessage(msg)) return false;
+    if (options.explicitRecleanse !== true && (getMessageDiffMeta(msg) || isMessageDiffReverted(msg))) {
+        refreshDiffViewer(index);
         return false;
     }
-    const trackDiff = getLatestTrackableDiffIndices().includes(index);
-
-    if (options.explicitRecleanse !== true && isMessageFinalizedForCurrentBranch(msg)) {
-        if (trackDiff) refreshDiffCacheIfStale(index);
-        return false;
-    }
-    if (isMessageAiFinal(msg)) return false;
-    if (isMessageManualFinal(msg) && options.allowManualFinal !== true) return false;
 
     const currentMes = typeof msg.mes === 'string' ? msg.mes : '';
     const sourceMes = typeof options.diffSourceMes === 'string' ? options.diffSourceMes : currentMes;
@@ -141,41 +132,10 @@ export function cleanseMessageDataAtIndex(index, options = {}) {
         }
     }
 
-    if (options.cleanAllSwipes === true && Array.isArray(msg.swipes)) {
-        for (let i = 0; i < msg.swipes.length; i++) {
-            if (`swipe:${i}` === getMessageDiffBranchKey(msg)) continue;
-            if (typeof msg.swipes[i] === 'string') {
-                const cleanedText = applyScopedReplacements(msg.swipes[i]);
-                if (cleanedText !== msg.swipes[i]) {
-                    msg.swipes[i] = cleanedText;
-                    changed = true;
-                    changedTargets++;
-                    changedSwipeCount++;
-                }
-            } else if (msg.swipes[i] && typeof msg.swipes[i] === 'object' && typeof msg.swipes[i].mes === 'string') {
-                const cleanedText = applyScopedReplacements(msg.swipes[i].mes);
-                if (cleanedText !== msg.swipes[i].mes) {
-                    msg.swipes[i].mes = cleanedText;
-                    changed = true;
-                    changedTargets++;
-                    changedSwipeCount++;
-                }
-            }
-        }
-    }
-
-    if (trackDiff) {
-        const { metadataChanged } = syncMessageDiffMetadata(
-            msg,
-            sourceMes,
-            typeof msg.mes === 'string' ? msg.mes : '',
-        );
-        if (metadataChanged) changed = true;
-        refreshDiffCacheIfStale(index, { finalization: 'program', dataChanged: changed });
-    } else {
-        if (clearAllMessageDiffMeta(msg)) changed = true;
-        clearTrackedDiffEntry(index, { persist: false });
-    }
+    const { metadataChanged } = syncMessageDiffMetadata(msg, sourceMes, msg.mes);
+    maintainDiffRetention();
+    if (metadataChanged) changed = true;
+    refreshDiffViewer(index);
 
     if (changed) markHostChatDirtyFromIndex(index);
     markLatestMessageShujukuRewritePending(index);
@@ -211,50 +171,15 @@ export function performIncrementalCleanse(payload, options = {}) {
     const msg = Array.isArray(chat) ? chat[index] : null;
     const assistant = isAssistantMessage(msg);
     if (!assistant) return;
-    if (msg?.__blai_is_reverted) {
-        clearTrackedDiffEntry(index);
-        injectDiffButtons([index]);
-        return;
-    }
-    if (isMessageManualFinal(msg)) {
-        refreshDiffCacheIfStale(index);
-        injectDiffButtons([index]);
-        return {
-            index,
-            messageRef: msg,
-            beforeText: typeof msg.mes === 'string' ? msg.mes : '',
-            afterText: typeof msg.mes === 'string' ? msg.mes : '',
-            dataChanged: false,
-            messageTextChanged: false,
-            displayedContentChanged: false,
-        };
-    }
     const beforeText = typeof msg.mes === 'string' ? msg.mes : '';
     const beforeDisplayText = msg?.extra?.display_text ?? msg?.mes;
-    if (assistant) {
-        const signature = computeMessageSignature(msg);
-        if (options.visualOnly) markDiffComparisonPending(index, signature);
-        else {
-            const previousState = diffRuntimeState.diffMessageStates.get(index);
-            if (isMessageFinalizedForCurrentBranch(msg)) {
-                refreshDiffCacheIfStale(index);
-                const messageNode = getMessageDomNode(index);
-                if (messageNode) ensureMessageDiffButton(index, messageNode);
-                return {
-                    index,
-                    messageRef: msg,
-                    beforeText,
-                    afterText: beforeText,
-                    dataChanged: false,
-                    messageTextChanged: false,
-                    displayedContentChanged: false,
-                };
-            }
-
-            if (!previousState || previousState.signature !== signature) {
-                markDiffComparisonPending(index, signature);
-            }
-        }
+    if (getMessageDiffMeta(msg) || isMessageDiffReverted(msg)) {
+        refreshDiffViewer(index);
+        injectDiffButtons([index]);
+        return {
+            index, messageRef: msg, beforeText, afterText: beforeText,
+            dataChanged: false, messageTextChanged: false, displayedContentChanged: false,
+        };
     }
 
     const dataChanged = options.visualOnly ? false : cleanseMessageDataAtIndex(index, {
@@ -286,12 +211,17 @@ export function performIncrementalCleanse(payload, options = {}) {
 }
 
 /**
- * 维护当前聊天的已持久化最终态、Diff 保留窗口与相关 UI。
+ * 迁移当前聊天的旧差异元数据，并投影最近消息的差异控件。
  * 此路径不执行 Program Rules，也不重新处理历史消息。
  * @returns {void}
  */
 export function performGlobalChatMaintenance() {
     logger.info(`[performGlobalChatMaintenance] 当前聊天维护开始`);
-    syncTrackedIndicesToLatestAssistantMessages({ cleanupHistoricalResidue: true });
+    const { chat } = getAppContext();
+    if (migrateChatDiffMetadata(chat, getCurrentChatMetadata())) {
+        markHostChatDirtyFromIndex(0);
+        queueIncrementalChatSave();
+    }
+    maintainDiffRetention();
     injectDiffButtons();
 }

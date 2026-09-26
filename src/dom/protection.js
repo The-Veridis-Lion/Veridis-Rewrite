@@ -2,7 +2,7 @@ import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { isCotScopeSkippingEnabled } from '../scope/model.js';
 import { loreFrameDomSelector } from '../integrations/loreFrame.js';
-import { isMessageManualFinal } from '../diff/messageMeta.js';
+import { isMessageDiffReverted } from '../diff/messageMeta.js';
 import { isUserMessageDomNode, resolveMessageIndexFromDomNode } from './message.js';
 
 /** Owns classification of DOM surfaces/text nodes that Veridis may or may not visually process. It does not mutate message data. */
@@ -139,19 +139,8 @@ export function isRevertedMessageDomNode(node) {
     const index = resolveMessageIndexFromDomNode(mesNode);
     const { chat } = getAppContext();
     const msg = Array.isArray(chat) ? chat[index] : null;
-    return msg?.__blai_is_reverted === true;
+    return isMessageDiffReverted(msg);
 }
-
-export function isManualFinalMessageDomNode(node) {
-    if (!node || node.nodeType !== 1) return false;
-    const mesNode = node.matches?.('.mes') ? node : node.closest?.('.mes');
-    if (!mesNode) return false;
-    const index = resolveMessageIndexFromDomNode(mesNode);
-    const { chat } = getAppContext();
-    const msg = Array.isArray(chat) ? chat[index] : null;
-    return isMessageManualFinal(msg);
-}
-
 
 export function isMessageOnAllowedSurface(messageNode) {
     if (!messageNode || !messageNode.closest) return false;

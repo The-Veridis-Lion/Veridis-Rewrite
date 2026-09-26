@@ -1,162 +1,170 @@
-/**
- * Owns Original -> optional AI -> Program for newly written message branches.
- * finalSource retains the last automatic stage; msg.mes owns later Manual edits.
- * Existing finalSource='ai'/'manual' entries retain their Program-before-AI order.
- */
-
+/** Owns each branch's replaceable stage record and text-free revert protection after eviction. */
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
+import { extensionName } from '../settings/defaults.js';
 
 const branchMetaKey = '__blai_diff_branch_meta';
+const messageProtectionKey = 'message';
 
 function isObject(value) {
-    return !!(value && typeof value === 'object');
+    return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function deleteValue(target, key) {
-    if (!Object.prototype.hasOwnProperty.call(target, key)) return false;
-    delete target[key];
-    return true;
+function isProtectionOnly(entry) {
+    return isObject(entry) && entry.reverted === true && Object.keys(entry).length === 1;
 }
 
-function getBranchMetaContainer(msg, create = false) {
-    if (!isObject(msg)) return null;
-    if (!isObject(msg[branchMetaKey])) {
-        if (!create) return null;
-        msg[branchMetaKey] = {};
-    }
-    return msg[branchMetaKey];
-}
-
-function normalizeBranchMeta(entry) {
-    if (!isObject(entry)
-        || typeof entry.originalMes !== 'string'
-        || typeof entry.programMes !== 'string') {
-        return null;
-    }
-    const hasAiTrace = entry.hasAiTrace === true;
-    const normalized = {
-        originalMes: entry.originalMes,
-        programMes: entry.programMes,
-        aiMes: hasAiTrace && typeof entry.aiMes === 'string' ? entry.aiMes : '',
-        hasAiTrace,
-        finalSource: entry.finalSource === 'manual'
-            ? 'manual'
-            : (hasAiTrace && entry.finalSource === 'ai' ? 'ai' : 'program'),
-    };
-    return normalized;
+function isCanonical(entry) {
+    return isObject(entry)
+        && typeof entry.originalMes === 'string'
+        && (entry.aiMes === null || typeof entry.aiMes === 'string')
+        && typeof entry.programMes === 'string'
+        && typeof entry.reverted === 'boolean'
+        && !Object.hasOwn(entry, 'hasAiTrace') && !Object.hasOwn(entry, 'finalSource');
 }
 
 export function getMessageDiffMeta(msg, branchKey = getMessageDiffBranchKey(msg)) {
-    return normalizeBranchMeta(getBranchMetaContainer(msg)?.[branchKey]);
+    if (!branchKey) return null;
+    const entry = msg?.[branchMetaKey]?.[branchKey];
+    return isCanonical(entry) ? {
+        originalMes: entry.originalMes,
+        aiMes: entry.aiMes,
+        programMes: entry.programMes,
+        reverted: entry.reverted,
+    } : null;
+}
+
+function writeBranchMeta(msg, branchKey, next) {
+    if (!isObject(msg) || !branchKey) return false;
+    if (!isCanonical(next)) throw new TypeError('Difference requires canonical stage texts and revert state');
+    const previous = getMessageDiffMeta(msg, branchKey);
+    const clearsMessageProtection = !next.reverted && isProtectionOnly(msg[branchMetaKey]?.[messageProtectionKey]);
+    if (!clearsMessageProtection && previous && Object.keys(next).every(key => previous[key] === next[key])) return false;
+    if (!isObject(msg[branchMetaKey])) msg[branchMetaKey] = {};
+    msg[branchMetaKey][branchKey] = next;
+    // Explicit recleanse releases the legacy message-wide choice after a successful commit.
+    if (clearsMessageProtection) delete msg[branchMetaKey][messageProtectionKey];
+    return true;
 }
 
 export function writeMessageDiffProgram(msg, branchKey, originalMes, programMes) {
-    if (!isObject(msg)) return false;
-    const normalizedBranchKey = branchKey || getMessageDiffBranchKey(msg);
-    const nextMeta = {
-        originalMes: String(originalMes ?? ''),
-        programMes: String(programMes ?? ''),
-        aiMes: '',
-        hasAiTrace: false,
-        finalSource: 'program',
-    };
-    const container = getBranchMetaContainer(msg, true);
-    const previous = normalizeBranchMeta(container[normalizedBranchKey]);
-    if (previous
-        && previous.originalMes === nextMeta.originalMes
-        && previous.programMes === nextMeta.programMes
-        && previous.hasAiTrace === false
-        && previous.finalSource === 'program') {
-        return false;
-    }
-    container[normalizedBranchKey] = nextMeta;
-    return true;
+    return writeBranchMeta(msg, branchKey, { originalMes, aiMes: null, programMes, reverted: false });
 }
 
 export function writeMessageDiffAiStage(msg, branchKey, originalMes, aiMes, programMes) {
-    if (!isObject(msg)) return false;
-    const normalizedBranchKey = branchKey || getMessageDiffBranchKey(msg);
-    const container = getBranchMetaContainer(msg, true);
-    const previous = normalizeBranchMeta(container[normalizedBranchKey]);
-    const nextMeta = {
-        originalMes: String(originalMes ?? ''),
-        aiMes: String(aiMes ?? ''),
-        programMes: String(programMes ?? ''),
-        hasAiTrace: true,
-        finalSource: 'program',
-    };
-    if (previous?.hasAiTrace
-        && previous.originalMes === nextMeta.originalMes
-        && previous.aiMes === nextMeta.aiMes
-        && previous.programMes === nextMeta.programMes
-        && previous.finalSource === 'program') return false;
-    container[normalizedBranchKey] = nextMeta;
-    return true;
+    return writeBranchMeta(msg, branchKey, { originalMes, aiMes, programMes, reverted: false });
 }
 
-/**
- * Manual text is already persisted in msg.mes. Leave automatic provenance intact;
- * return whether the edit has retained provenance whose presentation must refresh,
- * including edits that return exactly to the automatic result.
- */
-export function writeMessageDiffManualFinal(msg, branchKey = getMessageDiffBranchKey(msg)) {
-    return typeof msg?.mes === 'string' && getMessageDiffMeta(msg, branchKey) !== null;
+export function setMessageDiffReverted(msg, reverted, branchKey = getMessageDiffBranchKey(msg)) {
+    const entry = getMessageDiffMeta(msg, branchKey);
+    return entry ? writeBranchMeta(msg, branchKey, { ...entry, reverted }) : false;
+}
+
+export function isMessageDiffReverted(msg) {
+    const container = msg?.[branchMetaKey];
+    return isProtectionOnly(container?.[messageProtectionKey])
+        || container?.[getMessageDiffBranchKey(msg)]?.reverted === true;
+}
+
+/** Evict stage texts outside the window, retaining only explicit revert protection. */
+export function pruneChatDiffMetadata(chat, retainedIndices) {
+    if (!Array.isArray(chat)) return -1;
+    const retained = new Set(retainedIndices);
+    let firstChanged = -1;
+    for (let index = 0; index < chat.length; index++) {
+        const msg = chat[index];
+        const container = msg?.[branchMetaKey];
+        if (retained.has(index) || msg?.is_user === true || !isObject(container)) continue;
+        for (const [key, entry] of Object.entries(container)) {
+            if (isProtectionOnly(entry)) continue;
+            if (entry?.reverted === true) container[key] = { reverted: true };
+            else delete container[key];
+            if (firstChanged < 0) firstChanged = index;
+        }
+        if (Object.keys(container).length === 0) {
+            delete msg[branchMetaKey];
+            if (firstChanged < 0) firstChanged = index;
+        }
+    }
+    return firstChanged;
 }
 
 export function clearMessageDiffMeta(msg, branchKey = getMessageDiffBranchKey(msg)) {
-    if (!isObject(msg)) return false;
-    const container = getBranchMetaContainer(msg);
-    if (!container || !Object.prototype.hasOwnProperty.call(container, branchKey)) return false;
+    const container = msg?.[branchMetaKey];
+    if (!isObject(container) || !Object.hasOwn(container, branchKey)) return false;
     delete container[branchKey];
     if (Object.keys(container).length === 0) delete msg[branchMetaKey];
     return true;
 }
 
-export function clearAllMessageDiffMeta(msg) {
-    if (!isObject(msg)) return false;
-    let changed = deleteValue(msg, branchMetaKey);
-    for (const key of [
-        '__blai_original_mes',
-        '__blai_diff_source_signature',
-        '__blai_diff_last_cleaned_mes',
-        '__blai_diff_ai_program_mes',
-        '__blai_diff_ai_final_mes',
-        '__blai_diff_has_ai_trace',
-        '__blai_diff_final_source',
-        '__blai_diff_swipe_key',
-    ]) {
-        changed = deleteValue(msg, key) || changed;
+// Called by the existing host deletion listener after the host splices its Swipe arrays.
+export function deleteMessageDiffSwipe(msg, deletedIndex) {
+    const container = msg?.[branchMetaKey];
+    if (!isObject(container) || !Number.isInteger(deletedIndex) || deletedIndex < 0) return false;
+    const keys = Object.keys(container).filter(key => /^swipe:\d+$/.test(key))
+        .sort((a, b) => Number(a.slice(6)) - Number(b.slice(6)));
+    let changed = false;
+    for (const key of keys) {
+        const index = Number(key.slice(6));
+        if (index < deletedIndex) continue;
+        const entry = container[key];
+        delete container[key];
+        if (index > deletedIndex) container[`swipe:${index - 1}`] = entry;
+        changed = true;
     }
+    if (Object.keys(container).length === 0) delete msg[branchMetaKey];
     return changed;
 }
 
-export function getCurrentMessageOriginalMes(msg) {
-    return getMessageDiffMeta(msg)?.originalMes || '';
-}
-
-export function isMessageFinalizedForCurrentBranch(msg) {
-    // A retained branch owns an automatic result; any later different text is Manual.
-    return typeof msg?.mes === 'string' && getMessageDiffMeta(msg) !== null;
-}
-
-export function isMessageAiFinal(msg) {
-    return isMessageAiFinalForBranch(msg, getMessageDiffBranchKey(msg), msg?.mes);
-}
-
-export function isMessageAiFinalForBranch(msg, branchKey, messageText) {
-    const meta = getMessageDiffMeta(msg, branchKey);
-    return !!(
-        meta?.hasAiTrace
-        && meta.finalSource !== 'manual'
-        && msg?.__blai_is_reverted !== true
-        && typeof messageText === 'string'
-        && messageText === (meta.finalSource === 'ai' ? meta.aiMes : meta.programMes)
-    );
-}
-
-export function isMessageManualFinal(msg) {
-    const meta = getMessageDiffMeta(msg);
-    if (!meta || typeof msg?.mes !== 'string') return false;
-    if (meta.finalSource === 'manual') return true;
-    return msg.mes !== (meta.finalSource === 'ai' ? meta.aiMes : meta.programMes);
+/** Destructive one-time conversion at chat load; readers accept only canonical records. */
+export function migrateChatDiffMetadata(chat, chatMetadata) {
+    let changed = false;
+    for (const msg of Array.isArray(chat) ? chat : []) {
+        if (!isObject(msg)) continue;
+        const container = msg[branchMetaKey];
+        if (isObject(container)) {
+            for (const [key, entry] of Object.entries(container)) {
+                if (isCanonical(entry) || isProtectionOnly(entry)) continue;
+                const hasAi = entry?.hasAiTrace === true;
+                const compatible = isObject(entry)
+                    && (Object.hasOwn(entry, 'hasAiTrace') || Object.hasOwn(entry, 'finalSource'))
+                    && typeof entry.originalMes === 'string' && typeof entry.programMes === 'string'
+                    && (!hasAi || (entry.finalSource === 'program' && typeof entry.aiMes === 'string'));
+                if (compatible) {
+                    container[key] = {
+                        originalMes: entry.originalMes,
+                        aiMes: hasAi ? entry.aiMes : null,
+                        programMes: entry.programMes,
+                        reverted: false,
+                    };
+                } else delete container[key];
+                changed = true;
+            }
+            if (Object.keys(container).length === 0) {
+                delete msg[branchMetaKey];
+                changed = true;
+            }
+        }
+        // The legacy gate applied to the message, across all Swipes, until recleanse.
+        // Transfer that scope without requiring or reconstructing comparison texts.
+        if (msg.__blai_is_reverted === true) {
+            if (!isObject(msg[branchMetaKey])) msg[branchMetaKey] = {};
+            msg[branchMetaKey][messageProtectionKey] = { reverted: true };
+            changed = true;
+        }
+        for (const key of [
+            '__blai_is_reverted', '__blai_original_mes', '__blai_diff_source_signature',
+            '__blai_diff_last_cleaned_mes', '__blai_diff_ai_program_mes', '__blai_diff_ai_final_mes',
+            '__blai_diff_has_ai_trace', '__blai_diff_final_source', '__blai_diff_swipe_key',
+        ]) {
+            if (!Object.hasOwn(msg, key)) continue;
+            delete msg[key];
+            changed = true;
+        }
+    }
+    const cacheKey = `${extensionName}_diff_state_v3`;
+    if (isObject(chatMetadata) && Object.hasOwn(chatMetadata, cacheKey)) {
+        delete chatMetadata[cacheKey];
+        changed = true;
+    }
+    return changed;
 }

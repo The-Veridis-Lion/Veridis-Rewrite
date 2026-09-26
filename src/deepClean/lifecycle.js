@@ -13,7 +13,7 @@ import { planDeepCleanAiRequests } from './aiPlanning.js';
 import { executeDeepCleanAiRequests } from './aiProcessing.js';
 import { scanDeepCleanContentItems } from './scan.js';
 import { persistDeepCleanProposedBatch, persistDeepCleanReview } from './apply/index.js';
-import { createDeepCleanReviewSession, getDeepCleanReviewItemIndexes } from './review.js';
+import { createDeepCleanReviewSession, getDeepCleanReviewItemIndexes, waitForDeepCleanReviewEdits, cancelDeepCleanReviewComparisons } from './review.js';
 import {
     createDeepCleanSafeDiagnostic,
     recordDeepCleanFailure,
@@ -421,6 +421,8 @@ async function processNextDeepCleanBatch(lifecycle, onProgress) {
 
 function markDeepCleanStopped(lifecycle) {
     lifecycle.stopRequested = true;
+    lifecycle.reviewController?.abort();
+    cancelDeepCleanReviewComparisons(lifecycle.currentReviewSession);
     lifecycle.currentReviewSession = null;
     lifecycle.lookahead = null;
     lifecycle.diagnosticStartedAt = null;
@@ -542,7 +544,12 @@ export async function runDeepCleanProgramProcessing(options = {}) {
         if (!processed) {
             return { complete: true, summary: completeDeepCleanRun(lifecycle) };
         }
-        const session = createDeepCleanReviewSession(processed.processedRun, processed.batch.itemIndexes);
+        lifecycle.reviewController = new AbortController();
+        const session = await createDeepCleanReviewSession(processed.processedRun, processed.batch.itemIndexes, {
+            signal: lifecycle.reviewController.signal,
+        });
+        lifecycle.reviewController = null;
+        if (lifecycle.stopRequested) return null;
         lifecycle.currentReviewSession = session;
         deepCleanRuntimeState.deepCleanPhase = 'review';
         logger.info(`[Deep Clean] Review Batch sourceChars=${processed.batch.sourceCharacterCount} reviewItems=${session.reviewItemIndexes.length}`);
@@ -652,9 +659,7 @@ function finalizeDeepCleanFailure(lifecycle, terminalStage, failureCode, values 
         recordDeepCleanFailure(record);
         return record;
     } finally {
-        if (deepCleanRuntimeState.deepCleanSelection === lifecycle) {
-            deepCleanRuntimeState.deepCleanSelection = null;
-        }
+        markDeepCleanStopped(lifecycle);
         deepCleanRuntimeState.deepCleanPhase = 'error';
     }
 }
@@ -711,6 +716,8 @@ export async function runDeepCleanApply(options = {}) {
     deepCleanRuntimeState.deepCleanPhase = 'apply';
     const lookaheadPromise = lifecycle.lookahead?.promise;
     try {
+        await waitForDeepCleanReviewEdits(reviewSession);
+        if (lifecycle.stopRequested) return { stopped: true, nextSession: null };
         const result = await persistDeepCleanReview(reviewSession, {
             shouldStop: () => lifecycle.stopRequested,
             onProgress: options.onProgress,
@@ -739,7 +746,12 @@ export async function runDeepCleanApply(options = {}) {
         }
         if (lifecycle.lookahead?.processedRun) {
             const prepared = lifecycle.lookahead;
-            const nextSession = createDeepCleanReviewSession(prepared.processedRun, prepared.batch.itemIndexes);
+            lifecycle.reviewController = new AbortController();
+            const nextSession = await createDeepCleanReviewSession(prepared.processedRun, prepared.batch.itemIndexes, {
+                signal: lifecycle.reviewController.signal,
+            });
+            lifecycle.reviewController = null;
+            if (lifecycle.stopRequested) return { stopped: true, nextSession: null };
             lifecycle.lookahead = null;
             lifecycle.currentReviewSession = nextSession;
             deepCleanRuntimeState.deepCleanPhase = 'review';

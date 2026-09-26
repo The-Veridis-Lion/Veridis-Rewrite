@@ -245,6 +245,7 @@ export function bindAiSettingsEvents() {
             if (!$field.is(':focus')) $field.val(value);
         };
         $('#blai-ai-enabled').prop('checked', aiSettings.enabled === true);
+        $('#blai-ai-auto-trigger-enabled').prop('checked', aiSettings.autoTriggerEnabled === true);
         $('#blai-ai-protect-comments').prop('checked', aiSettings.protectXmlComments === true);
         const xmlScopeTag = normalizeOptionalXmlTagNameInput(aiSettings.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
         setValueIfNotFocused('#blai-ai-base-url', aiSettings.baseUrl || '');
@@ -331,6 +332,10 @@ export function bindAiSettingsEvents() {
         const aiSettings = ensureAiRewriteSettings();
         aiSettings.enabledDefaultApplied = true;
         updateAiRewriteSetting('enabled', enabled);
+    });
+
+    $(document).off('change', '#blai-ai-auto-trigger-enabled').on('change', '#blai-ai-auto-trigger-enabled', function() {
+        updateAiRewriteSetting('autoTriggerEnabled', $(this).prop('checked') === true, { markRulesDirty: false });
     });
 
     $(document).off('change', '#blai-ai-api-preset').on('change', '#blai-ai-api-preset', function() {

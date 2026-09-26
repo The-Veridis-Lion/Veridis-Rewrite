@@ -1,5 +1,43 @@
 import { resolveDeepCleanFinalProposedText } from './aiProcessing.js';
-import { getTextDiffOperations } from '../diff/compare.js';
+import { compareTextPairsInBackground } from '../diff/background.js';
+
+// Pending user edits are awaited before navigation or Apply; superseded work is terminated.
+const pendingEdits = new WeakMap();
+
+export async function waitForDeepCleanReviewEdits(session) {
+    const jobs = pendingEdits.get(session);
+    while (jobs?.size) await Promise.all([...jobs.values()].map(job => job.promise));
+}
+
+export function cancelDeepCleanReviewComparisons(session) {
+    const jobs = pendingEdits.get(session);
+    if (!jobs) return;
+    for (const job of jobs.values()) job.controller.abort();
+    jobs.clear();
+}
+
+function updateReviewBlock(session, itemIndex, blockIndex, block, property, editedText) {
+    if (!block) return Promise.resolve(session);
+    let jobs = pendingEdits.get(session);
+    if (!jobs) { jobs = new Map(); pendingEdits.set(session, jobs); }
+    const key = `${itemIndex}:${blockIndex}:${property}`;
+    jobs.get(key)?.controller.abort();
+    const controller = new AbortController();
+    const job = { controller, promise: null };
+    job.promise = updateDeepCleanReviewRuns(block[property], editedText, controller.signal)
+        .then(runs => {
+            if (controller.signal.aborted || jobs.get(key) !== job) return session;
+            block[property] = runs;
+            return session;
+        }).catch(error => {
+            if (!controller.signal.aborted) throw error;
+            return session;
+        }).finally(() => {
+            if (jobs.get(key) === job) jobs.delete(key);
+        });
+    jobs.set(key, job);
+    return job.promise;
+}
 
 function getContentItem(run, itemIndex) {
     const item = run?.contentItems?.[itemIndex];
@@ -62,7 +100,7 @@ function appendDeepCleanReviewRunRange(target, runs, start, length) {
     }
 }
 
-function updateDeepCleanReviewRuns(runs, editedText) {
+async function updateDeepCleanReviewRuns(runs, editedText, signal) {
     const previousRuns = Array.isArray(runs) ? runs : [];
     const previousText = resolveDeepCleanReviewRunsText(previousRuns);
     const nextText = String(editedText ?? '');
@@ -70,7 +108,8 @@ function updateDeepCleanReviewRuns(runs, editedText) {
 
     const nextRuns = [];
     let previousOffset = 0;
-    for (const operation of getTextDiffOperations(previousText, nextText)) {
+    const [operations] = await compareTextPairsInBackground([{ oldText: previousText, newText: nextText }], { signal });
+    for (const operation of operations) {
         const length = String(operation.text ?? '').length;
         if (operation.type === 'equal') {
             appendDeepCleanReviewRunRange(nextRuns, previousRuns, previousOffset, length);
@@ -84,7 +123,7 @@ function updateDeepCleanReviewRuns(runs, editedText) {
     return nextRuns;
 }
 
-function buildDeepCleanReviewBlocks(originalText, proposedText) {
+function buildDeepCleanReviewBlocks(operations) {
     const blocks = [];
     let oldText = '';
     let newText = '';
@@ -100,7 +139,7 @@ function buildDeepCleanReviewBlocks(originalText, proposedText) {
         newText = '';
     };
 
-    for (const operation of getTextDiffOperations(originalText, proposedText)) {
+    for (const operation of operations) {
         if (operation.type === 'equal') {
             flushChange();
             if (operation.text !== '') blocks.push({ type: 'equal', runs: createDeepCleanReviewRuns(operation.text, 'original') });
@@ -126,19 +165,19 @@ function getReviewEqualBlock(session, itemIndex, blockIndex) {
     return block?.type === 'equal' ? block : null;
 }
 
-export function createDeepCleanReviewSession(processedRun, itemIndexes = null) {
+export async function createDeepCleanReviewSession(processedRun, itemIndexes = null, { signal } = {}) {
     const reviewItemIndexes = getDeepCleanReviewItemIndexes(processedRun, itemIndexes);
+    const comparisons = await compareTextPairsInBackground(reviewItemIndexes.map(itemIndex => ({
+        oldText: getContentItem(processedRun, itemIndex).originalText,
+        newText: resolveDeepCleanFinalProposedText(processedRun, itemIndex),
+    })), { signal });
     return {
         processedRun,
         reviewItemIndexes,
-        reviewItems: reviewItemIndexes.map((itemIndex) => {
-            const item = getContentItem(processedRun, itemIndex);
+        reviewItems: reviewItemIndexes.map((itemIndex, position) => {
             return {
                 itemIndex,
-                blocks: buildDeepCleanReviewBlocks(
-                    item.originalText,
-                    resolveDeepCleanFinalProposedText(processedRun, itemIndex),
-                ),
+                blocks: buildDeepCleanReviewBlocks(comparisons[position]),
             };
         }),
         currentItemIndex: reviewItemIndexes[0] ?? null,
@@ -171,17 +210,14 @@ export function selectDeepCleanReviewBlock(session, itemIndex, blockIndex, activ
 
 export function setDeepCleanReviewBlockText(session, itemIndex, blockIndex, editedText) {
     const block = getReviewDiffBlock(session, itemIndex, blockIndex);
-    if (!block) return session;
+    if (!block) return Promise.resolve(session);
     const property = block.active === 'old' ? 'oldRuns' : 'newRuns';
-    block[property] = updateDeepCleanReviewRuns(block[property], editedText);
-    return session;
+    return updateReviewBlock(session, itemIndex, blockIndex, block, property, editedText);
 }
 
 export function setDeepCleanReviewEqualText(session, itemIndex, blockIndex, editedText) {
     const block = getReviewEqualBlock(session, itemIndex, blockIndex);
-    if (!block) return session;
-    block.runs = updateDeepCleanReviewRuns(block.runs, editedText);
-    return session;
+    return updateReviewBlock(session, itemIndex, blockIndex, block, 'runs', editedText);
 }
 
 export function resolveDeepCleanReviewedText(session, itemIndex) {

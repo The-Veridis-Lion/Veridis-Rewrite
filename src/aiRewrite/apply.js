@@ -3,7 +3,8 @@ import { refreshMessageDisplay } from '../chat/display.js';
 import { queueIncrementalChatSave } from '../chat/persistence.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
 import { applyScopedCompiledReplacements } from '../rules/engine.js';
-import { refreshDiffCacheIfStale } from '../diff/state.js';
+import { refreshDiffViewer } from '../diff/state.js';
+import { maintainDiffRetention } from '../diff/retention.js';
 import { getMessageDiffMeta, writeMessageDiffAiStage, writeMessageDiffProgram } from '../diff/messageMeta.js';
 import { beginAtomicMessageDisplaySwap } from '../dom/message.js';
 import { markHostChatDirtyFromIndex } from '../integrations/tauriTavern.js';
@@ -14,7 +15,7 @@ import { recordAiRewriteDebug } from './debug.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
 
 // Owns Original-based AI/fallback composition, the final normal Program pass,
-// and the atomic message/Swipe + branch-provenance commit boundary.
+// manual tail preservation, and the atomic message/Swipe + branch-provenance commit.
 
 function rangesOverlap(left, right) {
     return left.start < right.end && right.start < left.end;
@@ -44,8 +45,7 @@ function messageStagesEqual(left, right) {
     return left.originalMes === right.originalMes
         && left.programMes === right.programMes
         && left.aiMes === right.aiMes
-        && left.hasAiTrace === right.hasAiTrace
-        && left.finalSource === right.finalSource;
+        && left.reverted === right.reverted;
 }
 
 function commitRewriteText(taskLike, prepared, mode) {
@@ -59,6 +59,7 @@ function commitRewriteText(taskLike, prepared, mode) {
     const currentText = String(prepared.currentText ?? '');
     const originalText = String(prepared.originalText ?? '');
     const programText = String(prepared.programText ?? '');
+    const finalText = String(prepared.finalText ?? '');
     const aiText = mode === 'ai' ? String(prepared.aiText ?? '') : null;
     const branchKey = String(taskLike.branchKey || getMessageDiffBranchKey(msg));
     if (msg.mes !== currentText) return { committed: false, reason: 'message-text-changed' };
@@ -69,10 +70,10 @@ function commitRewriteText(taskLike, prepared, mode) {
         return { committed: false, reason: 'message-stage-changed' };
     }
 
-    const textChanged = programText !== currentText;
+    const textChanged = finalText !== currentText;
     const atomicSwap = textChanged ? beginAtomicMessageDisplaySwap(index) : null;
     try {
-        const textCommit = commitCurrentMessageText(msg, programText, branchKey);
+        const textCommit = commitCurrentMessageText(msg, finalText, branchKey);
         if (!textCommit.ok) {
             atomicSwap?.release();
             return { committed: false, reason: textCommit.reason };
@@ -83,7 +84,8 @@ function commitRewriteText(taskLike, prepared, mode) {
         const metadataChanged = mode === 'ai'
             ? writeMessageDiffAiStage(msg, branchKey, originalText, aiText, programText)
             : writeMessageDiffProgram(msg, branchKey, originalText, programText);
-        refreshDiffCacheIfStale(index, { finalization: 'ai' });
+        maintainDiffRetention();
+        refreshDiffViewer(index);
 
         if (textChanged || metadataChanged) {
             markHostChatDirtyFromIndex(index);
@@ -98,7 +100,7 @@ function commitRewriteText(taskLike, prepared, mode) {
             generationId: taskLike.generationId || '',
             index,
             beforeLength: currentText.length,
-            afterLength: programText.length,
+            afterLength: finalText.length,
             mode,
         });
         return { committed: true, reason: '' };
@@ -133,8 +135,22 @@ function applyRewritePlan(task, selectedReplacements, mode) {
     if (task.automatic !== true && !messageStagesEqual(previous, task.claimedMeta || null)) {
         return { appliedCount: 0, reason: 'message-stage-changed' };
     }
-    // Automatic composition reads live text; manual composition uses its captured source.
+    // Automatic composition reads live text; manual composition uses retained Original.
     const originalText = task.automatic === true ? currentText : task.originalText;
+    let preservedTail = '';
+    let trimProgramEnd = false;
+    if (task.automatic !== true && previous) {
+        // MVU appends to trimEnd() + two newlines; retain that separator even
+        // when the old stage's trailing newlines also form an exact prefix.
+        const trimmedProgram = previous.programMes.trimEnd();
+        trimProgramEnd = currentText !== previous.programMes
+            && currentText.startsWith(trimmedProgram + '\n\n');
+        const previousPrefix = trimProgramEnd ? trimmedProgram : previous.programMes;
+        if (!currentText.startsWith(previousPrefix)) {
+            return { appliedCount: 0, reason: 'message-program-stage-changed' };
+        }
+        preservedTail = currentText.slice(previousPrefix.length);
+    }
     const selectedItems = mode === 'ai'
         ? task.items.filter((item) => selectedReplacements.has(item.id))
         : task.items;
@@ -169,12 +185,13 @@ function applyRewritePlan(task, selectedReplacements, mode) {
     );
     const desiredStage = {
         originalMes: originalText,
-        aiMes: mode === 'ai' ? composition.text : '',
+        aiMes: mode === 'ai' ? composition.text : null,
         programMes: programText,
-        hasAiTrace: mode === 'ai',
-        finalSource: 'program',
+        reverted: false,
     };
-    if (programText === currentText && messageStagesEqual(previous, desiredStage)) {
+    // External tail text belongs only to the live message, never to the stage chain.
+    const finalText = (trimProgramEnd ? programText.trimEnd() : programText) + preservedTail;
+    if (finalText === currentText && messageStagesEqual(previous, desiredStage)) {
         if (task.automatic === true) generationLifecycle.clearStreamingProgram(task.generationId);
         recordAiRewriteDebug('apply-skip', { reason: 'no-text-change', generationId: task.generationId || '' }, 'warn');
         return { appliedCount: 0, reason: 'no-text-change' };
@@ -184,6 +201,7 @@ function applyRewritePlan(task, selectedReplacements, mode) {
         originalText,
         aiText: mode === 'ai' ? composition.text : null,
         programText,
+        finalText,
         previousMeta: previous,
     }, mode);
     if (!commitResult.committed) {
@@ -199,7 +217,7 @@ function applyRewritePlan(task, selectedReplacements, mode) {
         appliedCount: selectedItems.length,
         strategies: replacements.map((replacement) => replacement.strategy),
         beforeLength: currentText.length,
-        afterLength: programText.length,
+        afterLength: finalText.length,
     });
     return { appliedCount: selectedItems.length, committed: true, reason: '' };
 }

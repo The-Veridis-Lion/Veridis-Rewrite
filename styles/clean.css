@@ -104,44 +104,20 @@
 }
 
 .blai-diff-full-modified:not(.blai-deep-clean-review-modified) del {
-    color: var(--status-danger) !important;
-    background: transparent !important;
-    text-decoration: line-through !important;
-    padding: 0 3px !important;
-    border-radius: 3px !important;
+    color: var(--blai-diff-stage-color, var(--status-danger));
+    background: transparent;
+    text-decoration: line-through;
+    padding: 0 3px;
+    border-radius: 3px;
 }
 
 .blai-diff-full-modified:not(.blai-deep-clean-review-modified) ins {
-    color: var(--status-success) !important;
-    background: color-mix(in srgb, var(--bg-base) 12%, transparent) !important;
-    text-decoration: none !important;
-    padding: 0 3px !important;
-    border-radius: 3px !important;
-    font-weight: 600 !important;
-}
-
-.blai-diff-full-modified:not(.blai-deep-clean-review-modified) :is(ins, del)[data-blai-diff-source="program"] {
-    color: var(--blai-diff-source-program-color) !important;
-}
-
-.blai-diff-full-modified:not(.blai-deep-clean-review-modified) ins[data-blai-diff-source="program"] {
-    background: var(--blai-diff-source-program-background) !important;
-}
-
-.blai-diff-full-modified:not(.blai-deep-clean-review-modified) :is(ins, del)[data-blai-diff-source="ai"] {
-    color: var(--blai-diff-source-ai-color) !important;
-}
-
-.blai-diff-full-modified:not(.blai-deep-clean-review-modified) ins[data-blai-diff-source="ai"] {
-    background: var(--blai-diff-source-ai-background) !important;
-}
-
-.blai-diff-full-modified:not(.blai-deep-clean-review-modified) :is(ins, del)[data-blai-diff-source="manual"] {
-    color: var(--blai-diff-source-manual-color) !important;
-}
-
-.blai-diff-full-modified:not(.blai-deep-clean-review-modified) ins[data-blai-diff-source="manual"] {
-    background: var(--blai-diff-source-manual-background) !important;
+    color: var(--blai-diff-stage-color, var(--status-success));
+    background: var(--blai-diff-stage-background, color-mix(in srgb, var(--bg-base) 12%, transparent));
+    text-decoration: none;
+    padding: 0 3px;
+    border-radius: 3px;
+    font-weight: 600;
 }
 
 @media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-card {

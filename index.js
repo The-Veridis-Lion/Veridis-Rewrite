@@ -16,7 +16,6 @@ import { updateToolbarUI } from './src/presets/view.js';
 import { applyCharacterPresetBinding } from './src/presets/application.js';
 import { showRiskConfirmModal } from './src/ui/notifications.js';
 import { cleanupInvalidPresetBindings } from './src/presets/bindings.js';
-import { restoreDiffStateFromChatMetadata } from './src/diff/state.js';
 import { performGlobalChatMaintenance } from './src/chat/cleanse.js';
 import { buildPresetEntry, getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetRules } from './src/presets/model.js';
 import { normalizeRuleActivationSafety } from './src/rules/model.js';
@@ -28,12 +27,12 @@ import { normalizeZhVariantSettings, restoreZhDictionaryPackageFromCache } from 
 import { createDefaultSettings, ensureSettingsShape, maybeCopyLegacySettings, maybeImportModifiedSettingsIntoSharedNamespace, migrateOldData, needsCustomGlobalPromptMigrationConfirmation, resolveCustomGlobalPromptMigration } from './src/settings/migration.js';
 import { syncComposerButtonScript } from './src/aiRewrite/composerButton.js';
 import { readExtensionManifest } from './src/host/extensionManifest.js';
+import { resolveExtensionIdentity } from './src/host/extensionIdentity.js';
 import { collectInstalledEnabledExtensions, getEnabledExtensionExternalIds } from './src/feedback/payload.js';
 import { bindUpdateStatusEvents, initializeUpdateStatus } from './src/update/status.js';
 
 const { extension_settings, getContext: getSillyTavernContext } = extensionsModule;
-const veridisExternalId = 'third-party/Veridis-Rewrite';
-const veridisExtensionFolderName = 'Veridis-Rewrite';
+const { externalId: veridisExternalId, folderName: veridisExtensionFolderName, templateDirectory } = resolveExtensionIdentity(import.meta.url);
 let isBooted = false;
 let veridisCommit = '';
 
@@ -90,6 +89,7 @@ initAppContext({
     setWorldInfoCache: (name, data) => worldInfoCache.set(name, data),
     getCurrentPersonaIdentity: () => user_avatar,
     veridisExternalId,
+    veridisExtensionFolderName,
     readExtensionManifest: readHostExtensionManifest,
     getVeridisCommit: () => veridisCommit,
     getSillyTavernVersion: () => scriptModule.CLIENT_VERSION,
@@ -144,7 +144,7 @@ jQuery(() => {
         if (isTauriTavernHost()) logger.info('[屏蔽词净化助手] 已启用 TauriTavern 兼容层');
         if (isBaiBaiToolkitInstalled()) logger.info('[屏蔽词净化助手] 已启用柏宝箱兼容层');
         if (isLoreFrameInstalled()) logger.info('[屏蔽词净化助手] 已启用 LoreFrame 兼容层');
-        await setupUI(extensionsModule.renderExtensionTemplateAsync);
+        await setupUI(extensionsModule.renderExtensionTemplateAsync, templateDirectory);
         const aiRewrite = extension_settings[extensionName].aiRewrite;
         if (needsCustomGlobalPromptMigrationConfirmation(aiRewrite)) {
             const accepted = await showRiskConfirmModal('【屏蔽词净化助手 AI 改写版】的全局提示词写法已经更新。检测到你当前使用的是自定义提示词，是否应用新版默认全局提示词？');
@@ -157,7 +157,6 @@ jQuery(() => {
         initRealtimeInterceptor();
         updateToolbarUI();
         applyCharacterPresetBinding(true);
-        restoreDiffStateFromChatMetadata();
         performGlobalChatMaintenance();
         logger.info('[屏蔽词净化助手] 启动初始化完成');
         void (async () => {

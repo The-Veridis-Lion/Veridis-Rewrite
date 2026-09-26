@@ -23,6 +23,7 @@ import {
     setDeepCleanReviewEqualText,
     setDeepCleanReviewCurrentItem,
     setDeepCleanReviewViewMode,
+    waitForDeepCleanReviewEdits,
 } from './review.js';
 import {
     closeDeepCleanInitialSelection,
@@ -40,6 +41,19 @@ import {
 } from './view.js';
 
 export function bindDeepCleanEvents() {
+const showReviewError = (error) => {
+    logger.error('[Deep Clean] Review comparison failed', error);
+    if (getDeepCleanReviewSession()) requestDeepCleanStop();
+    showDeepCleanInitialSelectionError(error);
+};
+const withReadyReview = async (action) => {
+    const session = getDeepCleanReviewSession();
+    if (!session) return;
+    try {
+        await waitForDeepCleanReviewEdits(session);
+        if (getDeepCleanReviewSession() === session) action(session);
+    } catch (error) { showReviewError(error); }
+};
 const renderDeepCleanSelection = (selection = getDeepCleanInitialSelection()) => {
     renderDeepCleanInitialSelection(selection, getAppContext().extension_settings[extensionName]?.presets || {});
 };
@@ -64,7 +78,7 @@ $(document).off('click', '#blai-deep-clean-btn').on('click', '#blai-deep-clean-b
     const activePhase = ['frozen', 'scan-result', 'batch-processing', 'review', 'apply', 'stopping'].includes(deepCleanRuntimeState.deepCleanPhase);
     openDeepCleanInitialSelection({ preserveContent: activePhase || deepCleanRuntimeState.deepCleanPhase === 'initial-selection' });
     if (activeSession) {
-        renderDeepCleanReview(activeSession, getDeepCleanLookaheadProgress());
+        await withReadyReview(session => renderDeepCleanReview(session, getDeepCleanLookaheadProgress()));
         return;
     }
     if (deepCleanRuntimeState.deepCleanPhase === 'initial-selection') {
@@ -126,15 +140,15 @@ const focusDeepCleanReviewBlock = (blockIndex, branch) => {
     selection.addRange(range);
 };
 const chooseDeepCleanReviewBlock = (element) => {
-    const session = getDeepCleanReviewSession();
-    if (!session) return;
     const blockIndex = Number($(element).attr('data-deep-clean-review-block-index'));
     const branch = String($(element).attr('data-deep-clean-review-block-branch') || '');
     const alreadyActive = element.classList.contains('is-active');
     if (alreadyActive) return;
-    selectDeepCleanReviewBlock(session, session.currentItemIndex, blockIndex, branch);
-    renderDeepCleanReview(session, getDeepCleanLookaheadProgress());
-    focusDeepCleanReviewBlock(blockIndex, branch);
+    return withReadyReview(session => {
+        selectDeepCleanReviewBlock(session, session.currentItemIndex, blockIndex, branch);
+        renderDeepCleanReview(session, getDeepCleanLookaheadProgress());
+        focusDeepCleanReviewBlock(blockIndex, branch);
+    });
 };
 
 $(document).off('click', '[data-deep-clean-review-block-branch]').on('click', '[data-deep-clean-review-block-branch]', function() {
@@ -152,34 +166,34 @@ $(document).off('input', '[data-deep-clean-review-block-branch].is-active').on('
     const session = getDeepCleanReviewSession();
     if (!session) return;
     const blockIndex = Number($(this).attr('data-deep-clean-review-block-index'));
-    setDeepCleanReviewBlockText(session, session.currentItemIndex, blockIndex, this.innerText);
+    setDeepCleanReviewBlockText(session, session.currentItemIndex, blockIndex, this.innerText).catch(showReviewError);
 });
 
 $(document).off('input', '[data-deep-clean-review-equal-block-index]').on('input', '[data-deep-clean-review-equal-block-index]', function() {
     const session = getDeepCleanReviewSession();
     if (!session) return;
     const blockIndex = Number($(this).attr('data-deep-clean-review-equal-block-index'));
-    setDeepCleanReviewEqualText(session, session.currentItemIndex, blockIndex, this.innerText);
+    setDeepCleanReviewEqualText(session, session.currentItemIndex, blockIndex, this.innerText).catch(showReviewError);
 });
 
 $(document).off('click', '[data-deep-clean-review-view]').on('click', '[data-deep-clean-review-view]', function() {
-    const session = getDeepCleanReviewSession();
-    if (!session) return;
     const viewMode = String($(this).attr('data-deep-clean-review-view') || '');
-    if (session.viewMode === viewMode) return;
-    setDeepCleanReviewViewMode(session, viewMode);
-    renderDeepCleanReview(session, getDeepCleanLookaheadProgress());
+    return withReadyReview(session => {
+        if (session.viewMode === viewMode) return;
+        setDeepCleanReviewViewMode(session, viewMode);
+        renderDeepCleanReview(session, getDeepCleanLookaheadProgress());
+    });
 });
 
 $(document).off('click', '[data-deep-clean-review-nav]').on('click', '[data-deep-clean-review-nav]', function() {
-    const session = getDeepCleanReviewSession();
-    if (!session) return;
-    const position = session.reviewItemIndexes.indexOf(session.currentItemIndex);
     const direction = String($(this).attr('data-deep-clean-review-nav') || '');
-    const nextPosition = direction === 'previous' ? position - 1 : position + 1;
-    if (nextPosition < 0 || nextPosition >= session.reviewItemIndexes.length) return;
-    setDeepCleanReviewCurrentItem(session, session.reviewItemIndexes[nextPosition]);
-    renderDeepCleanReview(session, getDeepCleanLookaheadProgress());
+    return withReadyReview(session => {
+        const position = session.reviewItemIndexes.indexOf(session.currentItemIndex);
+        const nextPosition = direction === 'previous' ? position - 1 : position + 1;
+        if (nextPosition < 0 || nextPosition >= session.reviewItemIndexes.length) return;
+        setDeepCleanReviewCurrentItem(session, session.reviewItemIndexes[nextPosition]);
+        renderDeepCleanReview(session, getDeepCleanLookaheadProgress());
+    });
 });
 
 $(document).off('click', '#blai-deep-clean-stop').on('click', '#blai-deep-clean-stop', function() {
@@ -192,6 +206,8 @@ $(document).off('click', '#blai-deep-clean-apply').on('click', '#blai-deep-clean
     const session = getDeepCleanReviewSession();
     if (!session) return;
     $(this).prop('disabled', true);
+    $('#blai-deep-clean-content [contenteditable="true"]').attr('contenteditable', 'false');
+    $('#blai-deep-clean-content [contenteditable="true"]').attr('contenteditable', 'false');
     try {
         const result = await runDeepCleanApply({
             onProgress: renderDeepCleanApplyProgress,
