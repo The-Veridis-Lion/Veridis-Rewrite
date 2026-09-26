@@ -43,6 +43,7 @@ import {
 export function bindDeepCleanEvents() {
 const showReviewError = (error) => {
     logger.error('[Deep Clean] Review comparison failed', error);
+    if (getDeepCleanReviewSession()) requestDeepCleanStop();
     showDeepCleanInitialSelectionError(error);
 };
 const withReadyReview = async (action) => {

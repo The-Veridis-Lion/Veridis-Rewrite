@@ -659,9 +659,7 @@ function finalizeDeepCleanFailure(lifecycle, terminalStage, failureCode, values 
         recordDeepCleanFailure(record);
         return record;
     } finally {
-        if (deepCleanRuntimeState.deepCleanSelection === lifecycle) {
-            deepCleanRuntimeState.deepCleanSelection = null;
-        }
+        markDeepCleanStopped(lifecycle);
         deepCleanRuntimeState.deepCleanPhase = 'error';
     }
 }

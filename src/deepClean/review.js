@@ -28,11 +28,12 @@ function updateReviewBlock(session, itemIndex, blockIndex, block, property, edit
         .then(runs => {
             if (controller.signal.aborted || jobs.get(key) !== job) return session;
             block[property] = runs;
-            jobs.delete(key);
             return session;
         }).catch(error => {
             if (!controller.signal.aborted) throw error;
             return session;
+        }).finally(() => {
+            if (jobs.get(key) === job) jobs.delete(key);
         });
     jobs.set(key, job);
     return job.promise;
