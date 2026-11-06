@@ -278,6 +278,9 @@ export const defaultAiRewriteSettings = {
     modelOptions: [],
     apiPresets: {},
     activeApiPreset: "",
+    excludedParameters: "",
+    additionalParameters: "",
+    streamingEnabled: false,
     temperature: 0.3,
     topP: 1,
     topK: 0,
@@ -336,6 +339,8 @@ export const defaultSettings = {
     showBottomDiffButton: true,
     diffTrackedMessageLimit: defaultTrackedDiffMessages,
     themeMode: "auto",
+    uiFontScale: 1,
+    diffFontScale: 1,
     logLevel: 2,  // 0=off, 1=error, 2=warn(default), 3=info, 4=debug
     skipUserMessages: false,
     showComposerAiRewriteButton: false,

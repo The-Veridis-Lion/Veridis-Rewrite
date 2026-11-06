@@ -107,8 +107,8 @@ export async function setupUI(renderTemplate, templateDirectory) {
 
     if (!$('#blai-wand-btn').length) {
         $('#data_bank_wand_container').append(`
-            <div id="blai-wand-btn" title="词汇映射管理">
-                <i class="fa-solid fa-language fa-fw"></i><span>词汇映射</span>
+            <div id="blai-wand-btn" class="list-group-item flex-container flexGap5" title="词汇映射管理">
+                <div class="fa-solid fa-language fa-fw extensionsMenuExtensionButton"></div><span>词汇映射</span>
             </div>`);
     }
     ensureExtensionPanelEntry();

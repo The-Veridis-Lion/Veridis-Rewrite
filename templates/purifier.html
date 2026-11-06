@@ -152,6 +152,11 @@
                                                     <button type="button" id="blai-ai-model-fetch" class="blai-ai-icon-button" title="刷新模型列表" aria-label="刷新模型列表"><i class="fas fa-rotate" aria-hidden="true"></i></button>
                                                 </span>
                                             </label>
+                                            <label class="blai-ai-control blai-ai-switch" title="关闭时使用非流式返回；两种方式均在结果完整后应用改写">
+                                                <input type="checkbox" id="blai-ai-streaming-enabled">
+                                                <span class="blai-ai-switch-track" aria-hidden="true"></span>
+                                                <span>流式返回</span>
+                                            </label>
                                             <label class="blai-ai-control blai-ai-xml-control">
                                                 <span class="blai-ai-control-label">XML 处理触发范围</span>
                                                 <input type="text" id="blai-ai-xml-scope" class="blai-input" placeholder="留空则在消息结束后处理整条回复">
@@ -165,13 +170,26 @@
                                             </button>
                                         </div>
                                         <p id="blai-ai-http-warning" class="blai-ai-warning" hidden>非本地 HTTP 地址不安全，建议使用 HTTPS 或本地代理。</p>
+                                        <details class="blai-ai-request-options">
+                                            <summary>附加参数</summary>
+                                            <label class="blai-ai-control">
+                                                <span class="blai-ai-control-label">包括主体参数</span>
+                                                <textarea id="blai-ai-additional-parameters" class="blai-textarea" rows="5" placeholder="聊天完成请求主体中要包含的参数（YAML 对象）&#10;&#10;示例：&#10;top_k: 20&#10;repetition_penalty: 1.1" spellcheck="false" aria-describedby="blai-ai-request-options-error"></textarea>
+                                            </label>
+                                            <label class="blai-ai-control">
+                                                <span class="blai-ai-control-label">排除主体参数</span>
+                                                <textarea id="blai-ai-excluded-parameters" class="blai-textarea" rows="5" placeholder="要从聊天完成请求主体中排除的参数（YAML 数组）&#10;&#10;示例：&#10;- frequency_penalty&#10;- presence_penalty" spellcheck="false"></textarea>
+                                            </label>
+                                            <p id="blai-ai-request-options-error" class="blai-ai-warning" role="status" hidden></p>
+                                            <small>随 API 预设保存，导入或切换规则集时保留。关闭流式返回即使用非流式；结果完整后应用改写。</small>
+                                        </details>
                                     </section>
 
                                     <section class="blai-ai-section" aria-labelledby="blai-ai-prompt-title">
                                         <header class="blai-ai-section-header">
                                             <div>
                                                 <h2 id="blai-ai-prompt-title">全局提示词</h2>
-                                                <p>应用于所有 AI 改写规则的全局提示，将与特定规则的提示词合并。</p>
+                                    <p>应用于所有 AI 改写规则的全局提示，将与特定规则的提示词合并。全局提示词和参数独立保存，导入或切换规则集时保持不变。</p>
                                             </div>
                                             <button id="blai-ai-prompt-expand" type="button" class="blai-ai-icon-button" title="展开编辑全局提示词" aria-label="展开编辑全局提示词"><i class="fas fa-expand" aria-hidden="true"></i></button>
                                         </header>
@@ -433,6 +451,36 @@
                                                 </button>
                                             </div>
 
+                                            <div class="blai-tools-setting-row blai-tools-font-setting">
+                                                <div class="blai-tools-setting-copy">
+                                                    <label for="blai-ui-font-scale"><strong>界面字号</strong></label>
+                                                    <p>调整插件页面和编辑弹窗的文字大小，不影响前文透视。自动保存，100% 为标准大小。</p>
+                                                </div>
+                                                <select id="blai-ui-font-scale" class="blai-select-box" aria-label="界面字号">
+                                                    <option value="1">100% 标准</option>
+                                                    <option value="1.1">110%</option>
+                                                    <option value="1.2">120%</option>
+                                                    <option value="1.3">130%</option>
+                                                    <option value="1.4">140%</option>
+                                                    <option value="1.5">150%</option>
+                                                    <option value="1.6">160%</option>
+                                                </select>
+                                            </div>
+                                            <div class="blai-tools-setting-row blai-tools-font-setting">
+                                                <div class="blai-tools-setting-copy">
+                                                    <label for="blai-diff-font-scale"><strong>前文透视字号</strong></label>
+                                                    <p>单独调整净化前文透视窗口的文字大小，不影响界面字号。自动保存，100% 为标准大小。</p>
+                                                </div>
+                                                <select id="blai-diff-font-scale" class="blai-select-box" aria-label="前文透视字号">
+                                                    <option value="1">100% 标准</option>
+                                                    <option value="1.1">110%</option>
+                                                    <option value="1.2">120%</option>
+                                                    <option value="1.3">130%</option>
+                                                    <option value="1.4">140%</option>
+                                                    <option value="1.5">150%</option>
+                                                    <option value="1.6">160%</option>
+                                                </select>
+                                            </div>
                                             <label class="blai-tools-slider-setting" for="blai-diff-limit-input">
                                                 <span class="blai-tools-slider-header">
                                                     <span class="blai-tools-setting-copy">
@@ -587,7 +635,7 @@
                     <h3 id="blai-edit-modal-title" class="blai-edit-modal-title" style="margin: 0; display: flex; align-items: center; gap: 8px;">
                         <i class="fas fa-pen"></i> 编辑规则集
                     </h3>
-                    <button id="blai-edit-cancel-x" class="blai-icon-btn" style="background: transparent !important; border: none !important; box-shadow: none !important; font-size: 20px !important; color: var(--text-secondary); padding: 0 !important; min-width: auto !important; height: auto !important; cursor: pointer;">
+                    <button id="blai-edit-cancel-x" class="blai-icon-btn" style="background: transparent !important; border: none !important; box-shadow: none !important; font-size: calc(20px * var(--blai-ui-font-scale, 1)) !important; color: var(--text-secondary); padding: 0 !important; min-width: auto !important; height: auto !important; cursor: pointer;">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -805,6 +853,7 @@
                     <span class="blai-diff-legend-item" data-source="program"><i></i>程序改写</span>
                     <span class="blai-diff-legend-item" data-source="ai"><i></i>AI 改写</span>
                     <span class="blai-diff-legend-item" data-source="manual"><i></i>手动改写</span>
+                    <span class="blai-diff-legend-item" data-source="unchanged"><i></i>AI 未修改（原文）</span>
                 </div>
                 <div id="blai-diff-modal-content" class="blai-diff-modal-content"></div>
             </div>
@@ -842,7 +891,7 @@
                 <div class="blai-subrule-modal-body">
                     <div class="blai-subrule-field" style="margin-bottom: 12px;">
                         <label class="blai-field-label" style="margin-bottom: 6px; font-weight: 600;">备注说明 (可选)</label>
-                        <input type="text" id="blai-modal-sub-remark" class="blai-input" placeholder="例如：处理特定角色的口头禅" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;">
+                        <input type="text" id="blai-modal-sub-remark" class="blai-input" placeholder="例如：处理特定角色的口头禅" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important; padding: 10px 14px !important;">
                     </div>
 
                     <div class="blai-subrule-field" style="margin-bottom: 12px;">
@@ -856,14 +905,14 @@
 
                     <div id="blai-modal-sub-ai-prompt-field" class="blai-subrule-field" style="margin-bottom: 12px;" hidden>
                         <label class="blai-field-label" style="margin-bottom: 6px; font-weight: 600;">单条改写要求 (可选)</label>
-                        <textarea id="blai-modal-sub-ai-prompt" class="blai-textarea" rows="4" placeholder="只写这条规则命中时的特殊处理。可分情况说明：命中 A 组时只弱化不删除；命中 B 组时保留语气词；留空则只使用 AI 设置里的全局提示词。" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
+                        <textarea id="blai-modal-sub-ai-prompt" class="blai-textarea" rows="4" placeholder="只写这条规则命中时的特殊处理。可分情况说明：命中 A 组时只弱化不删除；命中 B 组时保留语气词；留空则只使用 AI 设置里的全局提示词。" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important; padding: 10px 14px !important;"></textarea>
                         <div id="blai-modal-sub-ai-prompt-hint" class="blai-subrule-mode-hint" aria-live="polite"></div>
                     </div>
 
                     <div class="blai-subrule-field" style="margin-bottom: 12px;">
                         <label class="blai-field-label" style="margin-bottom: 6px; font-weight: 600;">查找内容</label>
                         <div id="blai-modal-sub-target-error" class="blai-field-error" aria-live="polite"></div>
-                        <textarea id="blai-modal-sub-target" class="blai-textarea" rows="4" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
+                        <textarea id="blai-modal-sub-target" class="blai-textarea" rows="4" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important; padding: 10px 14px !important;"></textarea>
                     </div>
 
                     <div class="blai-subrule-field" style="margin-bottom: 15px;">
@@ -873,7 +922,7 @@
                                 <button id="blai-modal-sub-regex-recognize" type="button" class="blai-subrule-mini-btn">按行识别</button>
                             </div>
                         </div>
-                        <textarea id="blai-modal-sub-rep" class="blai-textarea" rows="4" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: 14px !important; padding: 10px 14px !important;"></textarea>
+                        <textarea id="blai-modal-sub-rep" class="blai-textarea" rows="4" style="background: var(--bg-surface) !important; border: none !important; border-radius: 8px !important; font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important; padding: 10px 14px !important;"></textarea>
                         <div id="blai-modal-sub-regex-list" class="blai-regex-replacement-list" hidden></div>
                     </div>
                 </div>

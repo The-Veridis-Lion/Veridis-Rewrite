@@ -21,6 +21,7 @@ import { bindDeepCleanEvents } from './deepClean/events.js';
 import { bindComposerButtonAiRewriteEvent, updateComposerButtonSetting } from './aiRewrite/composerButton.js';
 import { bindFeedbackEvents } from './feedback/events.js';
 import { bindTourEvents, offerMainTourFirstUse } from './ui/tour.js';
+import { bindUiFontScaleEvents } from './ui/fontScale.js';
 
 export function bindEvents() {
     const { extension_settings, saveSettingsDebounced, eventSource } = getAppContext();
@@ -36,6 +37,7 @@ export function bindEvents() {
     bindComposerButtonAiRewriteEvent(eventSource);
     bindFeedbackEvents();
     bindTourEvents();
+    bindUiFontScaleEvents();
 
     $(document).off('click', '#blai-wand-btn, #blai-wand-btn-panel').on('click', '#blai-wand-btn, #blai-wand-btn-panel', openPurifier);
 

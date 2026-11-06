@@ -1,5 +1,5 @@
 /** Owns each branch's replaceable stage record and text-free revert protection after eviction. */
-import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
+import { getMessageDiffBranchKey, commitCurrentMessageText, clearMessageDisplayText, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
 import { extensionName } from '../settings/defaults.js';
 
 const branchMetaKey = '__blai_diff_branch_meta';
@@ -30,6 +30,7 @@ export function getMessageDiffMeta(msg, branchKey = getMessageDiffBranchKey(msg)
         aiMes: entry.aiMes,
         programMes: entry.programMes,
         reverted: entry.reverted,
+        ...(Array.isArray(entry.aiUnchanged) && entry.aiUnchanged.length ? { aiUnchanged: entry.aiUnchanged } : {}),
     } : null;
 }
 
@@ -38,7 +39,7 @@ function writeBranchMeta(msg, branchKey, next) {
     if (!isCanonical(next)) throw new TypeError('Difference requires canonical stage texts and revert state');
     const previous = getMessageDiffMeta(msg, branchKey);
     const clearsMessageProtection = !next.reverted && isProtectionOnly(msg[branchMetaKey]?.[messageProtectionKey]);
-    if (!clearsMessageProtection && previous && Object.keys(next).every(key => previous[key] === next[key])) return false;
+    if (!clearsMessageProtection && previous && JSON.stringify(previous) === JSON.stringify(next)) return false;
     if (!isObject(msg[branchMetaKey])) msg[branchMetaKey] = {};
     msg[branchMetaKey][branchKey] = next;
     // Explicit recleanse releases the legacy message-wide choice after a successful commit.
@@ -50,8 +51,9 @@ export function writeMessageDiffProgram(msg, branchKey, originalMes, programMes)
     return writeBranchMeta(msg, branchKey, { originalMes, aiMes: null, programMes, reverted: false });
 }
 
-export function writeMessageDiffAiStage(msg, branchKey, originalMes, aiMes, programMes) {
-    return writeBranchMeta(msg, branchKey, { originalMes, aiMes, programMes, reverted: false });
+export function writeMessageDiffAiStage(msg, branchKey, originalMes, aiMes, programMes, aiUnchanged = []) {
+    return writeBranchMeta(msg, branchKey, { originalMes, aiMes, programMes, reverted: false,
+        ...(aiUnchanged.length ? { aiUnchanged } : {}) });
 }
 
 export function setMessageDiffReverted(msg, reverted, branchKey = getMessageDiffBranchKey(msg)) {
@@ -167,4 +169,16 @@ export function migrateChatDiffMetadata(chat, chatMetadata) {
         changed = true;
     }
     return changed;
+}
+
+/** Restore the retained result only while the current branch still shows its original. */
+export function restoreMessageDiffResult(msg) {
+    const branchKey = getMessageDiffBranchKey(msg);
+    const meta = getMessageDiffMeta(msg, branchKey);
+    if (!meta || !isMessageDiffReverted(msg) || msg.mes !== meta.originalMes) return false;
+    if (!commitCurrentMessageText(msg, meta.programMes, branchKey).ok) return false;
+    clearMessageDisplayText(msg);
+    syncCurrentSwipeExtra(msg);
+    setMessageDiffReverted(msg, false, branchKey);
+    return true;
 }

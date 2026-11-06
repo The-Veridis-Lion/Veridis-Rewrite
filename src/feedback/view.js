@@ -1,7 +1,7 @@
 // Owns the dedicated feedback and Deep Clean diagnostics workspace rendering.
 import { feedbackAreas, feedbackTypes } from './payload.js';
-import { getAiRewriteDebugDisplayText } from '../aiRewrite/debug.js';
-import { formatAiCommunicationRecords } from '../aiRewrite/communicationMonitor.js';
+import { renderAiRewriteDebugLog } from '../aiRewrite/debug.js';
+import { renderAiCommunicationMonitor } from '../aiRewrite/communicationMonitor.js';
 import { projectFeedbackUpdateWarning } from '../update/status.js';
 
 // Retain the actual editable form, including browser-owned File selections, for this page.
@@ -165,13 +165,13 @@ export function renderRuntimeLog() {
     content.innerHTML = `
         <section class="blai-feedback-local-view">
             <header class="blai-feedback-local-heading">
-                <div><h2>运行日志</h2><p>查看 Veridis 最近记录的本地运行诊断事件。</p></div>
+                <div><h2>运行日志</h2><p>按改写分组查看当前保留的运行事件；组内按时间顺序排列。未能确定归属的事件单独列出。</p></div>
                 <button id="blai-feedback-copy-log" type="button">复制日志</button>
             </header>
-            <pre id="blai-ai-debug-log" class="blai-feedback-log-output" tabindex="0" aria-live="polite"></pre>
+            <div id="blai-ai-debug-log" aria-live="polite"></div>
         </section>
     `;
-    content.querySelector('#blai-ai-debug-log').textContent = getAiRewriteDebugDisplayText();
+    renderAiRewriteDebugLog();
 }
 
 export function renderAiContext() {
@@ -180,13 +180,13 @@ export function renderAiContext() {
     content.innerHTML = `
         <section class="blai-feedback-local-view">
             <header class="blai-feedback-local-heading">
-                <div><h2>AI 上下文</h2><p>查看 Veridis 实际发送给 AI 的请求上下文及返回结果。其中可能包含提示词、上下文和 AI 回复，仅在本地显示。</p></div>
+                <div><h2>AI 上下文</h2><p>按改写分组查看当前保留的请求上下文及返回结果（本地保存最近最多 10 次请求，空间不足时优先保留较新记录；清空会删除本地记录）。其中可能包含提示词、上下文和 AI 回复，仅在本地显示。</p></div>
                 <button id="blai-ai-monitor-clear" type="button">清空</button>
             </header>
-            <pre id="blai-ai-monitor-output" class="blai-feedback-log-output" tabindex="0" aria-label="AI 上下文"></pre>
+            <div id="blai-ai-monitor-output" aria-label="AI 上下文"></div>
         </section>
     `;
-    content.querySelector('#blai-ai-monitor-output').textContent = formatAiCommunicationRecords();
+    renderAiCommunicationMonitor();
 }
 
 function diagnosticSummaryRows(record) {

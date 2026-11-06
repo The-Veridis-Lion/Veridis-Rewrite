@@ -1,0 +1,21 @@
+{
+  "name": "veridis-rewrite-regression-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/unchanged-targets.mjs tests/distribution.mjs tests/local-edits.mjs tests/adjacent-continuation.mjs tests/boundary-dialogue.mjs tests/edited-body.mjs tests/font-scale.mjs tests/narration-copies.mjs tests/preset-globals.mjs tests/request-options.mjs tests/request-yaml.mjs tests/update-check.mjs tests/log-time.mjs tests/communication-storage.mjs tests/diff-document.mjs tests/fragment-edit.mjs",
+    "test:integration": "node --test tests/router-compatibility.mjs tests/streaming.mjs",
+    "test:ui": "node tests/ui-column.mjs",
+    "test:myriad": "node tests/luker-myriad-smoke.mjs",
+    "test:startup": "node tests/luker-startup-ab.mjs",
+    "test:tauri": "node --test tests/tauri-route.mjs",
+    "test:log-ui": "node tests/log-records-ui.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1",
+    "yaml": "2.8.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

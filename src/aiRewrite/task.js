@@ -8,7 +8,8 @@ import { isAssistantMessage } from '../diff/tracking.js';
 import { compileProcessors } from '../rules/engine.js';
 import { getZhVariantCompatOptions, isZhDictionaryReady } from '../zh/dictionary.js';
 import { recordAiRewriteDebug } from './debug.js';
-import { getTavernHelperGenerationApi } from './generation.js';
+import { getAiRewriteTransport, getTavernHelperGenerationApi } from './generation.js';
+import { parseAiRequestOptions } from './requestOptions.js';
 
 // Owns settings access/snapshots, configuration and message-id checks, task identity,
 // automatic generation/finalization validation, and task freshness predicates.
@@ -20,6 +21,19 @@ export function getSettings() {
 
 export function getAiSettings() {
     return getSettings().aiRewrite || {};
+}
+
+// A compatible live suffix belongs to the host, rather than to the retained AI source.
+export function resolveManualProgramTail(currentText, previous) {
+    if (!previous) return { tail: '', trimProgramEnd: false };
+    // Empty history cannot prove that a populated current body is only a host suffix.
+    if (currentText.trim() && (!previous.originalMes.trim() || !previous.programMes.trim())) return null;
+    const trimmedProgram = previous.programMes.trimEnd();
+    const trimProgramEnd = currentText !== previous.programMes
+        && currentText.startsWith(trimmedProgram + '\n\n');
+    const prefix = trimProgramEnd ? trimmedProgram : previous.programMes;
+    if (!currentText.startsWith(prefix)) return null;
+    return { tail: currentText.slice(prefix.length), trimProgramEnd };
 }
 
 export function snapshotAiRewriteTaskSettings(settings, aiSettings) {
@@ -44,6 +58,9 @@ export function snapshotAiRewriteTaskSettings(settings, aiSettings) {
             baseUrl: aiSettings?.baseUrl,
             apiKey: aiSettings?.apiKey,
             model: aiSettings?.model,
+            excludedParameters: String(aiSettings?.excludedParameters || ''),
+            additionalParameters: String(aiSettings?.additionalParameters || ''),
+            streamingEnabled: aiSettings?.streamingEnabled === true,
             temperature: aiSettings?.temperature,
             topP: aiSettings?.topP,
             topK: aiSettings?.topK,
@@ -152,7 +169,10 @@ export function getAiConfigIssue(aiSettings) {
         };
     }
 
-    if (!getTavernHelperGenerationApi()) {
+    try { parseAiRequestOptions(aiSettings); }
+    catch (error) { return { code: 'invalid-request-options', reason: error.message }; }
+
+    if (getAiRewriteTransport() === 'tavern-helper-custom-api' && !getTavernHelperGenerationApi()) {
         return {
             code: 'tavern-helper-unavailable',
             reason: 'TavernHelper.generateRaw 不可用',

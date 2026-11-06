@@ -2,10 +2,12 @@
 import { getAppContext } from '../host/appContext.js';
 import { logger } from '../log.js';
 
-const remoteManifestRepository = 'The-Veridis-Lion/Veridis-Rewrite';
+let localManifest = null;
+let installedSource = null;
 
 let updateState = null;
 let updateInFlight = false;
+let checkInFlight = false;
 
 function makeElement(tagName, className, text = '') {
     const element = document.createElement(tagName);
@@ -57,7 +59,9 @@ function projectToolsVersion(message = '正在检查版本信息…') {
     content.replaceChildren();
 
     if (!updateState) {
-        content.append(makeElement('p', 'blai-tools-version-status', message));
+        if (localManifest?.version) appendStatusRow(content, localManifest.version, message);
+        else content.append(makeElement('p', 'blai-tools-version-status', message));
+        if (installedSource) content.append(makeElement('p', 'blai-tools-version-status', `更新来源：${installedSource.repository} · ${installedSource.branch}`));
         return;
     }
 
@@ -77,6 +81,7 @@ function projectToolsVersion(message = '正在检查版本信息…') {
         appendUpdateAction(body);
     }
 
+    if (installedSource) details.append(makeElement('p', 'blai-tools-version-status', `更新来源：${installedSource.repository} · ${installedSource.branch}`));
     details.append(body);
     content.append(details);
 }
@@ -97,84 +102,86 @@ function projectUpdateSurfaces() {
     projectFeedbackUpdateWarning();
 }
 
-async function readRemoteManifest() {
-    const response = await fetch(`https://raw.githubusercontent.com/${remoteManifestRepository}/main/manifest.json`, {
-        cache: 'no-store',
-    });
-    if (!response.ok) throw new Error(`Remote manifest request returned HTTP ${response.status}.`);
-    return await response.json();
+async function readRemoteJson(url, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+        const response = await fetch(url, { ...options, cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error(`Version request returned HTTP ${response.status}.`);
+        return await response.json();
+    } finally {
+        clearTimeout(timeout);
+    }
 }
 
-async function readRemoteMainCommitSha() {
-    const response = await fetch(`https://api.github.com/repos/${remoteManifestRepository}/git/ref/heads/main`, {
-        headers: { Accept: 'application/vnd.github+json' },
-        cache: 'no-store',
-    });
-    if (!response.ok) throw new Error(`Remote main reference request returned HTTP ${response.status}.`);
-    const reference = await response.json();
-    return reference.object?.sha;
+export function resolveUpdateSource(versionInfo) {
+    const remote = String(versionInfo?.remoteUrl || '').trim();
+    const match = remote.match(/^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i);
+    const branch = String(versionInfo?.currentBranchName || '').replace(/^refs\/heads\//, '').trim();
+    if (!match || !branch || branch === 'HEAD' || /[\s~^:?*\[\]\\]/.test(branch) || branch.includes('..')) return null;
+    return { repository: `${match[1]}/${match[2]}`, branch };
+}
+
+export async function loadLocalUpdateVersion() {
+    const app = getAppContext();
+    if (typeof app.readExtensionManifest !== 'function') return;
+    try { localManifest = await app.readExtensionManifest(app.veridisExternalId); }
+    catch (error) { logger.warn('[Veridis Update] Local manifest unavailable.', error); }
+}
+
+// Local fix builds may be newer than their Git checkout. Do not offer a downgrade.
+export function compareBuildVersions(left, right) {
+    const parse = value => String(value).match(/^(\d+)\.(\d+)(?:\.(\d+))?(?:-fix\.(\d+))?$/);
+    const a = parse(left), b = parse(right);
+    if (!a || !b) return null;
+    for (let i=1;i<=4;i++) {
+        const difference=Number(a[i] || 0)-Number(b[i] || 0);
+        if(difference) return Math.sign(difference);
+    }
+    return 0;
 }
 
 export async function initializeUpdateStatus({ versionInfo, isGlobal } = {}) {
     updateState = null;
-    updateInFlight = false;
-    projectUpdateSurfaces();
-
-    const appContext = getAppContext();
-    let localManifest;
-    try {
-        localManifest = await appContext.readExtensionManifest(appContext.veridisExternalId);
-    } catch (error) {
-        logger.error('[Veridis Update] Failed to read the local manifest; update status will remain hidden.', error);
-        projectToolsVersion('暂时无法确认版本状态。');
-        return;
-    }
-
-    let remoteManifest;
-    try {
-        remoteManifest = await readRemoteManifest();
-    } catch (error) {
-        logger.error('[Veridis Update] Failed to retrieve or parse the remote manifest; update status will remain hidden.', error);
-        projectToolsVersion('暂时无法确认版本状态。');
-        return;
-    }
-
+    projectFeedbackUpdateWarning();
+    installedSource = resolveUpdateSource(versionInfo);
+    await loadLocalUpdateVersion();
     const localVersion = String(localManifest?.version || '').trim();
-    const remoteVersion = String(remoteManifest?.version || '').trim();
-    if (!localVersion || !remoteVersion) {
-        logger.error('[Veridis Update] Local or remote manifest does not provide a version; update status will remain hidden.');
-        projectToolsVersion('暂时无法确认版本状态。');
+    if (!localVersion || !installedSource) {
+        projectToolsVersion('无法确认安装仓库或分支；请在宿主扩展管理中检查，不自动切换来源。');
+        projectFeedbackUpdateWarning();
         return;
     }
-    if (remoteVersion !== localVersion) {
-        const updateNote = String(remoteManifest?.update_note || '').trim();
-        if (!updateNote) logger.warn('[Veridis Update] Formal remote version update has no update_note metadata.');
-        updateState = { kind: 'formal', localVersion, remoteVersion, updateNote, isGlobal: isGlobal === true };
-    } else {
-        const localFullCommitSha = String(versionInfo?.currentCommitHash || '').trim();
-        let remoteMainFullCommitSha;
-        try {
-            remoteMainFullCommitSha = await readRemoteMainCommitSha();
-        } catch (error) {
-            logger.error('[Veridis Update] Failed to retrieve or parse the remote main reference; update status will remain hidden.', error);
-            projectToolsVersion('暂时无法确认版本状态。');
-            return;
+    projectToolsVersion('正在检查当前安装分支…');
+    try {
+        const {repository,branch}=installedSource;
+        const ref=branch.split('/').map(encodeURIComponent).join('/');
+        const remoteManifest=await readRemoteJson(`https://raw.githubusercontent.com/${repository}/${ref}/manifest.json`);
+        const remoteVersion=String(remoteManifest?.version || '').trim();
+        const comparison=compareBuildVersions(localVersion,remoteVersion);
+        if (!remoteVersion || (comparison === null && localVersion !== remoteVersion)) {
+            projectToolsVersion('已读取分支信息，但版本号无法可靠比较；不自动更新。');return;
         }
-        if (!/^[0-9a-f]{40}$/.test(localFullCommitSha) || !/^[0-9a-f]{40}$/.test(remoteMainFullCommitSha)) {
-            logger.error('[Veridis Update] Local or remote main reference does not provide a full commit SHA; update status will remain hidden.');
-            projectToolsVersion('暂时无法确认版本状态。');
-            return;
+        if (comparison > 0) {
+            projectToolsVersion(`本地修复版本高于分支版本 v${remoteVersion}，不进行降级。`);return;
         }
-        const isLatest = localFullCommitSha === remoteMainFullCommitSha;
-        updateState = {
-            kind: isLatest ? 'latest' : 'minor',
-            localVersion,
-            remoteVersion,
-            updateNote: String((isLatest ? localManifest : remoteManifest)?.update_note || '').trim(),
-            isGlobal: isGlobal === true,
-        };
+        const current=String(versionInfo?.currentCommitHash || '');
+        let remote=String(versionInfo?.remoteCommitHash || '');
+        if (!/^[0-9a-f]{40}$/i.test(remote)) {
+            const result=await readRemoteJson(`https://api.github.com/repos/${repository}/git/ref/heads/${ref}`,{headers:{Accept:'application/vnd.github+json'}});
+            remote=String(result.object?.sha || '');
+        }
+        if (!/^[0-9a-f]{40}$/i.test(current) || !/^[0-9a-f]{40}$/i.test(remote)) {
+            projectToolsVersion('已读取分支版本，但无法确认安装提交；不自动更新。');return;
+        }
+        updateState={kind:comparison<0?'formal':current===remote?'latest':'minor',localVersion,remoteVersion,
+            updateNote:String(remoteManifest.update_note || ''),isGlobal:isGlobal===true,
+            source:{...installedSource}};
+        projectUpdateSurfaces();
+    } catch(error) {
+        logger.warn('[Veridis Update] Current branch check failed.',error);
+        projectToolsVersion('当前分支检查失败，请稍后重试。');
     }
-    projectUpdateSurfaces();
 }
 
 async function updateAndReload() {
@@ -193,22 +200,16 @@ async function updateAndReload() {
     updateInFlight = true;
     $button.prop('disabled', true).text('正在更新…');
     try {
-        // Fetch all remote branches first, including main in shallow release-branch installs.
-        const branchesResponse = await fetch('/api/extensions/branches', {
-            method: 'POST',
-            headers: getRequestHeaders(),
-            body: JSON.stringify({ extensionName: extensionFolderName, global: updateState.isGlobal }),
+        // Verify the source again in case the host switched branches since the check.
+        const versionResponse=await fetch('/api/extensions/version', {
+            method:'POST',headers:getRequestHeaders(),
+            body:JSON.stringify({extensionName:extensionFolderName,global:updateState.isGlobal}),
         });
-        if (!branchesResponse.ok) throw new Error(`Extension branches request returned HTTP ${branchesResponse.status}.`);
-
-        const switchResponse = await fetch('/api/extensions/switch', {
-            method: 'POST',
-            headers: getRequestHeaders(),
-            body: JSON.stringify({ extensionName: extensionFolderName, global: updateState.isGlobal, branch: 'origin/main' }),
-        });
-        if (!switchResponse.ok) throw new Error(`Extension switch request returned HTTP ${switchResponse.status}.`);
-
-        // SillyTavern pulls the current branch; only reach this after checking out main.
+        if(!versionResponse.ok) throw new Error('无法确认当前安装分支，未执行更新。');
+        const currentSource=resolveUpdateSource(await versionResponse.json());
+        if(!currentSource || currentSource.repository!==updateState.source.repository || currentSource.branch!==updateState.source.branch)
+            throw new Error('安装来源已变化，请重新检查版本。');
+        // The host updates the existing checkout. Never switch to another branch.
         const response = await fetch('/api/extensions/update', {
             method: 'POST',
             headers: getRequestHeaders(),
@@ -225,6 +226,33 @@ async function updateAndReload() {
     }
 }
 
-export function bindUpdateStatusEvents() {
+export function bindUpdateStatusEvents(checkForUpdates) {
+    const appendCheckButton = () => {
+        const content = document.getElementById('blai-tools-version-content');
+        if (!content || content.querySelector('[data-update-action="check"]')) return;
+        const button = makeElement('button', 'blai-tools-version-update-action', '检查版本');
+        button.type = 'button';
+        button.dataset.updateAction = 'check';
+        content.append(button);
+    };
+    projectToolsVersion('需要时点击检查版本。');
+    appendCheckButton();
+    $(document).off('click', '#blai-tools-version-section [data-update-action="check"]').on('click', '#blai-tools-version-section [data-update-action="check"]', async function () {
+        if (checkInFlight || updateInFlight || typeof checkForUpdates !== 'function') return;
+        checkInFlight = true;
+        this.disabled = true;
+        this.textContent = '正在检查…';
+        try {
+            await checkForUpdates();
+        } catch (error) {
+            logger.warn('[Veridis Update] Version check failed.', error);
+            projectToolsVersion('暂时无法确认版本状态。');
+        } finally {
+            checkInFlight = false;
+            this.disabled = false;
+            this.textContent = '检查版本';
+            appendCheckButton();
+        }
+    });
     $(document).off('click', '#blai-tools-version-section [data-update-action="update"]').on('click', '#blai-tools-version-section [data-update-action="update"]', updateAndReload);
 }

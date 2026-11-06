@@ -8,6 +8,7 @@ import { logger } from '../log.js';
 import { normalizeOptionalXmlTagNameInput, parseScopeTagInput } from '../scope/model.js';
 import { showToast } from '../ui/notifications.js';
 import { injectDiffButtons } from '../diff/view.js';
+import { parseAiRequestOptions } from './requestOptions.js';
 let aiApiCheckSequence = 0;
 
 export function bindAiSettingsEvents() {
@@ -116,6 +117,9 @@ export function bindAiSettingsEvents() {
         baseUrl: String(value.baseUrl || '').trim(),
         apiKey: String(value.apiKey || ''),
         model: String(value.model || '').trim(),
+        excludedParameters: String(value.excludedParameters || ''),
+        additionalParameters: String(value.additionalParameters || ''),
+        streamingEnabled: value.streamingEnabled === true,
         modelOptions: normalizeAiModelOptions(value.modelOptions),
         ...normalizeAiSamplingSettings(value),
         xmlScopeTag: normalizeOptionalXmlTagNameInput(value.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag),
@@ -246,11 +250,18 @@ export function bindAiSettingsEvents() {
         };
         $('#blai-ai-enabled').prop('checked', aiSettings.enabled === true);
         $('#blai-ai-auto-trigger-enabled').prop('checked', aiSettings.autoTriggerEnabled === true);
+        $('#blai-ai-streaming-enabled').prop('checked', aiSettings.streamingEnabled === true);
         $('#blai-ai-protect-comments').prop('checked', aiSettings.protectXmlComments === true);
         const xmlScopeTag = normalizeOptionalXmlTagNameInput(aiSettings.xmlScopeTag, defaultAiRewriteSettings.xmlScopeTag);
         setValueIfNotFocused('#blai-ai-base-url', aiSettings.baseUrl || '');
         setValueIfNotFocused('#blai-ai-xml-scope', xmlScopeTag ? `<${xmlScopeTag}>` : '');
         setValueIfNotFocused('#blai-ai-api-key', aiSettings.apiKey || '');
+        setValueIfNotFocused('#blai-ai-excluded-parameters', aiSettings.excludedParameters || '');
+        setValueIfNotFocused('#blai-ai-additional-parameters', aiSettings.additionalParameters || '');
+        let optionsError = '';
+        try { parseAiRequestOptions(aiSettings); } catch (error) { optionsError = error.message; }
+        $('#blai-ai-additional-parameters').attr('aria-invalid', String(Boolean(optionsError)));
+        $('#blai-ai-request-options-error').text(optionsError).prop('hidden', !optionsError);
         syncAiApiPresetSelect(aiSettings);
         syncAiModelControl(aiSettings);
         setValueIfNotFocused('#blai-ai-temperature', aiSettings.temperature);
@@ -338,6 +349,10 @@ export function bindAiSettingsEvents() {
         updateAiRewriteSetting('autoTriggerEnabled', $(this).prop('checked') === true, { markRulesDirty: false });
     });
 
+    $(document).off('change', '#blai-ai-streaming-enabled').on('change', '#blai-ai-streaming-enabled', function() {
+        updateAiRewriteSetting('streamingEnabled', $(this).prop('checked') === true, { markRulesDirty: false });
+    });
+
     $(document).off('change', '#blai-ai-api-preset').on('change', '#blai-ai-api-preset', function() {
         const aiSettings = ensureAiRewriteSettings();
         const nextName = String($(this).val() || '');
@@ -406,6 +421,11 @@ export function bindAiSettingsEvents() {
 
     $(document).off('input change', '#blai-ai-api-key').on('input change', '#blai-ai-api-key', function() {
         updateAiRewriteSetting('apiKey', String($(this).val() || ''), { markRulesDirty: false });
+    });
+
+    $(document).off('input change', '#blai-ai-excluded-parameters, #blai-ai-additional-parameters').on('input change', '#blai-ai-excluded-parameters, #blai-ai-additional-parameters', function() {
+        const key = this.id === 'blai-ai-excluded-parameters' ? 'excludedParameters' : 'additionalParameters';
+        updateAiRewriteSetting(key, String($(this).val() || ''), { markRulesDirty: false });
     });
 
     $(document).off('change', '#blai-ai-model').on('change', '#blai-ai-model', function() {

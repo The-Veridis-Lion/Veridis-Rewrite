@@ -1,5 +1,6 @@
 import * as extensionsModule from "../../../extensions.js";
 import * as scriptModule from "../../../../script.js";
+import * as hostLibraries from "../../../../lib.js";
 import { saveSettingsDebounced, eventSource, event_types, chat } from "../../../../script.js";
 import { user_avatar } from "../../../personas.js";
 import { world_info, worldInfoCache } from "../../../world-info.js";
@@ -29,7 +30,7 @@ import { syncComposerButtonScript } from './src/aiRewrite/composerButton.js';
 import { readExtensionManifest } from './src/host/extensionManifest.js';
 import { resolveExtensionIdentity } from './src/host/extensionIdentity.js';
 import { collectInstalledEnabledExtensions, getEnabledExtensionExternalIds } from './src/feedback/payload.js';
-import { bindUpdateStatusEvents, initializeUpdateStatus } from './src/update/status.js';
+import { bindUpdateStatusEvents, initializeUpdateStatus, loadLocalUpdateVersion } from './src/update/status.js';
 
 const { extension_settings, getContext: getSillyTavernContext } = extensionsModule;
 const { externalId: veridisExternalId, folderName: veridisExtensionFolderName, templateDirectory } = resolveExtensionIdentity(import.meta.url);
@@ -51,9 +52,12 @@ async function captureVeridisCommit() {
     const getRequestHeaders = context?.getRequestHeaders;
     if (typeof getRequestHeaders !== 'function') return null;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
     try {
         const response = await fetch('/api/extensions/version', {
             method: 'POST',
+            signal: controller.signal,
             headers: getRequestHeaders(),
             body: JSON.stringify({
                 extensionName: veridisExtensionFolderName,
@@ -69,12 +73,20 @@ async function captureVeridisCommit() {
     } catch {
         // Feedback reports an unavailable commit without affecting the running extension.
         return null;
+    } finally {
+        clearTimeout(timeout);
     }
 }
 
 const readHostExtensionManifest = (externalId) => readExtensionManifest(externalId, extensionsModule.getExtensionManifest);
 
 initAppContext({
+    createEventSourceStream: async () => {
+        const { default: EventSourceStream } = await import('../../../sse-stream.js');
+        return new EventSourceStream();
+    },
+    parseYaml: typeof hostLibraries.yaml?.parse === 'function'
+        ? text => hostLibraries.yaml.parse(text, { maxAliasCount: 50 }) : null,
     extension_settings,
     saveSettingsDebounced,
     eventSource,
@@ -152,20 +164,22 @@ jQuery(() => {
             saveSettingsDebounced();
         }
         bindEvents();
-        bindUpdateStatusEvents();
+        await loadLocalUpdateVersion();
+        bindUpdateStatusEvents(async () => {
+            const versionInfo = await captureVeridisCommit();
+            await initializeUpdateStatus({
+                versionInfo,
+                isGlobal: extensionsModule.extensionTypes[veridisExternalId] === 'global',
+            });
+        });
         syncComposerButtonScript(extension_settings[extensionName].showComposerAiRewriteButton);
         initRealtimeInterceptor();
         updateToolbarUI();
         applyCharacterPresetBinding(true);
         performGlobalChatMaintenance();
         logger.info('[屏蔽词净化助手] 启动初始化完成');
-        void (async () => {
-            const versionInfo = await captureVeridisCommit();
-            await initializeUpdateStatus({
-                versionInfo,
-                isGlobal: extensionsModule.extensionTypes[veridisExternalId] === 'global',
-            });
-        })();
+        // The host already checks extension updates. Do not occupy another same-origin
+        // connection with a potentially slow Git lookup while chat/memory is loading.
     };
 
     if (typeof eventSource !== 'undefined' && event_types.APP_READY) {

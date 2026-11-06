@@ -1,5 +1,7 @@
 // Owns host-injected application references configured once by the extension entry point.
 const appContext = {
+    parseYaml: null,
+    createEventSourceStream: null,
     extension_settings: null,
     saveSettingsDebounced: null,
     eventSource: null,

@@ -2,7 +2,7 @@
  * Owns Preset user actions, import/export workflow, binding actions, and their
  * settings-save boundaries.
  */
-import { defaultAiRewriteSettings, extensionName } from '../settings/defaults.js';
+import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { markRulesDataDirty } from '../rules/state.js';
 import { presetsRuntimeState, markPresetsUiDirty } from './state.js';
@@ -12,7 +12,7 @@ import { normalizeRuleActivationSafety } from '../rules/model.js';
 import { buildPresetEntry, getCurrentPresetAiRewriteSettings, normalizeImportedRulesPayload, normalizePresetAiRewriteSettings } from './model.js';
 import { getPresetBindingUsage } from './bindings.js';
 import { applyCharacterPresetBinding, applyPresetByName, hasActivePresetUnsavedChanges } from './application.js';
-import { refreshCharacterBindingUI, syncPresetAiRewriteGenerationSettingsUI, updateToolbarUI } from './view.js';
+import { refreshCharacterBindingUI, updateToolbarUI } from './view.js';
 import { renderTags } from '../rules/view.js';
 import { showRiskConfirmModal, showToast } from '../ui/notifications.js';
 
@@ -136,7 +136,7 @@ function openImportChoiceModal(rules, defaultName, aiRewriteSettings = null) {
     };
     $('#blai-import-preset-name').val(presetName);
     const aiSummary = presetsRuntimeState.importPresetDraft.aiRewrite ? '，包含 AI 生成限制' : '';
-    $('#blai-import-choice-summary').text(`已读取 ${normalizedRules.length} 个规则分组${aiSummary}。只导入不会修改当前规则；切换使用和临时预览会替换当前规则并重新净化。`);
+    $('#blai-import-choice-summary').text(`已读取 ${normalizedRules.length} 个规则分组${aiSummary}。只导入不会修改当前规则；切换使用和临时预览会替换当前规则。AI 页面的全局提示词和参数保持不变。`);
     const $modal = $('#blai-preset-import-choice-modal');
     $modal.detach().appendTo(document.body);
     $modal
@@ -195,20 +195,6 @@ function getImportDraftAiRewriteSettings() {
     return normalizePresetAiRewriteSettings(presetsRuntimeState.importPresetDraft?.aiRewrite);
 }
 
-function applyImportDraftAiRewriteSettings() {
-    const aiRewriteSettings = getImportDraftAiRewriteSettings();
-    if (!aiRewriteSettings) return false;
-    const { extension_settings } = getAppContext();
-    const currentSettings = extension_settings[extensionName];
-    currentSettings.aiRewrite = {
-        ...defaultAiRewriteSettings,
-        ...(currentSettings.aiRewrite && typeof currentSettings.aiRewrite === 'object' ? currentSettings.aiRewrite : {}),
-        ...aiRewriteSettings,
-    };
-    syncPresetAiRewriteGenerationSettingsUI(currentSettings);
-    return true;
-}
-
 function importPresetOnly() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
     const settings = extension_settings[extensionName];
@@ -237,7 +223,6 @@ function importPresetAndSwitch() {
     settings.presets[name] = buildPresetEntry(rules, getImportDraftAiRewriteSettings());
     settings.activePreset = name;
     settings.rules = deepClone(rules);
-    applyImportDraftAiRewriteSettings();
     markRulesDataDirty({ presetsUi: true });
     saveSettingsDebounced();
     updateToolbarUI();
@@ -256,7 +241,6 @@ function importPresetAsTemporaryPreview() {
 
     settings.rules = rules;
     settings.activePreset = '';
-    applyImportDraftAiRewriteSettings();
     markRulesDataDirty();
     saveSettingsDebounced();
     updateToolbarUI();
@@ -279,7 +263,7 @@ export function bindPresetEvents() {
         const newPreset = $(this).val();
 
         if (oldPreset && newPreset !== oldPreset && hasActivePresetUnsavedChanges()) {
-            if (confirm(`预设 "${oldPreset}" 有未保存的规则或 AI 生成限制改动，是否在切换前保存？\n点击【确定】保存，点击【取消】放弃改动。`)) {
+            if (confirm(`预设 "${oldPreset}" 有未保存的规则改动，是否在切换前保存？\n点击【确定】保存，点击【取消】放弃改动。`)) {
                 settings.presets[oldPreset] = buildCurrentPresetEntry(settings.rules);
                 saveSettingsDebounced();
             }

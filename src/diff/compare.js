@@ -132,6 +132,11 @@ function renderDiffOperation(operation, section) {
         const tag = operation.type === 'delete' ? 'del' : 'ins';
         return `<${tag} ${attrs.join(' ')}>${escapeHtml(operation.text)}</${tag}>`;
     }
+    if (operation.unchangedReason) {
+        const reason = operation.unchangedReason === 'boundary-risk'
+            ? 'AI 未修改：回抄风险，保留原文' : 'AI 返回原文：需检查规则例外，未确认清理完成';
+        return `<mark class="blai-diff-ai-unchanged" title="${reason}">${escapeHtml(operation.text)}</mark>`;
+    }
     return escapeHtml(operation.text);
 }
 
@@ -244,11 +249,34 @@ function getSnippetPairOperations(pair, operations) {
     return selected;
 }
 
+// Split equal runs at original-stage coordinates, never search by repeated text.
+function annotateUnchangedTargets(pair, operations) {
+    if (pair.section !== 'ai' || !Array.isArray(pair.aiUnchanged)) return operations;
+    const ranges = pair.aiUnchanged.filter(item => Number.isInteger(item?.start)
+        && Number.isInteger(item?.end) && item.start >= 0 && item.end > item.start
+        && item.end <= pair.oldText.length && ['boundary-risk', 'unchanged'].includes(item.reason));
+    return operations.flatMap(run => {
+        if (run.type !== 'equal') return [run];
+        const overlapping = ranges.filter(range => range.start < run.oldEnd && range.end > run.oldStart);
+        const cuts = [...new Set([0, run.text.length, ...overlapping.flatMap(range =>
+            [Math.max(0, range.start - run.oldStart), Math.min(run.text.length, range.end - run.oldStart)])])].sort((a,b) => a-b);
+        return cuts.slice(0,-1).map((start,index) => {
+            const part = sliceDisplayRun(run, start, cuts[index+1]);
+            const range = overlapping.find(range => range.start <= part.oldStart && range.end >= part.oldEnd);
+            return range ? {...part, unchangedReason: range.reason} : part;
+        });
+    });
+}
+
 /** The existing Full/Snippet renderer, now consuming independent recorded pairs. */
 export function renderDiffDocument(pairs, mode) {
     const blocks = [];
     for (const pair of pairs) {
-        const operations = getDifferencePairOperations(pair);
+        // An unchanged later stage adds no comparison information to a full view.
+        if (mode === 'full' && pair.oldText === pair.newText
+            && !pair.aiUnchanged?.length
+            && pairs.some(other => other.oldText !== other.newText || other.aiUnchanged?.length)) continue;
+        const operations = annotateUnchangedTargets(pair, getDifferencePairOperations(pair));
         const runs = (mode === 'full'
             ? operations
             : getSnippetPairOperations(pair, operations))
@@ -283,7 +311,7 @@ export function renderDiffDocument(pairs, mode) {
                 runStart = runEnd;
                 runIndex++;
             }
-            if (parts.some(part => part.type !== 'equal')) {
+            if (parts.some(part => part.type !== 'equal' || part.unchangedReason)) {
                 blocks.push(`<div class="blai-diff-snippet">${renderDiffOperations(parts)}</div>`);
             }
         }

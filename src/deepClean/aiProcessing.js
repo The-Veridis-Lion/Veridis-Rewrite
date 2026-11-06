@@ -6,17 +6,19 @@ import { renderDeepCleanAiRequest } from './aiPlanning.js';
 const deepCleanAiRequestTimeoutMs = 300_000;
 
 async function callDeepCleanGenerateRaw(requestConfig) {
+    const controller = new AbortController();
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error('Deep Clean AI request timed out')), deepCleanAiRequestTimeoutMs);
     });
     try {
         return await Promise.race([
-            callTavernHelperGenerateRaw(requestConfig),
+            callTavernHelperGenerateRaw(requestConfig, controller.signal),
             timeoutPromise,
         ]);
     } finally {
         clearTimeout(timeoutId);
+        controller.abort();
     }
 }
 
@@ -28,6 +30,9 @@ function getFrozenAiSettings(run) {
         baseUrl: String(run.input?.aiConnection?.baseUrl || '').trim(),
         apiKey: String(run.input?.aiConnection?.apiKey || ''),
         model: String(run.input?.aiConnection?.model || '').trim(),
+        excludedParameters: String(run.input?.aiConnection?.excludedParameters || ''),
+        additionalParameters: String(run.input?.aiConnection?.additionalParameters || ''),
+        streamingEnabled: run.input?.aiConnection?.streamingEnabled === true,
     };
 }
 

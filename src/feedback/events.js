@@ -181,8 +181,10 @@ export function bindFeedbackEvents() {
         document.getElementById('blai-feedback-files')?.click();
     });
 
-    $(document).off('click', '#blai-feedback-copy-log').on('click', '#blai-feedback-copy-log', async () => {
-        const logText = getAiRewriteDebugLogText();
+    $(document).off('click', '#blai-feedback-copy-log, [data-feedback-copy-record]').on('click', '#blai-feedback-copy-log, [data-feedback-copy-record]', async function() {
+        const logText = this.hasAttribute('data-feedback-copy-record')
+            ? this.closest('.blai-log-record')?.querySelector('pre')?.textContent
+            : getAiRewriteDebugLogText();
         if (!logText || logText === '[]') {
             return;
         }
@@ -190,8 +192,10 @@ export function bindFeedbackEvents() {
             const tavernHelper = globalThis.TavernHelper || globalThis.parent?.TavernHelper;
             if (typeof tavernHelper?.builtin?.copyText !== 'function') throw new Error('TavernHelper.builtin.copyText 不可用');
             await tavernHelper.builtin.copyText(logText);
+            showToast('日志已复制', '已复制所选记录。');
         } catch (error) {
-            logger.warn('复制运行日志失败', error);
+            logger.warn('复制日志失败', error);
+            showToast('复制日志失败', '请重试或手动复制。');
         }
     });
 

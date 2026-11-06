@@ -3,7 +3,7 @@
 #blai-feedback-workspace {
     position: fixed;
     inset: 0;
-    z-index: 1000002;
+    z-index: 2147483602;
     min-width: 0;
     min-height: 0;
     overflow: hidden;
@@ -37,14 +37,14 @@
 #blai-feedback-workspace .blai-feedback-workspace-header span {
     display: block;
     color: var(--accent-color);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-weight: 900;
     letter-spacing: .18em;
 }
 
 #blai-feedback-workspace .blai-feedback-workspace-header h2 {
     margin: 3px 0 0;
-    font-size: clamp(18px, 2.3vw, 27px);
+    font-size: calc(clamp(18px, 2.3vw, 27px) * var(--blai-ui-font-scale, 1));
     line-height: 1.15;
 }
 
@@ -79,7 +79,7 @@
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 800;
     white-space: nowrap;
 }
@@ -121,7 +121,7 @@
     border-radius: 8px;
     background: color-mix(in srgb, var(--accent-color) 8%, transparent);
     color: var(--text-main);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
 }
 
@@ -139,7 +139,7 @@
 #blai-feedback-workspace .blai-feedback-preview h3 {
     margin: 0;
     color: var(--text-main);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 850;
 }
 
@@ -148,7 +148,7 @@
 #blai-feedback-workspace .blai-feedback-preview header p {
     margin: 5px 0 13px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
 }
 
@@ -169,7 +169,7 @@
     background: transparent !important;
     color: var(--text-main);
     font: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-feedback-workspace .blai-feedback-control input {
@@ -195,7 +195,7 @@
     align-items: flex-start;
     cursor: pointer;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.45;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -215,7 +215,7 @@
     align-items: center;
     gap: 8px;
     color: var(--text-main);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-feedback-workspace .blai-feedback-area-select input {
@@ -252,14 +252,14 @@
 
 #blai-feedback-workspace .blai-feedback-file-copy > span {
     color: var(--text-main);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 850;
 }
 
 #blai-feedback-workspace .blai-feedback-file-copy > p {
     margin: 0;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
 }
 
@@ -290,7 +290,7 @@
     align-items: start;
     gap: 9px;
     color: var(--text-main);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.45;
 }
 
@@ -307,7 +307,7 @@
 
 #blai-feedback-workspace .blai-feedback-check small {
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-feedback-workspace .blai-feedback-check-copy {
@@ -338,7 +338,7 @@
     padding: 13px 0;
     border-block: 1px solid var(--border-color);
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.6;
 }
 
@@ -353,7 +353,7 @@
     background: transparent;
     color: var(--text-main);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 800;
 }
 
@@ -380,7 +380,7 @@
 #blai-feedback-workspace .blai-feedback-status {
     min-height: 20px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.45;
 }
 
@@ -396,7 +396,7 @@
     min-height: 20px;
     margin-top: 8px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.45;
 }
 
@@ -427,7 +427,7 @@
     background: var(--bg-base);
     color: var(--text-main);
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
     white-space: pre;
     overflow-wrap: normal;
@@ -445,7 +445,7 @@
     background: var(--bg-base);
     color: var(--text-main);
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -482,7 +482,7 @@
 #blai-feedback-workspace .blai-feedback-local-heading p {
     margin-top: 5px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
 }
 
@@ -495,7 +495,7 @@
     background: transparent;
     color: var(--text-main);
     font: inherit;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 760;
 }
 
@@ -516,7 +516,7 @@
     background: var(--bg-base);
     color: var(--text-secondary);
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -542,7 +542,7 @@
 #blai-feedback-workspace .blai-feedback-diagnostics-intro p {
     margin: 5px 0 0;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-feedback-workspace .blai-feedback-diagnostic-record {
@@ -563,7 +563,7 @@
 
 #blai-feedback-workspace .blai-feedback-diagnostic-record dt {
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: .06em;
@@ -573,13 +573,13 @@
     margin: 4px 0 0;
     overflow-wrap: anywhere;
     color: var(--text-main);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-feedback-workspace .blai-feedback-no-record {
     margin: 12px 0 0;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
 }
 
 @media (max-width: 820px) {
@@ -619,3 +619,16 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+/* Separate entire rewrite records, not their individual diagnostic events. */
+#blai-feedback-workspace .blai-log-record {
+    margin-top: 24px;
+    padding-top: 18px;
+    border-top: 2px solid var(--border-color);
+    min-width: 0;
+}
+#blai-feedback-workspace .blai-log-record .blai-feedback-local-heading strong {
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+#blai-feedback-workspace .blai-log-record button { flex-shrink: 0; }

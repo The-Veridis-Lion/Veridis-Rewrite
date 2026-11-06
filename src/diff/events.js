@@ -1,3 +1,4 @@
+import { captureFragmentEdit, applyFragmentEdit } from './fragmentEdit.js';
 /**
  * Owns on-demand Difference modal rendering, actions, and existing DOM bindings.
  */
@@ -18,7 +19,7 @@ import { omitVariableUpdates } from '../text/variableUpdates.js';
 import { renderDiffDocumentInBackground } from './background.js';
 import { collectAiXmlScopeSegments } from '../aiRewrite/matching.js';
 import { clearMessageDisplayText, commitCurrentMessageText, getMessageDiffBranchKey, syncCurrentSwipeExtra } from '../chat/messageBranch.js';
-import { getMessageDiffMeta, isMessageDiffReverted, setMessageDiffReverted } from './messageMeta.js';
+import { getMessageDiffMeta, isMessageDiffReverted, setMessageDiffReverted, restoreMessageDiffResult, writeMessageDiffAiStage } from './messageMeta.js';
 import { findRelatedRulesForDiffChange } from './relatedRules.js';
 import { requestManualAiRewriteForMessage } from '../aiRewrite/index.js';
 
@@ -39,6 +40,8 @@ export function recleanseDiffMessageAtIndex(index) {
 export function bindDiffEvents() {
     const { extension_settings, saveSettingsDebounced } = getAppContext();
     let comparisonController = null;
+    let fragmentDraft = null;
+    let renderedSnapshot = null;
     const cancelComparison = () => {
         comparisonController?.abort();
         comparisonController = null;
@@ -84,6 +87,7 @@ export function bindDiffEvents() {
     };
 
     const closeDiffRelatedModal = ({ clearSelection = true } = {}) => {
+        fragmentDraft = null;
         $('#blai-diff-related-body').empty();
         $('#blai-diff-related-modal').hide();
         if (clearSelection) $('#blai-diff-modal-content .blai-diff-change-selected').removeClass('blai-diff-change-selected');
@@ -138,6 +142,7 @@ export function bindDiffEvents() {
         const insertedText = pairedInsert ? String(pairedInsert.textContent || '') : (clickedType === 'insert' ? clickedText : '');
 
         return {
+            section,
             clickedType,
             clickedText,
             deletedText,
@@ -163,6 +168,7 @@ export function bindDiffEvents() {
     };
 
     const renderRelatedRulesModal = (change, candidates) => {
+        $('#blai-diff-related-modal .blai-diff-related-title').text('可能相关规则');
         const $modal = $('#blai-diff-related-modal');
         const $body = $('#blai-diff-related-body');
         if (!$modal.length || !$body.length) return;
@@ -247,16 +253,16 @@ export function bindDiffEvents() {
     const syncDiffRevertToggleState = (msg) => {
         const isReverted = isMessageDiffReverted(msg);
         const meta = getMessageDiffMeta(msg);
-        const revertTitle = isReverted ? '重新净化文本' : '撤回净化并保护原文';
-        $('#blai-diff-revert-icon').attr('class', isReverted ? 'fas fa-wand-magic-sparkles' : 'fas fa-rotate-left');
-        $('#blai-diff-revert-text').text(isReverted ? '重新净化' : '撤回净化');
-        $('#blai-diff-revert-toggle').attr('title', revertTitle).prop('disabled', !isReverted && (!meta || msg.mes !== meta.programMes));
+        const revertTitle = isReverted ? '恢复上次净化结果（不请求 AI）' : '撤回净化并保护原文';
+        $('#blai-diff-revert-icon').attr('class', isReverted ? 'fas fa-rotate-right' : 'fas fa-rotate-left');
+        $('#blai-diff-revert-text').text(isReverted ? '恢复上次结果' : '撤回净化');
+        $('#blai-diff-revert-toggle').attr('title', revertTitle).prop('disabled', !meta || typeof msg.mes !== 'string' || (isReverted && msg.mes !== meta.originalMes));
         $('#blai-diff-mode-toggle').toggle(!isReverted);
     };
 
     const syncDiffAiRewriteButtonState = (msg) => {
         const isReverted = isMessageDiffReverted(msg);
-        $('#blai-diff-ai-rewrite').attr('title', isReverted ? '请先重新净化文本' : '对当前消息手动执行 AI 改写');
+        $('#blai-diff-ai-rewrite').attr('title', isReverted ? '对当前文本重新执行净化及 AI 改写' : '对当前消息手动执行 AI 改写');
     };
 
     const refreshMessageAfterRevertToggle = (index, msg) => {
@@ -274,19 +280,28 @@ export function bindDiffEvents() {
         if (!Number.isInteger(index) || index < 0 || !msg || typeof msg !== 'object') return;
 
         if (isMessageDiffReverted(msg)) {
-            recleanseDiffMessageAtIndex(index);
+            if (!restoreMessageDiffResult(msg)) return;
+            markHostChatDirtyFromIndex(index);
         } else {
             const branchKey = getMessageDiffBranchKey(msg);
             const diffMeta = getMessageDiffMeta(msg, branchKey);
-            if (!diffMeta || msg.mes !== diffMeta.programMes) {
-                return;
+            if (!diffMeta || typeof msg.mes !== 'string') return;
+            const currentText = msg.mes;
+            const chat = getAppContext().chat;
+            if (currentText !== diffMeta.programMes) {
+                if (!confirm('正文已手动修改。撤回会暂时移除净化及手动修改，回到净化前原文。\n当前完整正文会保存为上次结果，可通过“恢复上次结果”一起找回。\n确定撤回吗？')) return;
             }
+            // A host may change the selected chat or branch while confirmation is open.
+            if (getAppContext().chat !== chat || getDiffMessageByIndex(index) !== msg
+                || getCurrentDiffIndex() !== index || getMessageDiffBranchKey(msg) !== branchKey
+                || msg.mes !== currentText || JSON.stringify(getMessageDiffMeta(msg, branchKey)) !== JSON.stringify(diffMeta)) return;
             const commitResult = commitCurrentMessageText(msg, diffMeta.originalMes, branchKey);
             if (!commitResult.ok) {
                 return;
             }
             clearMessageDisplayText(msg);
             syncCurrentSwipeExtra(msg);
+            writeMessageDiffAiStage(msg, branchKey, diffMeta.originalMes, diffMeta.aiMes, currentText, diffMeta.aiUnchanged);
             setMessageDiffReverted(msg, true, branchKey);
             markHostChatDirtyFromIndex(index);
         }
@@ -302,7 +317,9 @@ export function bindDiffEvents() {
             return;
         }
         if (isMessageDiffReverted(msg)) {
-            return;
+            recleanseDiffMessageAtIndex(index);
+            if (isMessageDiffReverted(msg)) return;
+            refreshMessageAfterRevertToggle(index, msg);
         }
 
         closeDiffActionsMenu();
@@ -321,6 +338,7 @@ export function bindDiffEvents() {
 
     async function renderDiffModalContent(index) {
         cancelComparison();
+        renderedSnapshot = null;
         const msg = getDiffMessageByIndex(index);
         if (!msg) { closeDiffModal(); return; }
         const meta = getMessageDiffMeta(msg);
@@ -333,7 +351,7 @@ export function bindDiffEvents() {
         const contentEl = $('#blai-diff-modal-content');
         if (isMessageDiffReverted(msg)) {
             const current = !meta ? '历史对比文本已超出保留范围。' : msg.mes === meta.originalMes ? '当前显示为原始文本。' : '当前文本与保留原文不同。';
-            contentEl.html(`<div class="blai-diff-empty"><i class="fas fa-shield-halved blai-diff-reverted-icon"></i>此消息已撤回并处于免净化保护状态，${current}点击 <i class="fas fa-wand-magic-sparkles blai-diff-inline-icon"></i> 重新净化文本。</div>`);
+            contentEl.html(`<div class="blai-diff-empty"><i class="fas fa-shield-halved blai-diff-reverted-icon"></i>此消息已撤回并处于免净化保护状态，${current}可用“恢复上次结果”取回保留结果，或点击“AI 改写”重新生成。历史结果缺失或当前原文已编辑时不可直接恢复。</div>`);
             return;
         }
         if (!meta) {
@@ -365,6 +383,7 @@ export function bindDiffEvents() {
         }
         if (controller.signal.aborted || diffRuntimeState.currentMessage !== msg
             || getDiffMessageByIndex(index) !== msg || getMessageDiffBranchKey(msg) !== branchKey) return;
+        renderedSnapshot = { msg, branchKey, text: msg.mes, meta: JSON.stringify(meta) };
         const notice = omitVariableUpdates(msg.mes) !== omitVariableUpdates(meta.programMes)
             ? '<div class="blai-diff-empty">当前消息与记录的 Veridis 结果不同；下方展示记录的净化阶段。</div>' : '';
         const empty = '<div class="blai-diff-empty">当前消息未触发差异。</div>';
@@ -458,12 +477,41 @@ export function bindDiffEvents() {
     $(document).off('click', '#blai-diff-ai-rewrite').on('click', '#blai-diff-ai-rewrite', () => triggerCurrentDiffAiRewrite());
 
     $(document).off('click', '#blai-diff-modal-content del.blai-diff-change, #blai-diff-modal-content ins.blai-diff-change').on('click', '#blai-diff-modal-content del.blai-diff-change, #blai-diff-modal-content ins.blai-diff-change', function(e) {
-        if (diffRuntimeState.diffRelatedRuleMode !== true) return;
+        if (diffRuntimeState.diffRelatedRuleMode !== true) {
+            e.preventDefault();
+            e.stopPropagation();
+            const change = buildDiffChangeFromElement(this);
+            const { chat } = getAppContext();
+            const msg = getDiffMessageByIndex(getCurrentDiffIndex());
+            const fresh = renderedSnapshot?.msg === msg && renderedSnapshot.branchKey === getMessageDiffBranchKey(msg)
+                && renderedSnapshot.text === msg?.mes && renderedSnapshot.meta === JSON.stringify(getMessageDiffMeta(msg));
+            fragmentDraft = fresh && change && captureFragmentEdit(chat, msg, change.section, change);
+            $('#blai-diff-related-modal .blai-diff-related-title').text('编辑或撤回此处');
+            $('#blai-diff-related-body').html(fragmentDraft
+                ? '<label>编辑选中片段<textarea id="blai-fragment-text" class="text_pole" rows="5"></textarea></label><button type="button" id="blai-fragment-save" class="menu_button">保存此处</button><button type="button" id="blai-fragment-restore" class="menu_button">恢复此处原文</button><div id="blai-fragment-status" role="status"></div>'
+                : '<div role="status">该片段不是当前最终正文，或记录已变化。请刷新透视，并选择最终净化阶段的片段。</div>');
+            if (fragmentDraft) $('#blai-fragment-text').val(fragmentDraft.insertedText);
+            $('#blai-diff-related-modal').css('display', 'flex');
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
         $('#blai-diff-modal-content .blai-diff-change').removeClass('blai-diff-change-selected');
         $(this).addClass('blai-diff-change-selected');
         showRelatedRulesForDiffElement(this);
+    });
+
+    $(document).off('click', '#blai-fragment-save, #blai-fragment-restore').on('click', '#blai-fragment-save, #blai-fragment-restore', function(e) {
+        e.preventDefault();
+        const draft = fragmentDraft;
+        const value = this.id === 'blai-fragment-restore' ? draft?.deletedText : $('#blai-fragment-text').val();
+        if (diffRuntimeState.currentMessage !== draft?.msg || !applyFragmentEdit(getAppContext().chat, draft, value)) {
+            $('#blai-fragment-status').text('消息、分支或正文已变化，未保存。请关闭并刷新透视后重试。');
+            return;
+        }
+        markHostChatDirtyFromIndex(draft.index);
+        closeDiffRelatedModal();
+        refreshMessageAfterRevertToggle(draft.index, draft.msg);
     });
 
     $(document).off('click', '.blai-diff-related-candidate').on('click', '.blai-diff-related-candidate', function(e) {

@@ -4,6 +4,8 @@
 import { extensionName } from '../settings/defaults.js';
 import { aiRewriteState } from './state.js';
 import { logger } from '../log.js';
+import { formatLocalLogTime } from './logTime.js';
+import { renderLogRecords } from '../feedback/logRecords.js';
 
 const debugLogStorageKey = `${extensionName}_ai_rewrite_debug_events`;
 const criticalDebugLogStorageKey = `${extensionName}_ai_rewrite_critical_debug_events`;
@@ -198,8 +200,8 @@ export function recordAiRewriteDebug(stage, details = {}, level = 'info') {
         writeStoredCriticalDebugEvents(storedCritical);
     }
     const exposedEvents = mergeDebugEvents(
-        aiRewriteState.criticalDebugEvents || [],
         aiRewriteState.debugEvents || [],
+        aiRewriteState.criticalDebugEvents || [],
     );
     try {
         globalThis.__veridisAiRewriteLog = exposedEvents;
@@ -214,7 +216,7 @@ export function recordAiRewriteDebug(stage, details = {}, level = 'info') {
     const stored = readStoredDebugEvents();
     stored.push(event);
     writeStoredDebugEvents(stored);
-    refreshMountedDebugDisplay(aiRewriteState.debugEvents);
+    refreshMountedDebugDisplay(exposedEvents);
     let summary = '';
     try {
         summary = JSON.stringify(sanitizedDetails);
@@ -235,10 +237,10 @@ export function recordAiRewriteRuntimeDebug(stage, details = {}, level = 'info')
 
 function getMergedAiRewriteDebugEvents() {
     const combined = mergeDebugEvents(
-        readStoredCriticalDebugEvents(),
-        aiRewriteState.criticalDebugEvents || [],
         readStoredDebugEvents(),
         aiRewriteState.debugEvents || [],
+        readStoredCriticalDebugEvents(),
+        aiRewriteState.criticalDebugEvents || [],
     );
     const seen = new Set();
     const deduped = combined.filter((event) => {
@@ -280,7 +282,7 @@ function formatDebugDisplayFields(details, fields) {
 function formatDebugDisplayEvent(event) {
     const details = event?.details && typeof event.details === 'object' ? event.details : {};
     const stage = String(event?.stage || '');
-    const lines = [`[${String(event?.time || '').replace('T', ' ')}] ${debugStageDisplayLabels[stage] || stage}`];
+    const lines = [`[${formatLocalLogTime(event?.time)}] ${debugStageDisplayLabels[stage] || stage}`];
     const compactFields = compactDebugStageFields[stage];
     if (compactFields) {
         const compactLine = formatDebugDisplayFields(details, compactFields);
@@ -299,12 +301,89 @@ function formatDebugDisplayEvent(event) {
     return lines.join('\n');
 }
 
+// Derive groups from existing lifecycle IDs; never change the stored events.
+export function groupDebugDisplayEvents(events) {
+    const groups = [];
+    const latest = new Map();
+    let previous = null;
+    let pending = [];
+    let manual = null;
+    const make = (id, chatId = '') => {
+        const group = { id, chatId, events: [], order: 0 };
+        groups.push(group);
+        return group;
+    };
+    let other = null;
+    let ignored = null;
+    const addOther = (items) => {
+        if (!items.length) return;
+        other ||= make('');
+        other.events.push(...items);
+    };
+    for (const event of Array.isArray(events) ? events : []) {
+        const d = event.details || {};
+        const id = d.generationId;
+        if (event.stage === 'generation-start-ignored') {
+            if (event.details?.dryRun === true || event.details?.reason === 'dry-run') {
+                ignored ||= make('');
+                ignored.label = '试运行已忽略';
+                ignored.events.push(event);
+            } else addOther([event]);
+            continue;
+        }
+        if (!id) {
+            if (event.stage === 'task-built' || event.stage === 'run-start' && !manual) {
+                addOther(pending); pending = [];
+                manual = make('手动改写', d.chatId || '');
+                previous = manual;
+            }
+            if (manual) {
+                manual.events.push(event);
+                if (['run-success', 'run-cancelled', 'run-error', 'task-cancelled'].includes(event.stage)) manual = null;
+            } else pending.push(event);
+            continue;
+        }
+        manual = null;
+        let group = latest.get(id);
+        // IDs restart after page reload; a creation boundary must start a new group.
+        if (!group || event.stage === 'generation-created' || d.chatId && group.chatId && d.chatId !== group.chatId) {
+            group = make(id, d.chatId || '');
+            latest.set(id, group);
+        }
+        if (d.chatId) group.chatId = d.chatId;
+        for (const item of pending) {
+            const start = item.stage === 'generation-start-observed' && event.stage === 'generation-created';
+            const sameChat = !item.details?.chatId || item.details.chatId === group.chatId;
+            if (sameChat && (previous === group || start)) group.events.push(item);
+            else addOther([item]);
+        }
+        pending = [];
+        group.events.push(event);
+        previous = group;
+    }
+    addOther(pending);
+    const positions = new Map((events || []).map((event, index) => [event, index]));
+    return groups.filter(group => group.events.length).map(group => {
+        group.events.sort((a, b) => positions.get(a) - positions.get(b));
+        const first = group.events[0];
+        const last = group.events.at(-1);
+        return {
+            title: `${group.id ? `改写记录 · ${group.id}` : (group.label || '历史记录缺少归属信息')} · ${formatLocalLogTime(first.time)}`,
+            text: group.events.map(formatDebugDisplayEvent).join('\n\n'),
+            order: positions.get(last),
+        };
+    }).sort((a, b) => b.order - a.order);
+}
+
 function formatDebugDisplayEvents(events) {
-    return (Array.isArray(events) ? events : [])
-        .slice(-debugLogLimit)
-        .reverse()
-        .map(formatDebugDisplayEvent)
+    return groupDebugDisplayEvents(events)
+        .map(group => `━━━━━━━━━━━━━━━━━━━━━━━━\n【${group.title}】\n\n${group.text}`)
         .join('\n\n');
+}
+
+export function renderAiRewriteDebugLog(documentRef = globalThis.document) {
+    const output = documentRef?.getElementById?.('blai-ai-debug-log');
+    if (output) renderLogRecords(output, groupDebugDisplayEvents(getMergedAiRewriteDebugEvents()), '暂无运行记录。');
 }
 
 function refreshMountedDebugDisplay(events) {
@@ -313,7 +392,7 @@ function refreshMountedDebugDisplay(events) {
         const workspace = element?.closest?.('#blai-feedback-workspace');
         if (workspace?.getAttribute?.('aria-hidden') === 'false'
             && workspace?.dataset?.feedbackView === 'runtime-log') {
-            element.textContent = formatDebugDisplayEvents(events);
+            renderLogRecords(element, groupDebugDisplayEvents(events), '暂无运行记录。');
         }
     } catch {
         // Ignore absent or unavailable DOM; runtime/storage logging still works.

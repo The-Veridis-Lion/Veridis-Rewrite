@@ -1,3 +1,4 @@
+import { applyLocalEdits } from './localEdits.js';
 import { recordAiRewriteDebug } from './debug.js';
 
 export class AiRewriteResponseFormatError extends Error {
@@ -68,7 +69,15 @@ export function validateAiRewriteEntries(returnedEntries, itemById) {
     for (const [rawId, rawValue] of returnedEntries) {
         const id = String(rawId || '');
         if (!itemById.has(id)) throw new AiRewriteResponseFormatError(`API 返回未知改写 id：${id || '(空)'}`);
-        accepted.set(id, validateAiRewriteTargetValue(id, rawValue));
+        try {
+            // Preserve the original preset protocol; accept the experimental format only
+            // as a validated compatibility input, never require it from existing presets.
+            accepted.set(id, typeof rawValue === 'string'
+                ? validateAiRewriteTargetValue(id, rawValue)
+                : applyLocalEdits(itemById.get(id).text, rawValue));
+        } catch (error) {
+            throw new AiRewriteResponseFormatError(`API 返回 ${id} 的局部修改无效：${error.message}`, error);
+        }
     }
     return accepted;
 }

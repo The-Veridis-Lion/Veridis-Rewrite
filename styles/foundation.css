@@ -56,7 +56,7 @@
     justify-content: center !important;
     gap: 8px !important;
     border-radius: 8px !important;
-    font-size: 14px !important;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important;
     font-weight: 700 !important;
     white-space: nowrap !important;
 }
@@ -96,7 +96,7 @@
 #blai-purifier-popup .field span, #blai-purifier-popup .row-main strong {
     min-width: 0;
     color: var(--text-main);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 900;
     white-space: nowrap;
     overflow: hidden;
@@ -106,7 +106,7 @@
 #blai-purifier-popup .field small {
     min-width: 0;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 850;
     white-space: nowrap;
     overflow: hidden;
@@ -122,7 +122,7 @@
     color: var(--text-main);
     background: transparent;
     border: 1px solid var(--border-color);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 900;
     white-space: nowrap;
     box-shadow: none !important;
@@ -198,7 +198,7 @@
     width: 72px !important;
     min-height: 24px !important;
     padding: 0 8px !important;
-    font-size: 11px !important;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1 !important;
     font-weight: 900 !important;
     text-align: right;
@@ -206,7 +206,7 @@
 
 #blai-purifier-popup .setting-unit {
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 850;
     white-space: nowrap;
 }
@@ -222,7 +222,7 @@
 #blai-purifier-popup .clean-row p {
     margin: 0;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.45;
     font-weight: 700;
 }
@@ -254,7 +254,7 @@
 .blai-legacy-warning-icon {
     flex: 0 0 auto !important;
     color: var(--status-danger) !important;
-    font-size: 16px !important;
+    font-size: calc(16px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1 !important;
 }
 
@@ -264,14 +264,14 @@
 }
 
 .blai-legacy-warning-title {
-    font-size: 13px !important;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1)) !important;
     font-weight: 800 !important;
     line-height: 1.25 !important;
 }
 
 .blai-legacy-warning-text {
     margin-top: 2px !important;
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.35 !important;
     color: var(--text-secondary) !important;
 }
@@ -284,7 +284,7 @@
     border-radius: 7px !important;
     background: var(--status-danger) !important;
     color: var(--bg-base) !important;
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
     font-weight: 800 !important;
     cursor: pointer !important;
     white-space: nowrap !important;
@@ -323,7 +323,7 @@
     border: 1px solid var(--border-color) !important;
     background: var(--bg-surface) !important;
     color: var(--text-main) !important;
-    font-size: 18px !important;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1)) !important;
     box-sizing: border-box !important;
     outline: none !important;
     font-family: inherit !important;
@@ -344,7 +344,7 @@
 .blai-field-error {
     display: none !important;
     margin-top: 6px !important;
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.45 !important;
     color: var(--status-danger) !important;
 }
@@ -357,7 +357,7 @@
     padding: 0 10px !important;
     min-height: 30px !important;
     min-width: 30px !important;
-    font-size: 13px !important;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1 !important;
     border-radius: 8px !important;
     background: transparent !important;
@@ -379,7 +379,7 @@
     justify-content: center !important;
     padding: 4px 10px !important;
     border-radius: 4px !important;
-    font-size: 14px !important;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important;
     margin-right: 12px !important;
     font-weight: 800 !important;
     color: var(--bg-surface) !important;
@@ -390,7 +390,7 @@
 }
 
 .blai-badge-compact {
-    font-size: 10px !important;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1)) !important;
     padding: 2px 5px !important;
     min-width: auto !important;
     margin-right: 6px !important;
@@ -410,7 +410,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    font-size: 14px;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1));
     box-sizing: border-box;
 }
 
@@ -437,7 +437,7 @@
     border-radius: 10px !important;
     background: var(--bg-surface) !important;
     box-shadow: 0 14px 32px color-mix(in srgb, var(--bg-base) 22%, transparent) !important;
-    z-index: 10000007 !important;
+    z-index: 2147483608 !important;
 }
 
 .blai-bind-menu[hidden] {
@@ -464,7 +464,7 @@
 
 .blai-bind-menu-note {
     color: var(--text-secondary) !important;
-    font-size: 11px !important;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1)) !important;
     font-weight: 620 !important;
 }
 
@@ -474,7 +474,7 @@
     background-color: var(--bg-surface);
     padding: 0 14px;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1));
     color: var(--text-main);
     cursor: pointer;
     height: 40px;
@@ -535,7 +535,7 @@
     font-family: 'Font Awesome 6 Free';
     font-weight: 900;
     color: var(--bg-surface);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -546,7 +546,7 @@
     color: var(--bg-surface);
     padding: 2px 6px;
     border-radius: 10px;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
@@ -568,7 +568,7 @@
     opacity: 0.58 !important;
     width: 100% !important;
     text-align: center !important;
-    font-size: 13px !important;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1)) !important;
     padding: 20px 0 !important;
     color: var(--text-secondary) !important;
 }
@@ -581,7 +581,7 @@
     height: 100dvh !important;
     padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
     box-sizing: border-box !important;
-    z-index: 10000000 !important;
+    z-index: 2147483604 !important;
     flex-direction: column !important;
     font-family: inherit !important;
     align-items: center !important;
@@ -640,7 +640,7 @@
 .blai-modal-actions .blai-secondary-btn, .blai-modal-actions .blai-primary-btn, .blai-modal-actions button {
     flex: 1 !important;
     padding: 10px !important;
-    font-size: 14px !important;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important;
     display: flex !important;
     justify-content: center !important;
     align-items: center !important;
@@ -659,11 +659,11 @@
 .blai-confirm-title {
     color: var(--status-danger) !important;
     margin-top: 0 !important;
-    font-size: 22px !important;
+    font-size: calc(22px * var(--blai-ui-font-scale, 1)) !important;
 }
 
 .blai-confirm-text {
-    font-size: 15px !important;
+    font-size: calc(15px * var(--blai-ui-font-scale, 1)) !important;
     color: var(--text-main) !important;
     line-height: 1.6 !important;
     margin: 0 0 25px 0 !important;
@@ -700,7 +700,7 @@
     background: color-mix(in srgb, var(--text-main) 7%, transparent) !important;
     color: var(--text-main) !important;
     font: inherit !important;
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1 !important;
     cursor: pointer !important;
 }
@@ -733,7 +733,7 @@
     overflow: hidden !important;
     display: block !important;
     height: 32px !important;
-    font-size: 13px !important;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1)) !important;
     padding: 3px 8px !important;
 }}
 
@@ -742,7 +742,7 @@
 }}
 
 @media screen and (max-width: 600px) {.blai-input, .blai-textarea {
-    font-size: 14px !important;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important;
     padding: 10px 12px !important;
 }}
 
@@ -771,7 +771,7 @@
     border: 1px solid color-mix(in srgb, var(--text-main) 22%, var(--border-color));
     background: var(--bg-surface) !important;
     color: var(--text-main) !important;
-    font-size: 14px !important;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important;
     font-weight: 600 !important;
     line-height: 1.5 !important;
     text-align: center !important;
@@ -787,7 +787,7 @@
 
 .blai-toast > i {
     color: inherit;
-    font-size: 15px;
+    font-size: calc(15px * var(--blai-ui-font-scale, 1));
 }
 
 .blai-toast-content {
@@ -801,7 +801,7 @@
 
 .blai-toast-description {
     display: block;
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 400;
     line-height: 1.35;
 }
@@ -842,7 +842,7 @@
     border: 1px solid var(--border-color) !important;
     background: transparent !important;
     color: var(--text-main) !important;
-    font-size: 13px !important;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1)) !important;
     font-weight: 800 !important;
     box-shadow: none !important;
 }
@@ -864,7 +864,7 @@
     margin: 0 !important;
     overflow-y: auto !important;
     color: var(--text-main) !important;
-    font-size: 14px !important;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.7 !important;
     white-space: pre-wrap !important;
 }
@@ -941,13 +941,13 @@
 }}
 
 @media (max-width: 600px) {.blai-modal-shell .blai-edit-modal-title, .blai-modal-shell .blai-confirm-title, .blai-modal-shell h3 {
-    font-size: 16px !important;
+    font-size: calc(16px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.2 !important;
     font-weight: 800 !important;
 }}
 
 @media (max-width: 600px) {.blai-modal-shell input, .blai-modal-shell select, .blai-modal-shell textarea {
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media (max-width: 600px) {.blai-modal-shell input, .blai-modal-shell select {
@@ -956,7 +956,7 @@
 }}
 
 @media (max-width: 600px) {.blai-modal-shell small, .blai-modal-shell p, .blai-modal-shell .blai-subrule-mode-hint, .blai-modal-shell .blai-field-error {
-    font-size: 10px !important;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.4 !important;
 }}
 
@@ -970,7 +970,7 @@
     min-height: 36px !important;
     padding: 0 12px !important;
     border-radius: 8px !important;
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
     font-weight: 800 !important;
 }}
 

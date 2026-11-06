@@ -8,7 +8,7 @@ import { getMessageDiffMeta, isMessageDiffReverted } from '../diff/messageMeta.j
 import { getMessageDiffBranchKey } from '../chat/messageBranch.js';
 import { getCurrentChatIdentity } from '../host/context.js';
 import { generationLifecycle } from '../host/generationLifecycle.js';
-import { AiRewriteRequestFormatError, isAiRewriteRequestFormatError, isBadRequestError, requestAiRewrite } from './generation.js';
+import { AiRewriteRequestFormatError, isAiRewriteRequestFormatError, isBadRequestError, requestAiRewrite, getAiRewriteTransport } from './generation.js';
 import { recordAiRewriteDebug } from './debug.js';
 import {
     getAiSettings,
@@ -20,6 +20,7 @@ import {
     getTaskFreshnessIssue,
     isTaskStillFresh,
     snapshotAiRewriteTaskSettings,
+    resolveManualProgramTail,
     validateAutomaticAiRewriteContent,
 } from './task.js';
 import { applyAcceptedRewrites, applyProgramFallbackRewrites } from './apply.js';
@@ -397,6 +398,19 @@ function finishAiRewriteApply(task, accepted) {
 
     const applyResult = applyAcceptedRewrites(task, accepted);
     const appliedCount = applyResult.appliedCount || 0;
+    if (applyResult.rejectedCount > 0) {
+        notifyAiRewriteStatus('warning', '部分目标未完成清理', `已应用 ${appliedCount} 项；${applyResult.rejectedCount} 项仍有回抄风险，保留原文。`, { timeOut: 8000 });
+        return { status: 'partial', applyResult };
+    }
+    if (applyResult.unchangedCount > 0) {
+        recordAiRewriteDebug('run-unchanged-targets', {
+            generationId: task.generationId || '',
+            unchangedCount: applyResult.unchangedCount,
+        }, 'warn');
+        notifyAiRewriteStatus('warning', '部分目标未产生修改',
+            `有 ${applyResult.unchangedCount} 项保持原文；请检查是否属于规则例外，不能据此确认清理完成。`, { timeOut: 8000 });
+        return { status: 'unchanged-targets', applyResult };
+    }
     if (appliedCount > 0) {
         recordAiRewriteDebug('run-success', {
             generationId: task.generationId || '',
@@ -425,7 +439,7 @@ function finishAiRewriteApply(task, accepted) {
         acceptedCount: accepted.size,
         reason: 'no-text-change',
     });
-    notifyAiRewriteStatus('success', 'AI 改写成功', formatAiRewriteCompletionMessage(task, '没有新的文本变更需要写入'), { timeOut: 5000 });
+    notifyAiRewriteStatus('warning', 'AI 未产生新修改', formatAiRewriteCompletionMessage(task, '没有新的文本变更需要写入；请检查清理结果'), { timeOut: 5000 });
     return { status: 'no-change', applyResult };
 }
 
@@ -713,13 +727,28 @@ function buildAiRewriteCandidate(payload, options = {}) {
     const currentText = typeof msg.mes === 'string' ? msg.mes : '';
     const branchKey = getMessageDiffBranchKey(msg);
     const previous = getMessageDiffMeta(msg, branchKey);
+    const rebaseFromCurrentText = !isAutomatic && previous !== null
+        && resolveManualProgramTail(currentText, previous) === null;
     const frozenSnapshot = isAutomatic && payload && typeof payload === 'object' && typeof payload.snapshotText === 'string'
         ? payload.snapshotText
         : '';
     const sourceText = isAutomatic
         ? (frozenSnapshot || currentText)
-        : (previous?.originalMes ?? currentText);
-    if (!sourceText.trim()) return { task: null, reason: '目标消息为空' };
+        : (rebaseFromCurrentText ? currentText : (previous?.originalMes ?? currentText));
+    if (!sourceText.trim()) {
+        recordAiRewriteDebug('task-source-empty', {
+            index,
+            branchKey,
+            manual: !isAutomatic,
+            messageTextType: typeof msg.mes,
+            currentTextLength: currentText.length,
+            currentHasText: currentText.trim().length > 0,
+            retainedOriginalLength: previous?.originalMes.length ?? null,
+            retainedProgramLength: previous?.programMes.length ?? null,
+            rebaseFromCurrentText,
+        }, 'warn');
+        return { task: null, reason: '目标消息为空' };
+    }
 
     const taskSettings = snapshotAiRewriteTaskSettings(settings, aiSettings);
     const { wholeMessage, tagName } = getAiXmlScopeTag(taskSettings.aiSettings);
@@ -761,7 +790,7 @@ function buildAiRewriteCandidate(payload, options = {}) {
             sentenceTargetCount: originalItems.length,
             itemLengths: originalItems.map((item) => item.text.length),
             isStreaming: streamingRuntimeState.isStreamingGeneration === true,
-            source: !isAutomatic && previous ? 'retained-original' : 'host-original',
+            source: rebaseFromCurrentText ? 'edited-current' : (!isAutomatic && previous ? 'retained-original' : 'host-original'),
             rawSourceLength: currentText.length,
             sourceLength: sourceText.length,
             generationId: isAutomatic ? String(payload.generationId || '') : '',
@@ -783,6 +812,7 @@ function buildAiRewriteCandidate(payload, options = {}) {
             matchedAiRuleCount: countMatchedAiRules(matches),
             claimedMessageText: currentText,
             claimedMeta: previous,
+            rebaseFromCurrentText,
             automatic: isAutomatic,
             generationId: isAutomatic ? String(payload.generationId || '') : '',
             chatId: isAutomatic ? String(payload.chatId || '') : '',
@@ -990,7 +1020,9 @@ async function requestAcceptedRewritesOnce(task, rewriteState, attempt, maxAttem
                 recordAiRewriteDebug('request-stale-after-fetch', { generationId: task.generationId || '', reason: freshnessIssue }, 'warn');
                 return { stale: true, accepted };
             }
-            const groupAccepted = parseAiResponse(rawResponse, new Map(group.items.map((item) => [item.id, item])));
+            const itemById = new Map(group.items.map((item) => [item.id, item]));
+            // Response validation failures never spend another model request.
+            const groupAccepted = parseAiResponse(rawResponse, itemById);
             groupAccepted.forEach((value, key) => accepted.set(key, value));
             completedGroupKeys.add(group.key);
         } catch (err) {
@@ -1098,7 +1130,7 @@ async function runAiRewriteForMessage(payload, options = {}) {
         rawAiMatchCount: readyTask.rawAiMatchCount,
         matchedAiRuleCount: readyTask.matchedAiRuleCount,
         model: aiSettings.model,
-        transport: 'tavern-helper-custom-api',
+        transport: getAiRewriteTransport(),
         maxRetries: getAiRetryCount(aiSettings),
         isStreaming: streamingRuntimeState.isStreamingGeneration === true,
         waitForFinalCleanse,

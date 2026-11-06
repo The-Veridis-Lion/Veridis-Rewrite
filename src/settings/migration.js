@@ -32,6 +32,9 @@ function normalizeAiApiPresetEntry(value) {
         baseUrl: String(value.baseUrl || '').trim(),
         apiKey: String(value.apiKey || ''),
         model: String(value.model || '').trim(),
+        excludedParameters: String(value.excludedParameters || ''),
+        additionalParameters: String(value.additionalParameters || ''),
+        streamingEnabled: value.streamingEnabled === true,
         modelOptions: Array.isArray(value.modelOptions)
             ? [...new Set(value.modelOptions.map((model) => String(model || '').trim()).filter(Boolean))]
             : [],
@@ -59,6 +62,9 @@ function normalizeAiRewriteSettings(settings) {
         next.enabledDefaultApplied = true;
     }
     next.enabled = next.enabled === true;
+    next.excludedParameters = String(next.excludedParameters || '');
+    next.additionalParameters = String(next.additionalParameters || '');
+    next.streamingEnabled = next.streamingEnabled === true;
     next.autoTriggerEnabled = next.autoTriggerEnabled === true;
     next.enabledDefaultApplied = next.enabledDefaultApplied === true;
     delete next.streamingRoughPreview;

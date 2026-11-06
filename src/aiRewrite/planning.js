@@ -4,7 +4,7 @@ import { collectXmlCommentRanges, maskXmlCommentRanges } from './commentProtecti
 import { recordAiRewriteDebug } from './debug.js';
 import { collectVariableUpdateRanges } from '../text/variableUpdates.js';
 
-const responseGuard = `输出必须是一个 JSON 对象，键必须恰好为本次全部 rewrite_target 的 id。每个值必须是直接替换对应完整目标文本的完整结果字符串；空字符串表示删除整个目标文本。不得输出解释、代码块或标签外包装。`;
+const responseGuard = `【最终输出格式】严格输出一个 JSON 对象，每个 rewrite_target 的 id 对应一个完整替换字符串，键不增不减。删除本目标时返回空字符串；无需修改时返回本目标原文。按各目标绑定的启用规则完成本轮清理，保留必要事实、数量、否定和动作。完整替换只指标签内已有范围；目标可能是半句，在原位置与保留的前后文拼接通顺即可。locked_context 仅供理解，禁止复制或近义复述进结果，不补入标签外对白、主语或相邻动作。不得输出修改数组、代码块或解释。示例：{"hit-1":"改写结果"}。`;
 
 export function normalizeLimit(value, fallback, min, max) {
     const parsed = Number(value);
@@ -157,14 +157,14 @@ function buildAnnotatedSource(originalText, items, settings, maxContextChars, ru
         if (item.start < window.start || item.end > window.end) {
             throw new Error(`改写目标 ${item.id} 超出发送上下文范围`);
         }
-        rendered += redactSourceRange(source, cursor, item.start, protectedRanges);
+        rendered += `<locked_context>${redactSourceRange(source, cursor, item.start, protectedRanges)}</locked_context>`;
         const ruleIds = ruleIdsByItem.get(item.id) || [];
         const rulesAttribute = ruleIds.length > 0 ? ` rules="${ruleIds.join(',')}"` : '';
         rendered += `<rewrite_target id="${item.id}"${rulesAttribute}>${source.slice(item.start, item.end)}</rewrite_target>`;
         cursor = item.end;
     });
 
-    rendered += redactSourceRange(source, cursor, window.end, protectedRanges);
+    rendered += `<locked_context>${redactSourceRange(source, cursor, window.end, protectedRanges)}</locked_context>`;
     if (window.end < source.length) rendered += '\n[后文已省略]';
     return rendered;
 }

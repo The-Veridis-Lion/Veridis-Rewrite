@@ -1,7 +1,7 @@
 /* Clean/Scope/Deep Clean presentation, including Deep Clean responsive layout. */
 
 .blai-scope-tag-editor-modal {
-    z-index: 10000006 !important;
+    z-index: 2147483607 !important;
 }
 
 .blai-scope-tag-editor-card {
@@ -22,7 +22,7 @@
 .blai-scope-tag-editor-title {
     margin: 0 0 30px !important;
     color: var(--text-main) !important;
-    font-size: 26px !important;
+    font-size: calc(26px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.25 !important;
     font-weight: 760 !important;
     text-align: center !important;
@@ -38,7 +38,7 @@
 .blai-scope-tag-editor-field .blai-field-label {
     margin: 0 !important;
     color: var(--text-main) !important;
-    font-size: 18px !important;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.3 !important;
     font-weight: 700 !important;
 }
@@ -46,14 +46,14 @@
 .blai-scope-tag-input {
     height: 58px !important;
     border-radius: 12px !important;
-    font-size: 18px !important;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1)) !important;
     background: var(--bg-surface) !important;
     color: var(--text-main) !important;
 }
 
 .blai-scope-tag-field-help {
     color: var(--text-secondary) !important;
-    font-size: 14px !important;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.45 !important;
 }
 
@@ -71,7 +71,7 @@
     padding: 0 20px !important;
     border: none !important;
     border-radius: 14px !important;
-    font-size: 18px !important;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1)) !important;
     font-weight: 760 !important;
     line-height: 1 !important;
     cursor: pointer !important;
@@ -130,7 +130,7 @@
 
 @media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-title {
     margin-bottom: 20px !important;
-    font-size: 19px !important;
+    font-size: calc(19px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-field {
@@ -139,16 +139,16 @@
 }}
 
 @media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-field .blai-field-label {
-    font-size: 13px !important;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-input {
     height: 44px !important;
-    font-size: 13px !important;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-field-help {
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media screen and (min-width: 1025px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-actions {
@@ -160,7 +160,7 @@
     min-width: 78px !important;
     min-height: 40px !important;
     border-radius: 10px !important;
-    font-size: 13px !important;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media (max-width: 600px) {#blai-scope-tag-editor-modal {
@@ -177,7 +177,7 @@
 
 @media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-title {
     margin-bottom: 16px !important;
-    font-size: 16px !important;
+    font-size: calc(16px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-field {
@@ -186,17 +186,17 @@
 }}
 
 @media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-field .blai-field-label {
-    font-size: 14px !important;
+    font-size: calc(14px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-input {
     height: 38px !important;
     min-height: 38px !important;
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-field-help {
-    font-size: 10px !important;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media (max-width: 600px) {#blai-scope-tag-editor-modal .blai-scope-tag-editor-actions {
@@ -209,7 +209,7 @@
     min-height: 36px !important;
     padding: 0 14px !important;
     border-radius: 8px !important;
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 #blai-purifier-popup .blai-clean-page {
@@ -249,7 +249,7 @@
 }
 
 #blai-purifier-popup .blai-clean-section-header h2, #blai-purifier-popup .blai-clean-danger-header h2 {
-    font-size: 15px;
+    font-size: calc(15px * var(--blai-ui-font-scale, 1));
     font-weight: 760;
     line-height: 1.3;
 }
@@ -257,7 +257,7 @@
 #blai-purifier-popup .blai-clean-section-header p {
     margin-top: 4px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.5;
     text-wrap: pretty;
 }
@@ -337,14 +337,14 @@
 
 #blai-purifier-popup .blai-clean-mode-copy strong {
     color: inherit;
-    font-size: 13px;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1));
     font-weight: 740;
     line-height: 1.35;
 }
 
 #blai-purifier-popup .blai-clean-mode-copy > span {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
     text-wrap: pretty;
 }
@@ -353,7 +353,7 @@
     min-height: 18px;
     margin-top: 10px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.5;
 }
 
@@ -375,7 +375,7 @@
 }
 
 #blai-purifier-popup .blai-clean-list-label strong {
-    font-size: 13px;
+    font-size: calc(13px * var(--blai-ui-font-scale, 1));
     font-weight: 740;
 }
 
@@ -390,7 +390,7 @@
     background: var(--bg-surface);
     color: var(--text-secondary);
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
@@ -405,7 +405,7 @@
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 680;
     box-shadow: none;
 }
@@ -459,7 +459,7 @@
     background: transparent !important;
     color: var(--text-main) !important;
     font-family: inherit !important;
-    font-size: 12px !important;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1)) !important;
     box-shadow: none !important;
 }
 
@@ -537,7 +537,7 @@
 #blai-purifier-popup .blai-clean-group-title {
     min-width: 0;
     overflow: hidden;
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -554,7 +554,7 @@
     background: var(--bg-surface);
     color: var(--text-secondary);
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-variant-numeric: tabular-nums;
 }
 
@@ -681,7 +681,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     line-height: 1.3;
 }
@@ -696,7 +696,7 @@
     box-shadow: none !important;
     color: var(--text-secondary) !important;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important;
-    font-size: 10px !important;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1)) !important;
     line-height: 1.35 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -748,14 +748,14 @@
     background: transparent;
     color: var(--text-main);
     font-family: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 680;
 }
 
 #blai-purifier-popup .blai-clean-group-empty {
     padding: 14px 12px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     text-align: center;
 }
 
@@ -782,7 +782,7 @@
 }
 
 #blai-purifier-popup .blai-clean-setting-row strong {
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     line-height: 1.35;
 }
@@ -790,7 +790,7 @@
 #blai-purifier-popup .blai-clean-setting-row p {
     margin-top: 4px;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.5;
     text-wrap: pretty;
 }
@@ -813,7 +813,7 @@
 }
 
 #blai-purifier-popup .blai-clean-danger-content h3 {
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 740;
     line-height: 1.35;
 }
@@ -821,7 +821,7 @@
 #blai-purifier-popup .blai-clean-danger-content > p {
     margin-top: 6px;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
     text-wrap: pretty;
 }
@@ -837,7 +837,7 @@
     border-radius: 7px;
     background: color-mix(in srgb, var(--accent-color) 9%, transparent);
     color: var(--accent-color);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.5;
 }
 
@@ -860,7 +860,7 @@
     background: var(--status-danger);
     color: var(--bg-surface);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 740;
     box-shadow: none;
     transition: filter .18s ease;
@@ -925,20 +925,20 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-eyebrow {
     color: var(--accent-color);
-    font: 750 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+    font: 750 calc(10px * var(--blai-ui-font-scale, 1))/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
     letter-spacing: .09em;
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-header h2 {
     color: var(--text-main);
-    font-size: 15px;
+    font-size: calc(15px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     line-height: 1.25;
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-header #blai-deep-clean-description {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.35;
 }
 
@@ -956,7 +956,7 @@
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     box-shadow: none;
 }
@@ -974,7 +974,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-loading, #blai-deep-clean-workspace .blai-deep-clean-error, #blai-deep-clean-workspace .blai-deep-clean-empty {
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
     text-align: center;
 }
@@ -987,7 +987,7 @@
     background: var(--bg-surface);
     color: var(--text-main);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     box-shadow: none;
 }
@@ -1043,7 +1043,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-section h3 {
     color: var(--text-main);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 760;
     line-height: 1.35;
 }
@@ -1051,7 +1051,7 @@
 #blai-deep-clean-workspace .blai-deep-clean-section > p {
     margin-top: 5px;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.5;
 }
 
@@ -1091,7 +1091,7 @@
     background: transparent;
     color: var(--text-main);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 680;
     text-align: left;
     box-shadow: none;
@@ -1111,7 +1111,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-quick > i {
     color: var(--text-secondary);
-    font-size: 8px;
+    font-size: calc(8px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-quick:hover, #blai-deep-clean-workspace .blai-deep-clean-quick.is-active {
@@ -1127,7 +1127,7 @@
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     text-decoration: underline;
     box-shadow: none;
 }
@@ -1155,7 +1155,7 @@
     background: var(--bg-base) !important;
     color: var(--text-main);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-specified-list {
@@ -1182,7 +1182,7 @@
 #blai-deep-clean-workspace .blai-deep-clean-option > span, #blai-deep-clean-workspace .blai-deep-clean-option > legend {
     padding: 0;
     color: var(--text-main);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
 }
 
@@ -1226,7 +1226,7 @@
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-mode-copy strong {
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
 }
 
@@ -1236,7 +1236,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-mode-copy small {
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-weight: 500;
     line-height: 1.4;
 }
@@ -1266,7 +1266,7 @@
     background: var(--bg-surface);
     color: var(--text-secondary);
     font: inherit;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     box-shadow: none;
 }
@@ -1303,14 +1303,14 @@
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-resource-header h3 {
-    font-size: 18px;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     letter-spacing: -.015em;
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-resource-header p {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-resource-header p strong {
@@ -1341,7 +1341,7 @@
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     white-space: nowrap;
     box-shadow: none;
@@ -1411,7 +1411,7 @@
     grid-column: 1;
     justify-self: center;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     pointer-events: none;
 }
 
@@ -1433,7 +1433,7 @@
     justify-content: flex-end;
     gap: 13px;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     white-space: nowrap;
 }
 
@@ -1453,7 +1453,7 @@
     background: transparent;
     color: var(--accent-color);
     font: inherit;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     text-decoration: underline;
     box-shadow: none;
 }
@@ -1503,7 +1503,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-choice-title {
     color: var(--text-main);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 680;
 }
 
@@ -1516,7 +1516,7 @@
     padding: 9px 0 10px;
     border-top: 1px solid var(--border-color);
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     line-height: 1.45;
 }
 
@@ -1554,7 +1554,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-processing-intro h3 {
     color: var(--text-main);
-    font-size: 22px;
+    font-size: calc(22px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     letter-spacing: -.02em;
 }
@@ -1562,7 +1562,7 @@
 #blai-deep-clean-workspace .blai-deep-clean-processing-intro p {
     margin-top: 7px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.5;
 }
 
@@ -1607,7 +1607,7 @@
     border-radius: 50%;
     background: var(--bg-surface);
     color: var(--accent-color);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-pipeline li.is-active .blai-deep-clean-pipeline-marker {
@@ -1631,7 +1631,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-pipeline strong {
     color: inherit;
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
 }
 
@@ -1697,7 +1697,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-batch-head h3 {
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-weight: 780;
     letter-spacing: .1em;
     text-transform: uppercase;
@@ -1715,7 +1715,7 @@
     flex-wrap: wrap;
     gap: 6px;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 600;
     line-height: 1.2;
 }
@@ -1728,7 +1728,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-batch-metrics strong {
     color: var(--text-main);
-    font-size: 16px;
+    font-size: calc(16px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     line-height: 1;
     font-variant-numeric: tabular-nums;
@@ -1747,7 +1747,7 @@
     gap: 9px;
     border-block: 1px solid var(--border-color);
     color: var(--text-main);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 680;
     line-height: 1.45;
 }
@@ -1768,7 +1768,7 @@
 #blai-deep-clean-workspace .blai-deep-clean-batch-contents h4 {
     margin-bottom: 8px;
     color: var(--text-main);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-weight: 760;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -1785,7 +1785,7 @@
     padding: 8px 0 8px 12px;
     border-bottom: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.45;
     overflow-wrap: anywhere;
 }
@@ -1804,7 +1804,7 @@
 #blai-deep-clean-workspace .blai-deep-clean-batch-empty {
     padding: 18px 0;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.5;
 }
 
@@ -1821,14 +1821,14 @@
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-result > header h3 {
-    font-size: 20px;
+    font-size: calc(20px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-result > header p {
     margin-top: 6px;
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-scan-metrics, #blai-deep-clean-workspace .blai-deep-clean-scan-categories {
@@ -1844,7 +1844,7 @@
 #blai-deep-clean-workspace .blai-deep-clean-scan-categories h3 {
     grid-column: 1 / -1;
     padding: 0 0 2px;
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-scan-metrics > div, #blai-deep-clean-workspace .blai-deep-clean-scan-categories > div {
@@ -1856,12 +1856,12 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-scan-metrics span, #blai-deep-clean-workspace .blai-deep-clean-scan-categories span {
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-scan-metrics strong, #blai-deep-clean-workspace .blai-deep-clean-scan-categories strong {
     color: var(--text-main);
-    font-size: 18px;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1));
     font-variant-numeric: tabular-nums;
 }
 
@@ -1885,17 +1885,17 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-state > i {
     color: var(--accent-color);
-    font-size: 20px;
+    font-size: calc(20px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-state h3 {
-    font-size: 16px;
+    font-size: calc(16px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-state p {
     color: var(--text-secondary);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     line-height: 1.55;
 }
 
@@ -1926,7 +1926,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-completion-summary h4 {
     color: var(--accent-color);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-weight: 760;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -1956,13 +1956,13 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-completion-metrics dt {
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     line-height: 1.35;
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-completion-metrics dd {
     color: var(--text-main);
-    font-size: 17px;
+    font-size: calc(17px * var(--blai-ui-font-scale, 1));
     font-weight: 740;
     font-variant-numeric: tabular-nums;
 }
@@ -1973,7 +1973,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-stopped-state h3 {
     color: var(--accent-color);
-    font-size: 18px;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1));
     font-weight: 800;
 }
 
@@ -2027,7 +2027,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-review-head p {
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -2036,7 +2036,7 @@
 #blai-deep-clean-workspace .blai-deep-clean-review-head h3 {
     margin-top: 4px;
     color: var(--text-main);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     overflow-wrap: anywhere;
 }
@@ -2057,7 +2057,7 @@
     background: var(--bg-surface);
     color: var(--text-secondary);
     font: inherit;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     box-shadow: none;
 }
@@ -2075,7 +2075,7 @@
     display: inline-block;
     margin-top: 6px;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 650;
 }
 
@@ -2106,7 +2106,7 @@
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     box-shadow: none;
 }
@@ -2124,7 +2124,7 @@
 #blai-deep-clean-workspace .blai-deep-clean-review-projection {
     min-height: 1.5em;
     color: var(--text-main);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     line-height: 1.65;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
@@ -2212,7 +2212,7 @@
     background: transparent;
     color: var(--text-secondary);
     font: inherit;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 700;
     box-shadow: none;
 }
@@ -2228,7 +2228,7 @@
 
 #blai-deep-clean-workspace .blai-deep-clean-review-navigation strong {
     color: var(--text-main);
-    font: 700 10px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+    font: 700 calc(10px * var(--blai-ui-font-scale, 1))/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
     font-variant-numeric: tabular-nums;
 }
 
@@ -2248,7 +2248,7 @@
     align-items: center;
     gap: 7px;
     color: var(--text-secondary);
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
 }
 
 #blai-deep-clean-workspace .blai-deep-clean-review-apply strong {
@@ -2280,7 +2280,7 @@
     justify-content: space-between;
     gap: 12px;
     color: var(--text-main);
-    font-size: 11px;
+    font-size: calc(11px * var(--blai-ui-font-scale, 1));
     font-weight: 720;
     list-style: none;
     cursor: pointer;
@@ -2298,7 +2298,7 @@
 
 @media (max-width: 900px) {#blai-deep-clean-workspace .blai-deep-clean-controls > summary > i {
     color: var(--text-secondary);
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
     transition: transform .16s ease;
 }}
 
@@ -2402,7 +2402,7 @@
 }}
 
 @media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-resource-header h3 {
-    font-size: 16px;
+    font-size: calc(16px * var(--blai-ui-font-scale, 1));
 }}
 
 @media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-resource-tabs {
@@ -2448,7 +2448,7 @@
 }}
 
 @media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-processing-intro h3 {
-    font-size: 18px;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1));
 }}
 
 @media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-scan-metrics, #blai-deep-clean-workspace .blai-deep-clean-scan-categories {
@@ -2491,7 +2491,7 @@
 }}
 
 @media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-navigation button {
-    font-size: 9px;
+    font-size: calc(9px * var(--blai-ui-font-scale, 1));
 }}
 
 @media (max-width: 600px) {#blai-deep-clean-workspace .blai-deep-clean-review-apply {
@@ -2555,11 +2555,11 @@
 }}
 
 @media (max-width: 700px) {#blai-purifier-popup .blai-clean-mode-copy strong {
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
 }}
 
 @media (max-width: 700px) {#blai-purifier-popup .blai-clean-mode-copy > span {
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     line-height: 1.4;
 }}
 

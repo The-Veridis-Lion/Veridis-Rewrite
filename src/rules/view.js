@@ -515,7 +515,7 @@ export function renderSubrulesToModal() {
         let remarkHTML = '';
         if (remark) {
             remarkHTML = `
-                <div class="blai-subrule-remark" style="margin-top: 8px; padding-top: 10px; border-top: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent)); font-size: 11px; color: var(--text-secondary); font-style: italic;">
+                <div class="blai-subrule-remark" style="margin-top: 8px; padding-top: 10px; border-top: 1px dotted color-mix(in srgb, var(--text-main) 35%, color-mix(in srgb, var(--bg-base) 12%, transparent)); font-size: calc(11px * var(--blai-ui-font-scale, 1)); color: var(--text-secondary); font-style: italic;">
                     <i class="fas fa-info-circle" style="margin-right: 4px;"></i>${safeHtml(remark)}
                 </div>
             `;
@@ -542,7 +542,7 @@ export function renderSubrulesToModal() {
                 </div>
                 <div class="blai-subrule-preview">
                     <span class="blai-subrule-preview-source">${tPreview}</span>
-                    <i class="fas fa-arrow-right" style="color: var(--text-secondary); font-size: 11px; margin: 0 6px;"></i>
+                    <i class="fas fa-arrow-right" style="color: var(--text-secondary); font-size: calc(11px * var(--blai-ui-font-scale, 1)); margin: 0 6px;"></i>
                     <span class="blai-subrule-preview-replacement">${rPreview}</span>
                 </div>
                 ${remarkHTML}

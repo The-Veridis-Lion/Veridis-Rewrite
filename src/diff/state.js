@@ -35,7 +35,7 @@ export function getDiffComparisonForMessage(index, section) {
     const meta = getMessageDiffMeta(msg);
     if (!meta) return null;
     if (section === 'ai') {
-        return meta.aiMes === null ? null : { oldText: meta.originalMes, newText: meta.aiMes };
+        return meta.aiMes === null ? null : { oldText: meta.originalMes, newText: meta.aiMes, ...(meta.aiUnchanged?.length ? { aiUnchanged: meta.aiUnchanged } : {}) };
     }
     return section === 'program'
         ? { oldText: meta.aiMes ?? meta.originalMes, newText: meta.programMes }

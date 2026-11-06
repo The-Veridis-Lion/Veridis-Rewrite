@@ -1,0 +1,124 @@
+/* Fixed centered desktop window; mobile layout stays under the original media queries. */
+@media (min-width: 601px) {
+    #blai-purifier-popup.blai-app-shell {
+        left: max(16px, calc((100vw - 1040px) / 2)) !important;
+        right: auto !important;
+        width: min(1040px, calc(100vw - 32px)) !important;
+        max-width: calc(100vw - 32px) !important;
+        border-inline: 1px solid var(--border-color) !important;
+        box-shadow: 0 0 24px color-mix(in srgb, var(--text-main) 12%, transparent) !important;
+    }
+}
+
+#blai-purifier-popup .blai-home-dataset-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+}
+#blai-purifier-popup .blai-home-dataset-summary {
+    flex-wrap: wrap;
+}
+#blai-purifier-popup .blai-home-dataset-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+#blai-purifier-popup .blai-home-rule-grid,
+#blai-purifier-popup .blai-ai-columns,
+#blai-purifier-popup.blai-app-shell .content-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+
+@media (max-width: 600px) {
+#blai-purifier-popup.blai-app-shell .bottom-nav {
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+    display: grid !important;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 54px !important;
+    margin: 0 !important;
+    padding: 4px 8px !important;
+    border: 0 !important;
+    border-top: 1px solid var(--border-color) !important;
+    border-radius: 0 !important;
+    box-sizing: border-box !important;
+    background: var(--bg-surface) !important;
+}
+#blai-purifier-popup .blai-home-preset-field {
+    width: 100%;
+    flex-basis: 100%;
+}
+#blai-purifier-popup .blai-home-metrics,
+#blai-purifier-popup .blai-home-toolbar-actions {
+    flex-wrap: wrap;
+}
+#blai-purifier-popup .blai-home-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+#blai-purifier-popup .blai-ai-connection-grid,
+#blai-purifier-popup .blai-ai-parameter-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+}
+}
+
+/* Keep native per-page scrolling, with the rail at the window's right edge. */
+#blai-purifier-popup.blai-app-shell .pages {
+    padding: 0 !important;
+}
+#blai-purifier-popup.blai-app-shell .page-panel {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 18px 0 !important;
+    box-sizing: border-box !important;
+    overflow-y: scroll !important;
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+    scrollbar-gutter: stable;
+}
+#blai-purifier-popup.blai-app-shell .page-panel > * {
+    width: min(calc(100% - 40px), 1440px) !important;
+    min-width: 0;
+    margin-inline: auto !important;
+    box-sizing: border-box;
+}
+#blai-purifier-popup.blai-app-shell .page-panel::-webkit-scrollbar {
+    display: block !important;
+    width: 14px !important;
+}
+#blai-purifier-popup.blai-app-shell .page-panel::-webkit-scrollbar-track {
+    background: var(--bg-surface) !important;
+    border-left: 1px solid var(--border-color);
+}
+#blai-purifier-popup.blai-app-shell .page-panel::-webkit-scrollbar-thumb {
+    background: var(--accent-color) !important;
+    border: 3px solid var(--bg-surface);
+    border-radius: 999px;
+    min-height: 36px;
+    background-clip: padding-box !important;
+}
+#blai-purifier-popup.blai-app-shell .page-panel::-webkit-scrollbar-thumb:hover {
+    border-width: 2px;
+}
+@media (max-width: 600px) {
+#blai-purifier-popup.blai-app-shell .page-panel {
+    padding-block: 10px !important;
+}
+#blai-purifier-popup.blai-app-shell .page-panel > * {
+    width: calc(100% - 20px) !important;
+}
+}
+#blai-purifier-popup #blai-ui-font-scale,
+#blai-purifier-popup #blai-diff-font-scale {
+    width: 160px !important;
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 0 160px !important;
+}
+#blai-purifier-popup .blai-tools-font-setting {
+    flex-wrap: wrap;
+}
+#blai-purifier-popup .blai-tools-font-setting .blai-tools-setting-copy {
+    flex: 1 1 200px;
+}

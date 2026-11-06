@@ -57,7 +57,7 @@
     color: var(--text-main);
     background: transparent;
     border: 0;
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     font-weight: 900;
     text-align: left;
 }
@@ -107,7 +107,7 @@
     display: grid;
     place-items: center;
     gap: 2px;
-    font-size: 10px;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1));
     font-weight: 900;
 }
 
@@ -126,7 +126,7 @@
     box-sizing: border-box !important;
     display: none;
     flex-direction: column;
-    z-index: 999999 !important;
+    z-index: 2147483600 !important;
     backdrop-filter: blur(20px) !important;
     -webkit-backdrop-filter: blur(20px) !important;
 }
@@ -177,7 +177,7 @@
     grid-column: 2;
     grid-row: 1;
     color: var(--text-main);
-    font-size: 18px;
+    font-size: calc(18px * var(--blai-ui-font-scale, 1));
     font-weight: 750;
     line-height: 1.2;
     text-align: center;
@@ -189,7 +189,7 @@
     grid-column: 2;
     grid-row: 2;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: calc(12px * var(--blai-ui-font-scale, 1));
     line-height: 1.35;
     text-align: center;
     overflow-wrap: anywhere;
@@ -231,7 +231,7 @@
     background: transparent;
     color: var(--text-main);
     box-shadow: none;
-    font-size: 15px;
+    font-size: calc(15px * var(--blai-ui-font-scale, 1));
     line-height: 1;
 }
 
@@ -259,7 +259,7 @@
     }
 
     #blai-purifier-popup .blai-global-heading {
-        font-size: 17px;
+        font-size: calc(17px * var(--blai-ui-font-scale, 1));
     }
 }
 
@@ -277,11 +277,11 @@
     }
 
     #blai-purifier-popup .blai-global-icon-button {
-        font-size: 16px;
+        font-size: calc(16px * var(--blai-ui-font-scale, 1));
     }
 
     #blai-purifier-popup .blai-global-heading {
-        font-size: 16px;
+        font-size: calc(16px * var(--blai-ui-font-scale, 1));
     }
 
     #blai-purifier-popup .blai-global-description {
@@ -404,10 +404,10 @@
 }}
 
 @media (max-width: 600px) {#blai-purifier-popup.blai-app-shell {
-    --blai-mobile-type-large: 16px;
-    --blai-mobile-type-medium: 14px;
-    --blai-mobile-type-small: 12px;
-    --blai-mobile-type-tiny: 10px;
+    --blai-mobile-type-large: calc(16px * var(--blai-ui-font-scale, 1));
+    --blai-mobile-type-medium: calc(14px * var(--blai-ui-font-scale, 1));
+    --blai-mobile-type-small: calc(12px * var(--blai-ui-font-scale, 1));
+    --blai-mobile-type-tiny: calc(10px * var(--blai-ui-font-scale, 1));
     inset: 0 !important;
     top: 0 !important;
     left: 0 !important;
@@ -526,7 +526,7 @@
     padding: 6px 3px !important;
     gap: 4px !important;
     border-radius: 11px !important;
-    font-size: 10px !important;
+    font-size: calc(10px * var(--blai-ui-font-scale, 1)) !important;
 }}
 
 @media (min-width: 601px) {#blai-purifier-popup.blai-app-shell .rail-btn:first-of-type {

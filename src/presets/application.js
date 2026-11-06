@@ -1,9 +1,9 @@
 /**
  * Owns application of a selected/effective Preset to authoritative Veridis settings,
- * including Rule/AI-generation snapshot application and persistence. It does not own
+ * including Rule snapshot application and persistence. Global AI settings stay independent. It does not own
  * Preset event registration.
  */
-import { defaultAiRewriteSettings, extensionName } from '../settings/defaults.js';
+import { extensionName } from '../settings/defaults.js';
 import { getAppContext } from '../host/appContext.js';
 import { markRulesDataDirty } from '../rules/state.js';
 import { presetsRuntimeState } from './state.js';
@@ -11,9 +11,9 @@ import { logger } from '../log.js';
 import { getCurrentCharacterContext, getCurrentChatCompletionPresetName } from '../host/context.js';
 import { deepClone } from './model.js';
 import { renderTags } from '../rules/view.js';
-import { getCurrentPresetAiRewriteSettings, getPresetAiRewriteSettings, getPresetRules } from './model.js';
+import { getPresetRules } from './model.js';
 import { getPresetForCharacter } from './bindings.js';
-import { refreshCharacterBindingUI, syncPresetAiRewriteGenerationSettingsUI, updateToolbarUI } from './view.js';
+import { refreshCharacterBindingUI, updateToolbarUI } from './view.js';
 
 function normalizeRulesForPresetComparison(rules) {
     return (Array.isArray(rules) ? rules : []).map((rule) => {
@@ -22,14 +22,9 @@ function normalizeRulesForPresetComparison(rules) {
     });
 }
 
-function hasPresetContentChanges(currentRules, savedPresetEntry, currentAiRewrite) {
-    const rulesChanged = JSON.stringify(normalizeRulesForPresetComparison(currentRules))
+function hasPresetContentChanges(currentRules, savedPresetEntry) {
+    return JSON.stringify(normalizeRulesForPresetComparison(currentRules))
         !== JSON.stringify(normalizeRulesForPresetComparison(getPresetRules(savedPresetEntry)));
-    if (rulesChanged) return true;
-
-    const savedAiRewrite = getPresetAiRewriteSettings(savedPresetEntry);
-    if (!savedAiRewrite) return false;
-    return JSON.stringify(getCurrentPresetAiRewriteSettings(currentAiRewrite)) !== JSON.stringify(savedAiRewrite);
 }
 
 export function hasActivePresetUnsavedChanges() {
@@ -37,18 +32,7 @@ export function hasActivePresetUnsavedChanges() {
     const settings = extension_settings[extensionName];
     const active = settings.activePreset;
     if (!active) return false;
-    return hasPresetContentChanges(settings.rules || [], settings.presets[active] || [], settings.aiRewrite);
-}
-
-function applyPresetAiRewriteSettings(settings, presetEntry) {
-    const presetAiRewrite = getPresetAiRewriteSettings(presetEntry);
-    if (!presetAiRewrite) return;
-    settings.aiRewrite = {
-        ...defaultAiRewriteSettings,
-        ...(settings.aiRewrite && typeof settings.aiRewrite === 'object' ? settings.aiRewrite : {}),
-        ...presetAiRewrite,
-    };
-    syncPresetAiRewriteGenerationSettingsUI(settings);
+    return hasPresetContentChanges(settings.rules || [], settings.presets[active] || []);
 }
 
 export function applyPresetByName(name, options = {}) {
@@ -59,7 +43,6 @@ export function applyPresetByName(name, options = {}) {
     const presetEntry = presetExists ? settings.presets[presetName] : null;
     settings.activePreset = presetExists ? presetName : '';
     settings.rules = presetExists ? deepClone(getPresetRules(presetEntry)) : [];
-    if (presetExists) applyPresetAiRewriteSettings(settings, presetEntry);
     markRulesDataDirty();
     saveSettingsDebounced();
     logger.info(`切换预设: ${presetName || '(临时规则)'}, 存在=${presetExists}`);

@@ -10,14 +10,18 @@ export function syncPersonaDescriptionProtectionControl() {
     const updateButton = (button) => {
         if (!button) return;
         const enabled = settings.protectPersonaDescription === true;
-        button.classList.toggle('is-active', enabled);
-        button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-        button.setAttribute('title', enabled ? '已保护用户设定描述，点击取消保护' : '点击保护用户设定描述');
+        if (button.classList.contains('is-active') !== enabled) button.classList.toggle('is-active', enabled);
+        const pressed = enabled ? 'true' : 'false';
+        if (button.getAttribute('aria-pressed') !== pressed) button.setAttribute('aria-pressed', pressed);
+        const title = enabled ? '已保护用户设定描述，点击取消保护' : '点击保护用户设定描述';
+        if (button.getAttribute('title') !== title) button.setAttribute('title', title);
         const text = button.querySelector('.blai-persona-protect-text');
         const isPanelControl = Boolean(button.closest('#blai-purifier-popup'));
-        if (text) text.textContent = isPanelControl ? (enabled ? '开启' : '关闭') : (enabled ? '已保护' : '保护');
+        const label = isPanelControl ? (enabled ? '开启' : '关闭') : (enabled ? '已保护' : '保护');
+        if (text && text.textContent !== label) text.textContent = label;
         const icon = button.querySelector('i');
-        if (icon) icon.className = enabled ? 'fa-solid fa-shield-halved' : 'fa-solid fa-shield';
+        const iconClass = enabled ? 'fa-solid fa-shield-halved' : 'fa-solid fa-shield';
+        if (icon && icon.className !== iconClass) icon.className = iconClass;
     };
 
     document
